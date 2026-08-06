@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.env
+
+# MewCode config (contains real API keys)
+.mewcode.yaml
+
+# CC Switch docs (downloaded reference files)
+ccswitch_*.html
+ccswitch_*.md
+ccswitch_*.txt
+
+# Backups
+CLAUDE(旧的).md.bak
+docs_bak/
+
+# IDE
+.vscode/
+.idea/
+
+# Claude local settings
+.claude/settings.local.json

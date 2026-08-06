@@ -1,0 +1,56 @@
+# MewCode 配置文件模板
+# 使用方法：复制此文件为 .mewcode.yaml 并填写你的配置
+#   cp .mewcode.yaml.example .mewcode.yaml   (Linux/macOS)
+#   copy .mewcode.yaml.example .mewcode.yaml  (Windows)
+#
+# 如果你已使用 CC Switch 管理 Claude Code，无需创建此文件。
+# MewCode 会自动读取 ~/.claude/settings.json 中的 CC Switch 配置。
+
+# 当前激活的 provider 名称（必须匹配下方 providers 列表中某一项的 name）
+provider: anthropic-official
+
+# 滑动窗口保留的最大对话轮数，超出自动丢弃最早的消息对
+max_turns: 20
+
+# 自定义 system prompt。留空 "" 则使用内置默认值
+system_prompt: ""
+
+# LLM 供应商配置列表，可配置多个，通过 provider 字段切换
+providers:
+  # Anthropic provider 示例
+  # 认证方式（二选一，auth_token 优先）：
+  #   api_key     → x-api-key header（标准 Anthropic API key）
+  #   auth_token  → Authorization: Bearer header（如 CC Switch / 火山引擎 ARK 的 token）
+  - name: anthropic-official
+    protocol: anthropic
+    base_url: https://api.anthropic.com
+    api_key: "your-api-key-here"          # 或使用环境变量：${ANTHROPIC_API_KEY}
+    # auth_token: "your-bearer-token"     # Bearer 认证（与 api_key 互斥）
+    model: claude-sonnet-4-20250514
+    thinking: true                          # 是否启用 extended thinking（仅 anthropic 生效）
+
+  # OpenAI provider 示例
+  # 注意：base_url 指向 API 根地址即可，SDK 会自动追加 /chat/completions，
+  #       不要写成 .../v1/chat/completions（会导致路径重复）
+  # - name: openai-official
+  #   protocol: openai
+  #   base_url: https://api.openai.com/v1
+  #   api_key: "${OPENAI_API_KEY}"
+  #   model: gpt-4o
+  #   thinking: false
+
+  # 兼容 OpenAI 协议的第三方服务示例（如 DeepSeek 官方 API）
+  # - name: deepseek
+  #   protocol: openai
+  #   base_url: https://api.deepseek.com/v1
+  #   api_key: "${DEEPSEEK_API_KEY}"
+  #   model: deepseek-chat
+  #   thinking: false
+
+  # OpenCode Go 服务示例（opencode.ai，OpenAI 兼容协议）
+  # - name: opencode-go
+  #   protocol: openai
+  #   base_url: https://opencode.ai/zen/go/v1
+  #   api_key: "你的 OpenCode Go API key"
+  #   model: deepseek-v4-flash      # 模型列表见 opencode.ai/docs/zh-cn/go/
+  #   thinking: false
