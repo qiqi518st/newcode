@@ -1,9 +1,8 @@
-"""Anthropic Provider：通过 Anthropic SDK 调用 LLM"""
+"""Anthropic Provider：流式 SSE、tool_use 解析、工具结果回灌"""
 
-import httpx
 from anthropic import AsyncAnthropic, APIError as AnthropicAPIError
 
-from .base import Message, StreamEvent
+from .base import Message, StreamEvent, ToolCall, ToolDefinition
 from ..config.schema import ProviderConfig
 from ..utils.error import ProviderError
 
@@ -33,14 +32,43 @@ class AnthropicProvider:
     def model(self) -> str:
         return self._model
 
-    async def stream(self, msgs: list[Message]) -> "AsyncIterator[StreamEvent]":
-        """发起对话请求，流式输出回复"""
+    async def stream(
+        self,
+        msgs: list[Message],
+        tools: list[ToolDefinition] | None = None,
+    ) -> "AsyncIterator[StreamEvent]":
+        """发起 Anthropic 流式对话请求，支持工具调用"""
         system_prompt = ""
         api_messages: list[dict] = []
         for msg in msgs:
             if msg.role == "system":
                 system_prompt = msg.content
-            elif msg.role in ("user", "assistant"):
+            elif msg.role == "tool":
+                # Anthropic tool_result 格式
+                api_messages.append({
+                    "role": "user",
+                    "content": [{
+                        "type": "tool_result",
+                        "tool_use_id": msg.tool_use_id or "",
+                        "content": msg.content,
+                        "is_error": False,
+                    }],
+                })
+            elif msg.role == "assistant" and msg.tool_calls:
+                # Anthropic assistant tool_use 声明格式
+                api_messages.append({
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": tc["id"],
+                            "name": tc["name"],
+                            "input": tc["arguments"],
+                        }
+                        for tc in msg.tool_calls
+                    ],
+                })
+            else:
                 api_messages.append({"role": msg.role, "content": msg.content})
 
         kwargs: dict = {
@@ -52,22 +80,65 @@ class AnthropicProvider:
             kwargs["system"] = system_prompt
         if self._thinking:
             kwargs["thinking"] = {"type": "enabled", "budget_tokens": 1024}
+        if tools:
+            kwargs["tools"] = [
+                {
+                    "name": t.name,
+                    "description": t.description,
+                    "input_schema": t.parameters,
+                }
+                for t in tools
+            ]
+
+        # 流式消费状态
+        _tool_name: str | None = None
+        _tool_use_id: str | None = None
+        _partial_json: str = ""
 
         try:
-            msg = await self._client.messages.create(**kwargs)
-            # 提取 text 块（过滤 thinking 块）
-            full_text = "".join(
-                block.text for block in msg.content if block.type == "text"
-            )
-            # 按合理大小分块 yield 模拟流式
-            chunk_size = max(4, len(full_text) // 10)
-            pos = 0
-            while pos < len(full_text):
-                end = min(pos + chunk_size, len(full_text))
-                # 确保不在多字节字符中间截断
-                yield StreamEvent(text=full_text[pos:end])
-                pos = end
-            yield StreamEvent(done=True)
+            async with self._client.messages.stream(**kwargs) as stream:
+                async for event in stream:
+                    event_type = event.type
+
+                    if event_type == "content_block_start":
+                        block = event.content_block
+                        if block.type == "tool_use":
+                            _tool_name = block.name
+                            _tool_use_id = block.id
+                            _partial_json = ""
+                        elif block.type == "text":
+                            # 文本块开始，无增量
+                            pass
+
+                    elif event_type == "content_block_delta":
+                        delta = event.delta
+                        if delta.type == "text_delta":
+                            yield StreamEvent(text=delta.text)
+                        elif delta.type == "input_json_delta":
+                            _partial_json += delta.partial_json
+
+                    elif event_type == "content_block_stop":
+                        if _tool_name is not None:
+                            # tool_use 块结束，解析 JSON
+                            import json
+                            try:
+                                arguments = json.loads(_partial_json) if _partial_json else {}
+                            except json.JSONDecodeError:
+                                arguments = {}
+                            yield StreamEvent(
+                                tool_call=ToolCall(
+                                    tool_name=_tool_name,
+                                    arguments=arguments,
+                                    tool_use_id=_tool_use_id or "",
+                                )
+                            )
+                            _tool_name = None
+                            _tool_use_id = None
+                            _partial_json = ""
+
+                    elif event_type == "message_stop":
+                        yield StreamEvent(done=True)
+
         except AnthropicAPIError as e:
             yield StreamEvent(err=ProviderError(f"Anthropic API 错误: {e}"))
         except Exception as e:

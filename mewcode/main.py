@@ -9,9 +9,12 @@ from mewcode import __version__
 from mewcode.config.loader import load as load_config, load_ccswitch
 from mewcode.provider.base import new_provider
 from mewcode.conversation.manager import ConversationManager
+from mewcode.tools import Registry
+from mewcode.agent import Agent
 from mewcode.tui.renderer import RichRenderer
 from mewcode.tui.app import REPL
 from mewcode.prompt.resources import render_banner
+from mewcode.agent.events import EventType
 
 
 def main() -> None:
@@ -56,31 +59,43 @@ def main() -> None:
 
     provider = new_provider(provider_config)
     conversation = ConversationManager(config.system_prompt, config.max_turns)
+    registry = Registry.default()
+    agent = Agent(provider, conversation, registry)
     renderer = RichRenderer()
 
     if args.command:
         # 单次调用模式
-        asyncio.run(_oneshot(args.command, provider, conversation, renderer))
+        asyncio.run(_oneshot(args.command, agent))
     else:
         # TUI 多轮对话模式
         print(render_banner(__version__, os.getcwd()))
-        repl = REPL(provider, conversation, renderer)
+        repl = REPL(agent, renderer)
         asyncio.run(repl.run())
 
 
-async def _oneshot(
-    command: str,
-    provider,
-    conversation: ConversationManager,
-    renderer: RichRenderer,
-) -> None:
-    """单次调用模式：发送问题，流式输出回复，退出"""
-    conversation.add_user(command)
+async def _oneshot(command: str, agent: Agent) -> None:
+    """单次调用模式：发送问题，消费 Agent Event 流，退出"""
     try:
-        full_response = await renderer.render_stream(
-            provider.stream(conversation.get_context())
-        )
-        conversation.add_assistant(full_response)
+        async for event in agent.run(command):
+            if event.type == EventType.TEXT:
+                print(event.payload, end="", flush=True)
+            elif event.type == EventType.TOOL_CALL:
+                tc = event.payload
+                params = ", ".join(f"{k}={v!r}" for k, v in tc.arguments.items())
+                print(f"\n● {tc.tool_name}({params})")
+            elif event.type == EventType.TOOL_RESULT:
+                tr = event.payload
+                if tr.status == "error":
+                    print(f"  ✗ {tr.error}")
+                else:
+                    summary = tr.output[:200] + "..." if len(tr.output) > 200 else tr.output
+                    print(f"  → {summary}")
+            elif event.type == EventType.DONE:
+                print()
+                return
+            elif event.type == EventType.ERROR:
+                print(f"\n错误: {event.payload}", file=sys.stderr)
+                sys.exit(1)
     except Exception as e:
         print(f"错误: {e}", file=sys.stderr)
         sys.exit(1)

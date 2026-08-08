@@ -1,0 +1,164 @@
+---
+name: github-upload
+description: "将 MewCode 项目代码按标准流程推送到 GitHub，含检查、初始化、.gitignore、提交、打 tag、推送。"
+---
+
+# GitHub 上传流程
+
+将当前 MewCode 项目代码推送到 GitHub 仓库 `https://github.com/qiqi518st/newcode`。
+
+## 前置条件检查
+
+1. **git 是否安装**：`git --version`
+2. **用户名和邮箱是否配置**：
+   - `git config user.name`
+   - `git config user.email`
+3. **当前目录是否是 git 仓库**：`git rev-parse --git-dir`
+4. **GitHub 远程是否已配置**：`git remote -v`
+
+如果用户名或邮箱未配置，提示用户先执行：
+```bash
+git config --global user.name "你的用户名"
+git config --global user.email "你的邮箱"
+```
+
+## 执行步骤
+
+### 步骤 1：初始化仓库（如需要）
+
+如果当前目录不是 git 仓库：
+```bash
+git init
+git branch -m master
+```
+
+### 步骤 2：创建/更新 .gitignore
+
+确保 `.gitignore` 存在且包含以下内容（Python 项目标准）：
+
+```
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 虚拟环境
+venv/
+env/
+ENV/
+.venv/
+
+# 测试
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# MewCode 敏感配置（含 API key）
+.mewcode.yaml
+```
+
+> ⚠️ **重要**：`.mewcode.yaml` 必须加入 `.gitignore`，因为它包含真实 API key。
+> 如果 `.mewcode.yaml` 已经被提交过，需要执行 `git rm --cached .mewcode.yaml` 将其从版本控制中移除但保留本地文件。
+
+### 步骤 3：检查敏感文件
+
+提交前确认以下文件**不在**暂存区：
+- `.mewcode.yaml`
+- `*.key`
+- `.env`
+
+如果发现有敏感文件被暂存，立即取消暂存：
+```bash
+git reset HEAD <文件>
+```
+
+### 步骤 4：暂存并提交
+
+```bash
+git add -A
+git status   # 让用户确认暂存内容
+git commit -m "<提交信息>"
+```
+
+默认提交信息格式：`chXX: 简短描述`，其中 XX 是当前章节号（从版本号或用户输入推断）。
+如果用户提供了自定义提交信息，优先使用用户的。
+
+### 步骤 5：关联远程仓库（如需要）
+
+如果远程未配置：
+```bash
+git remote add origin https://github.com/qiqi518st/newcode.git
+```
+
+如果远程已配置但地址不对，更新：
+```bash
+git remote set-url origin https://github.com/qiqi518st/newcode.git
+```
+
+### 步骤 6：拉取合并（避免冲突）
+
+```bash
+git pull origin master --rebase
+```
+
+如有冲突，停下来让用户解决，不要自动处理。
+
+### 步骤 7：推送代码
+
+```bash
+git push origin master
+```
+
+### 步骤 8：打 tag（如用户要求）
+
+如果用户提供了 tag 名称（如 `v0.3.0` 或 `ch03`）：
+
+```bash
+git tag <tag-name>
+git push origin <tag-name>
+```
+
+如果没有提供 tag 名称但项目版本号是 `0.X.0`，默认打 tag `v0.X.0`。
+
+## 注意事项
+
+1. **绝不要把 `.mewcode.yaml` 提交到 GitHub**。每次推送前检查 `git status`，确认它不在暂存区。
+2. **冲突时停下来问用户**。不要自动 `git merge` 或覆盖。
+3. **先 pull 再 push**。避免覆盖远程的更新。
+4. **提交信息要描述清楚当前做了什么**。例如 `ch03: 实现工具系统（6 个核心工具 + Agent 单轮闭环）`。
+5. **tag 命名**：版本号用 `v0.X.0`，章节标记用 `chXX`。
+
+## 快捷调用
+
+用户可以直接输入：
+- `/github-upload` — 按默认流程推送
+- `/github-upload ch03` — 推送并打 tag `ch03`
+- `/github-upload v0.3.0` — 推送并打 tag `v0.3.0`
+- `/github-upload "自定义提交信息"` — 使用自定义提交信息

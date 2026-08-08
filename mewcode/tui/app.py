@@ -1,4 +1,4 @@
-"""TUI REPL 循环：状态机、prompt_toolkit 输入、流式消费、计时、ESC 中断、重试"""
+"""TUI REPL 循环：状态机、prompt_toolkit 输入、Agent Event 消费、计时、ESC 中断、重试"""
 
 import asyncio
 import time
@@ -11,8 +11,8 @@ from rich.console import Console
 from rich.live import Live
 from rich.markdown import Markdown
 
-from ..provider.base import Provider, StreamEvent
-from ..conversation.manager import ConversationManager
+from ..agent import Agent
+from ..agent.events import EventType
 from .renderer import RichRenderer
 
 
@@ -44,12 +44,10 @@ class REPL:
 
     def __init__(
         self,
-        provider: Provider,
-        conversation: ConversationManager,
+        agent: Agent,
         renderer: RichRenderer,
     ) -> None:
-        self.provider = provider
-        self.conv = conversation
+        self.agent = agent
         self.renderer = renderer
         self.state = SessionState.IDLE
         self.cur_reply: str = ""
@@ -99,14 +97,13 @@ class REPL:
             pass
 
     async def _process_input(self, text: str) -> None:
-        """提交用户输入，切换状态并开始流式消费"""
+        """提交用户输入，切换状态并开始消费 Agent Event"""
         self.state = SessionState.STREAMING
-        self.conv.add_user(text)
         self.cur_reply = ""
         self._retry_count = 0
         self.turn_start = time.monotonic()
 
-        self._stream_task = asyncio.create_task(self._consume_stream())
+        self._stream_task = asyncio.create_task(self._consume_agent_events(text))
         try:
             await self._stream_task
         except asyncio.CancelledError:
@@ -114,8 +111,8 @@ class REPL:
         finally:
             self.state = SessionState.IDLE
 
-    async def _consume_stream(self) -> None:
-        """消费 Provider 流式输出，Rich Live 渲染 Markdown，含重试逻辑"""
+    async def _consume_agent_events(self, user_input: str) -> None:
+        """消费 Agent Event 流，Rich Live 渲染 Markdown + 工具行"""
         max_retries = 3
         retry_delay = 3.0
 
@@ -125,7 +122,7 @@ class REPL:
                 await asyncio.sleep(retry_delay)
 
             buffer: str = ""
-            error: Exception | None = None
+            error_occurred = False
 
             try:
                 with Live(
@@ -134,35 +131,48 @@ class REPL:
                     refresh_per_second=10,
                     vertical_overflow="visible",
                 ) as live:
-                    async for event in self.provider.stream(self.conv.get_context()):
-                        if event.text:
-                            buffer += event.text
+                    async for event in self.agent.run(user_input):
+                        if event.type == EventType.TEXT:
+                            text = event.payload
+                            buffer += text
                             live.update(Markdown(buffer))
-                        elif event.done:
-                            break
-                        elif event.err:
-                            error = event.err
+                        elif event.type == EventType.TOOL_CALL:
+                            tc = event.payload
+                            params = ", ".join(f"{k}={v!r}" for k, v in tc.arguments.items())
+                            self._console.print(
+                                f"● {tc.tool_name}({params})",
+                                style="bold green",
+                            )
+                        elif event.type == EventType.TOOL_RESULT:
+                            tr = event.payload
+                            if tr.status == "error":
+                                self._console.print(
+                                    f"  ✗ {tr.error}",
+                                    style="red",
+                                )
+                            else:
+                                summary = tr.output[:200] + "..." if len(tr.output) > 200 else tr.output
+                                self._console.print(f"  → {summary}", style="dim")
+                        elif event.type == EventType.DONE:
+                            self.cur_reply = buffer
+                            elapsed = time.monotonic() - self.turn_start
+                            self._show_done(elapsed)
+                            return
+                        elif event.type == EventType.ERROR:
+                            error_occurred = True
+                            self._show_error(event.payload)
                             break
             except asyncio.CancelledError:
-                raise  # 由 _process_input 处理
+                raise
             except Exception as e:
-                error = e
+                error_occurred = True
+                self._show_error(e)
 
-            if error is None:
-                # 本轮成功
-                self.cur_reply = buffer
-                self.conv.add_assistant(buffer)
-                elapsed = time.monotonic() - self.turn_start
-                self._show_done(elapsed)
-                return
+            if error_occurred and attempt < max_retries:
+                self._retry_count = attempt + 1
+                continue
             else:
-                # 出错：可重试则继续，否则显示错误
-                if attempt < max_retries:
-                    self._retry_count = attempt + 1
-                    continue
-                else:
-                    self._show_error(error)
-                    return
+                return
 
     def _cancel_stream(self) -> None:
         """ESC 取消当前流式 task"""

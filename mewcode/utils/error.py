@@ -14,3 +14,23 @@ class ConfigError(MewCodeError):
 class ProviderError(MewCodeError):
     """Provider 调用相关的错误：API 错误、网络错误等"""
     pass
+
+
+class ToolError(MewCodeError):
+    """工具执行失败的基类"""
+    pass
+
+
+class CommandNotAllowedError(ToolError):
+    """命令不在白名单"""
+    pass
+
+
+class PathTraversalError(ToolError):
+    """路径越界，超出项目范围"""
+    pass
+
+
+class ToolTimeoutError(ToolError):
+    """工具执行超时"""
+    pass
