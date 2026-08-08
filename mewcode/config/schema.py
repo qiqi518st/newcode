@@ -24,4 +24,6 @@ class Config:
     provider: str                                # 当前激活的 provider name
     max_turns: int = 20                          # 滑动窗口保留轮数
     system_prompt: str = ""                      # 自定义 system prompt，空则用内置默认值
+    plan_file: str = "plans/plan.md"               # Plan Mode 输出的计划文件路径
+    default_mode: str = "normal"                 # 默认运行模式："normal" | "plan"
     providers: list[ProviderConfig] = field(default_factory=list)

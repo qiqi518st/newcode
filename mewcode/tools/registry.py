@@ -29,6 +29,23 @@ class Registry:
             for t in self._tools.values()
         ]
 
+    def read_only_definitions(self) -> list[ToolDefinition]:
+        """仅导出只读工具的定义列表（Plan Mode 用）"""
+        return [
+            ToolDefinition(
+                name=t.name,
+                description=t.description,
+                parameters=t.parameters,
+            )
+            for t in self._tools.values()
+            if t.read_only
+        ]
+
+    def is_read_only(self, name: str) -> bool:
+        """查询指定工具是否为只读；不存在时返回 False"""
+        tool = self.get(name)
+        return tool.read_only if tool else False
+
     async def execute(self, name: str, arguments: dict) -> ToolResult:
         """查找并执行工具"""
         tool = self.get(name)

@@ -2,7 +2,7 @@
 
 from anthropic import AsyncAnthropic, APIError as AnthropicAPIError
 
-from .base import Message, StreamEvent, ToolCall, ToolDefinition
+from .base import Message, StreamEvent, ToolCall, ToolDefinition, TokenUsage
 from ..config.schema import ProviderConfig
 from ..utils.error import ProviderError
 
@@ -36,6 +36,7 @@ class AnthropicProvider:
         self,
         msgs: list[Message],
         tools: list[ToolDefinition] | None = None,
+        system_suffix: str = "",
     ) -> "AsyncIterator[StreamEvent]":
         """发起 Anthropic 流式对话请求，支持工具调用"""
         system_prompt = ""
@@ -77,7 +78,7 @@ class AnthropicProvider:
             "max_tokens": 4096,
         }
         if system_prompt:
-            kwargs["system"] = system_prompt
+            kwargs["system"] = system_prompt + system_suffix
         if self._thinking:
             kwargs["thinking"] = {"type": "enabled", "budget_tokens": 1024}
         if tools:
@@ -137,7 +138,15 @@ class AnthropicProvider:
                             _partial_json = ""
 
                     elif event_type == "message_stop":
-                        yield StreamEvent(done=True)
+                        # 提取 token 用量
+                        usage = None
+                        if hasattr(event, "message") and hasattr(event.message, "usage"):
+                            u = event.message.usage
+                            usage = TokenUsage(
+                                input_tokens=getattr(u, "input_tokens", 0),
+                                output_tokens=getattr(u, "output_tokens", 0),
+                            )
+                        yield StreamEvent(done=True, usage=usage)
 
         except AnthropicAPIError as e:
             yield StreamEvent(err=ProviderError(f"Anthropic API 错误: {e}"))

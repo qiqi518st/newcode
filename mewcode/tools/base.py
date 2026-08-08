@@ -6,7 +6,7 @@ from ..provider.base import ToolResult
 
 
 class Tool(Protocol):
-    """工具协议：每个工具实现名称、描述、参数 Schema 和执行方法"""
+    """工具协议：每个工具实现名称、描述、参数 Schema、只读属性 和执行方法"""
 
     @property
     def name(self) -> str:
@@ -21,6 +21,11 @@ class Tool(Protocol):
     @property
     def parameters(self) -> dict:
         """参数 JSON Schema（OpenAPI 规范子集）"""
+        ...
+
+    @property
+    def read_only(self) -> bool:
+        """是否为只读操作。只读工具可并发执行，有副作用的工具需串行。"""
         ...
 
     async def execute(self, arguments: dict) -> ToolResult:

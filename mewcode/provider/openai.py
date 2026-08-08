@@ -2,7 +2,7 @@
 
 from openai import AsyncOpenAI, APIError as OpenAIAPIError
 
-from .base import Message, StreamEvent, ToolCall, ToolDefinition
+from .base import Message, StreamEvent, ToolCall, ToolDefinition, TokenUsage
 from ..config.schema import ProviderConfig
 from ..utils.error import ProviderError
 
@@ -30,11 +30,17 @@ class OpenAIProvider:
         self,
         msgs: list[Message],
         tools: list[ToolDefinition] | None = None,
+        system_suffix: str = "",
     ) -> "AsyncIterator[StreamEvent]":
         """发起 OpenAI 流式对话请求，支持工具调用"""
         api_messages: list[dict] = []
         for msg in msgs:
-            if msg.role == "tool":
+            if msg.role == "system":
+                api_messages.append({
+                    "role": "system",
+                    "content": msg.content + system_suffix,
+                })
+            elif msg.role == "tool":
                 api_messages.append({
                     "role": "tool",
                     "tool_call_id": msg.tool_call_id or "",
@@ -66,6 +72,7 @@ class OpenAIProvider:
             "model": self._model,
             "messages": api_messages,
             "stream": True,
+            "stream_options": {"include_usage": True},
         }
         if tools:
             kwargs["tools"] = [
@@ -82,6 +89,7 @@ class OpenAIProvider:
 
         # tool_calls 分片拼接状态：index -> {"id": ..., "name": ..., "arguments": ...}
         _tool_call_buffers: dict[int, dict] = {}
+        _last_usage: TokenUsage | None = None
 
         try:
             stream = await self._client.chat.completions.create(**kwargs)
@@ -130,7 +138,14 @@ class OpenAIProvider:
                 if delta.content:
                     yield StreamEvent(text=delta.content)
 
-            yield StreamEvent(done=True)
+                # 捕获 usage（OpenAI 在最后一个 chunk 中返回）
+                if chunk.usage:
+                    _last_usage = TokenUsage(
+                        input_tokens=chunk.usage.prompt_tokens or 0,
+                        output_tokens=chunk.usage.completion_tokens or 0,
+                    )
+
+            yield StreamEvent(done=True, usage=_last_usage)
         except OpenAIAPIError as e:
             yield StreamEvent(err=ProviderError(f"OpenAI API 错误: {e}"))
         except Exception as e:

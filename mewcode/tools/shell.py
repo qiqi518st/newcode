@@ -30,6 +30,10 @@ class ExecuteCommandTool:
     """在指定目录下执行 shell 命令（白名单控制）"""
 
     @property
+    def read_only(self) -> bool:
+        return False
+
+    @property
     def name(self) -> str:
         return "execute_command"
 

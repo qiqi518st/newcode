@@ -1,6 +1,6 @@
 ---
 name: github-upload
-description: "将 MewCode 项目代码按标准流程推送到 GitHub，含检查、初始化、.gitignore、提交、打 tag、推送。"
+description: "Push MewCode project to GitHub with checks, .gitignore, commit, tag, and push"
 ---
 
 # GitHub 上传流程

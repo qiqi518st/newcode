@@ -21,6 +21,10 @@ class ReadFileTool:
     """读取文件内容，支持行范围切片"""
 
     @property
+    def read_only(self) -> bool:
+        return True
+
+    @property
     def name(self) -> str:
         return "read_file"
 
@@ -88,6 +92,10 @@ class WriteFileTool:
     """写入文件内容，目录不存在自动创建"""
 
     @property
+    def read_only(self) -> bool:
+        return False
+
+    @property
     def name(self) -> str:
         return "write_file"
 
@@ -132,6 +140,10 @@ class WriteFileTool:
 
 class EditFileTool:
     """原文唯一匹配替换"""
+
+    @property
+    def read_only(self) -> bool:
+        return False
 
     @property
     def name(self) -> str:

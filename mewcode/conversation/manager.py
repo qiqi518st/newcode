@@ -21,6 +21,10 @@ class ConversationManager:
         self._messages.append(Message(role="assistant", content=content))
         self._trim()
 
+    def last_role(self) -> str | None:
+        """返回最后一条消息的 role，空列表时返回 None"""
+        return self._messages[-1].role if self._messages else None
+
     def add_tool_call(self, tool_call: ToolCall) -> None:
         """追加 assistant 的工具调用回合（保存结构化声明）"""
         self._messages.append(
@@ -32,6 +36,53 @@ class ConversationManager:
                     "name": tool_call.tool_name,
                     "arguments": tool_call.arguments,
                 }],
+                tool_call_id=tool_call.tool_call_id,
+                tool_use_id=tool_call.tool_use_id,
+                name=tool_call.tool_name,
+            )
+        )
+
+    def add_assistant_with_tool_calls(
+        self, text: str, tool_calls: list[ToolCall]
+    ) -> None:
+        """追加 assistant 消息，同时含文本和多个工具调用声明"""
+        self._messages.append(
+            Message(
+                role="assistant",
+                content=text,
+                tool_calls=[
+                    {
+                        "id": tc.tool_use_id or tc.tool_call_id or "",
+                        "name": tc.tool_name,
+                        "arguments": tc.arguments,
+                    }
+                    for tc in tool_calls
+                ],
+            )
+        )
+
+    def add_tool_results(
+        self, results: list[tuple[ToolCall, ToolResult]]
+    ) -> None:
+        """按序追加 tool 结果消息"""
+        for tc, tr in results:
+            content = tr.output if tr.status == "ok" else tr.error
+            self._messages.append(
+                Message(
+                    role="tool",
+                    content=content,
+                    tool_call_id=tc.tool_call_id,
+                    tool_use_id=tc.tool_use_id,
+                    name=tc.tool_name,
+                )
+            )
+
+    def add_cancelled_tool_result(self, tool_call: ToolCall) -> None:
+        """为未完成的工具调用补「已取消」结果，确保配对完整"""
+        self._messages.append(
+            Message(
+                role="tool",
+                content="已取消",
                 tool_call_id=tool_call.tool_call_id,
                 tool_use_id=tool_call.tool_use_id,
                 name=tool_call.tool_name,

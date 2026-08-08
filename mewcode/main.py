@@ -28,6 +28,11 @@ def main() -> None:
         help="单次调用模式：直接输出回复后退出",
     )
     parser.add_argument(
+        "-p", "--plan",
+        action="store_true",
+        help="计划模式：只用只读工具探查代码，产出计划后退出",
+    )
+    parser.add_argument(
         "--version",
         action="version",
         version=f"mewcode {__version__}",
@@ -65,18 +70,24 @@ def main() -> None:
 
     if args.command:
         # 单次调用模式
-        asyncio.run(_oneshot(args.command, agent))
+        mode = "plan" if args.plan else "normal"
+        asyncio.run(_oneshot(args.command, agent, mode))
     else:
         # TUI 多轮对话模式
         print(render_banner(__version__, os.getcwd()))
-        repl = REPL(agent, renderer)
+        repl = REPL(
+            agent,
+            renderer,
+            plan_file=config.plan_file,
+            default_mode=config.default_mode,
+        )
         asyncio.run(repl.run())
 
 
-async def _oneshot(command: str, agent: Agent) -> None:
+async def _oneshot(command: str, agent: Agent, mode: str = "normal") -> None:
     """单次调用模式：发送问题，消费 Agent Event 流，退出"""
     try:
-        async for event in agent.run(command):
+        async for event in agent.run(command, mode=mode):
             if event.type == EventType.TEXT:
                 print(event.payload, end="", flush=True)
             elif event.type == EventType.TOOL_CALL:
@@ -90,7 +101,16 @@ async def _oneshot(command: str, agent: Agent) -> None:
                 else:
                     summary = tr.output[:200] + "..." if len(tr.output) > 200 else tr.output
                     print(f"  → {summary}")
+            elif event.type == EventType.TOKEN_USAGE:
+                pass  # 单次模式不展示 token 用量
+            elif event.type == EventType.TURN_START:
+                pass  # 单次模式不展示轮次
+            elif event.type == EventType.TURN_END:
+                pass
             elif event.type == EventType.DONE:
+                stop_reason = event.payload
+                if stop_reason.value != "natural":
+                    print(f"\n[终止: {stop_reason.value}]")
                 print()
                 return
             elif event.type == EventType.ERROR:

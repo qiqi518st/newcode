@@ -15,6 +15,10 @@ class ListFilesTool:
     """按 glob 模式列出文件路径"""
 
     @property
+    def read_only(self) -> bool:
+        return True
+
+    @property
     def name(self) -> str:
         return "list_files"
 
@@ -55,6 +59,10 @@ class ListFilesTool:
 
 class SearchCodeTool:
     """在指定目录下按正则表达式搜索文件内容"""
+
+    @property
+    def read_only(self) -> bool:
+        return True
 
     @property
     def name(self) -> str:

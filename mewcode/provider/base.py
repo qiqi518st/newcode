@@ -1,10 +1,17 @@
-"""LLM 协议无关类型：Provider Protocol、StreamEvent、Message、ToolCall、ToolDefinition、ToolResult"""
+"""LLM 协议无关类型：Provider Protocol、StreamEvent、Message、ToolCall、ToolDefinition、ToolResult、TokenUsage"""
 
 from dataclasses import dataclass, field
 from typing import Literal, Protocol, AsyncIterator
 
 from ..config.schema import ProviderConfig
 from ..utils.error import ConfigError
+
+
+@dataclass
+class TokenUsage:
+    """单次 LLM API 调用的 token 用量"""
+    input_tokens: int
+    output_tokens: int
 
 
 @dataclass
@@ -48,9 +55,10 @@ class ToolResult:
 class StreamEvent:
     """流式事件：text / tool_call / done / err 互斥"""
     text: str = ""                             # 文本增量
-    tool_call: ToolCall | None = None          # 工具调用（新增）
+    tool_call: ToolCall | None = None          # 工具调用
     done: bool = False                         # 本轮正常结束
     err: Exception | None = None               # 出错（与 done 互斥）
+    usage: TokenUsage | None = None            # 流结束时的 token 用量
 
 
 class Provider(Protocol):
@@ -70,10 +78,12 @@ class Provider(Protocol):
         self,
         msgs: list[Message],
         tools: list[ToolDefinition] | None = None,
+        system_suffix: str = "",
     ) -> AsyncIterator[StreamEvent]:
         """发起一轮流式对话；内部注入 system prompt 与 thinking 配置；
         思考增量内部丢弃；以 async generator 吐出 StreamEvent；
         调用方 cancel() 该 task 即终止。
+        system_suffix 拼接到内置系统提示后（Plan Mode 用）。
         """
         ...
 

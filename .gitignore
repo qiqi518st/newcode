@@ -15,6 +15,9 @@ venv/
 # MewCode config (contains real API keys)
 .mewcode.yaml
 
+# Plan files
+plans/
+
 # CC Switch docs (downloaded reference files)
 ccswitch_*.html
 ccswitch_*.md
