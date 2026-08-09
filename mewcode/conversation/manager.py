@@ -89,25 +89,21 @@ class ConversationManager:
             )
         )
 
-    def add_tool_result(self, result: ToolResult) -> None:
-        """追加 tool 角色的结果消息"""
-        content = result.output if result.status == "ok" else result.error
-        # 从上一个 assistant tool_call 消息中提取 ID / name
-        tool_call_id = None
-        tool_use_id = None
-        name = None
-        if self._messages and self._messages[-1].role == "assistant":
-            tool_call_id = self._messages[-1].tool_call_id
-            tool_use_id = self._messages[-1].tool_use_id
-            name = self._messages[-1].name
+    def add_tool_result(self, tool_call: ToolCall, result: ToolResult) -> None:
+        """追加 tool 角色的结果消息（与对应 tool_call 配对，确保 ID 一致）
 
+        注意：必须显式传 tool_call——assistant 消息含多个 tool_calls 时，
+        无法从消息对象推断结果属于哪个调用，若 tool_use_id 为空，
+        API 会报 'tool_call_ids did not have response messages'。
+        """
+        content = result.output if result.status == "ok" else result.error
         self._messages.append(
             Message(
                 role="tool",
                 content=content,
-                tool_call_id=tool_call_id,
-                tool_use_id=tool_use_id,
-                name=name,
+                tool_call_id=tool_call.tool_call_id,
+                tool_use_id=tool_call.tool_use_id,
+                name=tool_call.tool_name,
             )
         )
 

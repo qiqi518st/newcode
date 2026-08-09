@@ -12,6 +12,9 @@ provider: anthropic-official
 # 滑动窗口保留的最大对话轮数，超出自动丢弃最早的消息对
 max_turns: 20
 
+# 计划文件保留天数。启动时自动清理超过该天数的 plan 文件，0 表示不清理
+cleanup_period_days: 30
+
 # 自定义 system prompt。留空 "" 则使用内置默认值
 system_prompt: ""
 

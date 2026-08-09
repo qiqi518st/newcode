@@ -13,6 +13,7 @@ from mewcode.tools import Registry
 from mewcode.agent import Agent
 from mewcode.tui.renderer import RichRenderer
 from mewcode.tui.app import REPL
+from mewcode.plans import PlanManager
 from mewcode.prompt.resources import render_banner
 from mewcode.agent.events import EventType
 
@@ -67,6 +68,14 @@ def main() -> None:
     registry = Registry.default()
     agent = Agent(provider, conversation, registry)
     renderer = RichRenderer()
+    plan_manager = PlanManager(os.path.join(os.getcwd(), "plans"))
+
+    # 启动清理：删除超过保留期的过期计划
+    cleaned = plan_manager.cleanup_old(config.cleanup_period_days)
+    if cleaned > 0:
+        print(
+            f"已清理 {cleaned} 个过期计划（>{config.cleanup_period_days}天）"
+        )
 
     if args.command:
         # 单次调用模式
@@ -78,7 +87,7 @@ def main() -> None:
         repl = REPL(
             agent,
             renderer,
-            plan_file=config.plan_file,
+            plan_manager=plan_manager,
             default_mode=config.default_mode,
         )
         asyncio.run(repl.run())

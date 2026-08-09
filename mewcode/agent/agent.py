@@ -153,10 +153,11 @@ class Agent:
                 self.conv.add_assistant_with_tool_calls(_buffer, _tool_calls)
                 for tc in unknown_calls:
                     self.conv.add_tool_result(
+                        tc,
                         ToolResult(
                             status="error",
                             error=f"未知工具: {tc.tool_name}",
-                        )
+                        ),
                     )
                 yield Event(EventType.DONE, StopReason.CONSECUTIVE_UNKNOWN_TOOLS)
                 return
@@ -167,10 +168,11 @@ class Agent:
             # 先写入未知工具的结果到历史
             for tc in unknown_calls:
                 self.conv.add_tool_result(
+                    tc,
                     ToolResult(
                         status="error",
                         error=f"未知工具: {tc.tool_name}",
-                    )
+                    ),
                 )
 
             # 执行已知工具
@@ -189,8 +191,8 @@ class Agent:
                         sr = known_results[known_idx]
                         yield Event(EventType.TOOL_CALL, tc)
                         yield Event(EventType.TOOL_RESULT, sr.result)
-                        # 写入历史
-                        self.conv.add_tool_result(sr.result)
+                        # 写入历史（配对 tool_call，保证 tool_use_id 一致）
+                        self.conv.add_tool_result(tc, sr.result)
                         known_idx += 1
                     # unknown 已在上面处理
 

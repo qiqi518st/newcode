@@ -38,7 +38,7 @@ def _parse(raw: dict) -> Config:
     provider_name = raw.get("provider", "")
     max_turns = raw.get("max_turns", 20)
     system_prompt = raw.get("system_prompt", "")
-    plan_file = raw.get("plan_file", "plans/plan.md")
+    cleanup_period_days = raw.get("cleanup_period_days", 30)
     default_mode = raw.get("default_mode", "normal")
 
     raw_providers = raw.get("providers", [])
@@ -82,7 +82,7 @@ def _parse(raw: dict) -> Config:
         provider=provider_name,
         max_turns=max_turns,
         system_prompt=system_prompt,
-        plan_file=plan_file,
+        cleanup_period_days=cleanup_period_days,
         default_mode=default_mode,
         providers=providers,
     ))
@@ -91,7 +91,7 @@ def _parse(raw: dict) -> Config:
         provider=provider_name,
         max_turns=max_turns,
         system_prompt=system_prompt,
-        plan_file=plan_file,
+        cleanup_period_days=cleanup_period_days,
         default_mode=default_mode,
         providers=providers,
     )

@@ -15,8 +15,8 @@ venv/
 # MewCode config (contains real API keys)
 .mewcode.yaml
 
-# Plan files
-plans/
+# Plan files (runtime data in project root, NOT mewcode/plans code package)
+/plans/
 
 # CC Switch docs (downloaded reference files)
 ccswitch_*.html

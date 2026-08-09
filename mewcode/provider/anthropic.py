@@ -95,9 +95,15 @@ class AnthropicProvider:
         _tool_name: str | None = None
         _tool_use_id: str | None = None
         _partial_json: str = ""
+        # usage 从 message_start 初始值 + message_delta 累计值合并
+        _usage: TokenUsage | None = None
 
+        # 注意：不用 SDK 的 messages.stream()（内部快照累积会因
+        # message_start 缺 content 字段而崩溃，如经 CC Switch 中转的
+        # deepseek 响应），改用 create(stream=True) 直接消费原始事件流。
         try:
-            async with self._client.messages.stream(**kwargs) as stream:
+            stream = await self._client.messages.create(stream=True, **kwargs)
+            try:
                 async for event in stream:
                     event_type = event.type
 
@@ -137,16 +143,28 @@ class AnthropicProvider:
                             _tool_use_id = None
                             _partial_json = ""
 
-                    elif event_type == "message_stop":
-                        # 提取 token 用量
-                        usage = None
-                        if hasattr(event, "message") and hasattr(event.message, "usage"):
-                            u = event.message.usage
-                            usage = TokenUsage(
-                                input_tokens=getattr(u, "input_tokens", 0),
-                                output_tokens=getattr(u, "output_tokens", 0),
+                    elif event_type == "message_start":
+                        # 初始 usage（input 计数）
+                        u = getattr(event.message, "usage", None)
+                        if u is not None:
+                            _usage = TokenUsage(
+                                input_tokens=getattr(u, "input_tokens", 0) or 0,
+                                output_tokens=getattr(u, "output_tokens", 0) or 0,
                             )
-                        yield StreamEvent(done=True, usage=usage)
+
+                    elif event_type == "message_delta":
+                        # 累计 usage（覆盖，message_delta 携带最终计数）
+                        u = getattr(event, "usage", None)
+                        if u is not None:
+                            _usage = TokenUsage(
+                                input_tokens=getattr(u, "input_tokens", 0) or 0,
+                                output_tokens=getattr(u, "output_tokens", 0) or 0,
+                            )
+
+                    elif event_type == "message_stop":
+                        yield StreamEvent(done=True, usage=_usage)
+            finally:
+                await stream.close()
 
         except AnthropicAPIError as e:
             yield StreamEvent(err=ProviderError(f"Anthropic API 错误: {e}"))

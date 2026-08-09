@@ -9,8 +9,9 @@ from mewcode.provider.base import ToolCall, ToolResult
 async def test_tool_message_sequence():
     cm = ConversationManager("", 20)
     cm.add_user("read main.py")
-    cm.add_tool_call(ToolCall("read_file", {"path": "main.py"}, tool_call_id="tc_1"))
-    cm.add_tool_result(ToolResult("ok", "import os"))
+    tc = ToolCall("read_file", {"path": "main.py"}, tool_call_id="tc_1")
+    cm.add_tool_call(tc)
+    cm.add_tool_result(tc, ToolResult("ok", "import os"))
     cm.add_assistant("main.py 的第一行是 import os")
 
     msgs = cm.get_context()
@@ -21,8 +22,9 @@ async def test_tool_message_sequence():
 @pytest.mark.anyio
 async def test_tool_message_ids():
     cm = ConversationManager("", 20)
-    cm.add_tool_call(ToolCall("read_file", {}, tool_call_id="tc_abc", tool_use_id="tu_abc"))
-    cm.add_tool_result(ToolResult("ok", "content"))
+    tc = ToolCall("read_file", {}, tool_call_id="tc_abc", tool_use_id="tu_abc")
+    cm.add_tool_call(tc)
+    cm.add_tool_result(tc, ToolResult("ok", "content"))
 
     msgs = cm.get_context()
     tool_msg = [m for m in msgs if m.role == "tool"][0]
@@ -40,8 +42,9 @@ async def test_trim_with_tool_messages():
 
     # 加一组 tool 消息
     cm.add_user("q3")
-    cm.add_tool_call(ToolCall("t", {}))
-    cm.add_tool_result(ToolResult("ok", "r"))
+    tc = ToolCall("t", {})
+    cm.add_tool_call(tc)
+    cm.add_tool_result(tc, ToolResult("ok", "r"))
     cm.add_assistant("a3")
 
     msgs = cm.get_context()
