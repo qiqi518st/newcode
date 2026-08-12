@@ -1,8 +1,10 @@
 """Provider 工具解析测试"""
 
 import json
+
 import pytest
-from mewcode.provider.base import StreamEvent, ToolCall, Message, ToolDefinition
+
+from mewcode.provider.base import ToolCall
 
 
 class TestAnthropicToolParsing:
@@ -12,8 +14,21 @@ class TestAnthropicToolParsing:
     async def test_parse_tool_use(self):
         # 模拟 Anthropic stream 事件序列
         events = [
-            {"type": "content_block_start", "content_block": {"type": "tool_use", "name": "read_file", "id": "tu_123"}},
-            {"type": "content_block_delta", "delta": {"type": "input_json_delta", "partial_json": '{"path": "main.py"}'}},
+            {
+                "type": "content_block_start",
+                "content_block": {
+                    "type": "tool_use",
+                    "name": "read_file",
+                    "id": "tu_123",
+                },
+            },
+            {
+                "type": "content_block_delta",
+                "delta": {
+                    "type": "input_json_delta",
+                    "partial_json": '{"path": "main.py"}',
+                },
+            },
             {"type": "content_block_stop"},
             {"type": "message_stop"},
         ]
@@ -29,7 +44,9 @@ class TestAnthropicToolParsing:
                 partial_json += ev["delta"]["partial_json"]
             elif ev["type"] == "content_block_stop":
                 args = json.loads(partial_json)
-                tc = ToolCall(tool_name=tool_name, arguments=args, tool_use_id=tool_use_id)
+                tc = ToolCall(
+                    tool_name=tool_name, arguments=args, tool_use_id=tool_use_id
+                )
                 assert tc.tool_name == "read_file"
                 assert tc.arguments == {"path": "main.py"}
                 assert tc.tool_use_id == "tu_123"
@@ -42,7 +59,10 @@ class TestOpenAIToolParsing:
     async def test_parse_function_call(self):
         # 模拟 OpenAI tool_calls 分片
         chunks = [
-            {"id": "fc_123", "function": {"name": "read_file", "arguments": '{"path": '}},
+            {
+                "id": "fc_123",
+                "function": {"name": "read_file", "arguments": '{"path": '},
+            },
             {"id": "fc_123", "function": {"arguments": '"main.py"}'}},
         ]
 

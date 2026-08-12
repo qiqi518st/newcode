@@ -1,12 +1,12 @@
 """工具单元测试"""
 
-import asyncio
 import os
+
 import pytest
 
-from mewcode.tools.file_ops import ReadFileTool, WriteFileTool, EditFileTool
-from mewcode.tools.shell import ExecuteCommandTool
+from mewcode.tools.file_ops import EditFileTool, ReadFileTool, WriteFileTool
 from mewcode.tools.search import ListFilesTool, SearchCodeTool
+from mewcode.tools.shell import ExecuteCommandTool
 
 
 class TestReadFileTool:
@@ -18,7 +18,6 @@ class TestReadFileTool:
         assert "main" in r.output
 
     @pytest.mark.anyio
-
     async def test_read_not_found(self):
         t = ReadFileTool()
         r = await t.execute({"path": "not_exist_xxx.txt"})
@@ -26,7 +25,6 @@ class TestReadFileTool:
         assert "不存在" in r.error
 
     @pytest.mark.anyio
-
     async def test_read_path_traversal(self):
         t = ReadFileTool()
         r = await t.execute({"path": "../../etc/passwd"})
@@ -34,7 +32,6 @@ class TestReadFileTool:
         assert "超出项目范围" in r.error
 
     @pytest.mark.anyio
-
     async def test_read_limit(self):
         t = ReadFileTool()
         r = await t.execute({"path": "mewcode/main.py", "limit": 5})
@@ -57,7 +54,6 @@ class TestWriteFileTool:
         os.remove(path)
 
     @pytest.mark.anyio
-
     async def test_write_path_traversal(self):
         t = WriteFileTool()
         r = await t.execute({"path": "../../etc/xxx", "content": "x"})
@@ -73,22 +69,28 @@ class TestEditFileTool:
         t_read = ReadFileTool()
         path = "test_tmp_edit.txt"
         await t_write.execute({"path": path, "content": "foo bar baz"})
-        r = await t_edit.execute({"path": path, "old_string": "bar", "new_string": "qux"})
+        r = await t_edit.execute(
+            {"path": path, "old_string": "bar", "new_string": "qux"}
+        )
         assert r.status == "ok"
         r2 = await t_read.execute({"path": path})
         assert "foo qux baz" in r2.output
         os.remove(path)
 
     @pytest.mark.anyio
-
     async def test_edit_no_match(self):
         t = EditFileTool()
-        r = await t.execute({"path": "mewcode/main.py", "old_string": "NOTEXIST12345", "new_string": "x"})
+        r = await t.execute(
+            {
+                "path": "mewcode/main.py",
+                "old_string": "NOTEXIST12345",
+                "new_string": "x",
+            }
+        )
         assert r.status == "error"
         assert "未找到" in r.error
 
     @pytest.mark.anyio
-
     async def test_edit_multiple_match(self):
         t_write = WriteFileTool()
         t_edit = EditFileTool()
@@ -109,7 +111,6 @@ class TestExecuteCommandTool:
         assert "Python" in r.output
 
     @pytest.mark.anyio
-
     async def test_denied(self):
         t = ExecuteCommandTool()
         r = await t.execute({"command": "rm -rf /"})
@@ -117,12 +118,11 @@ class TestExecuteCommandTool:
         assert "不在白名单" in r.error
 
     @pytest.mark.anyio
-
     async def test_timeout(self):
         t = ExecuteCommandTool()
         # 用很短的超时来测试（但工具内部超时是 60s，这里不改）
         # 改为测试一个快速失败命令
-        r = await t.execute({"command": "python -c \"exit(1)\""})
+        r = await t.execute({"command": 'python -c "exit(1)"'})
         assert r.status == "error"
         assert "exit_code" in r.output
 
@@ -136,7 +136,6 @@ class TestListFilesTool:
         assert "main.py" in r.output or len(r.output) > 0
 
     @pytest.mark.anyio
-
     async def test_list_empty(self):
         t = ListFilesTool()
         r = await t.execute({"pattern": "*.xyz"})
@@ -151,7 +150,6 @@ class TestSearchCodeTool:
         assert r.status == "ok"
 
     @pytest.mark.anyio
-
     async def test_search_empty(self):
         t = SearchCodeTool()
         r = await t.execute({"pattern": "NOTEXISTXYZ", "glob": "mewcode/*.py"})

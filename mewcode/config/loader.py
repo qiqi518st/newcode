@@ -7,8 +7,8 @@ from pathlib import Path
 
 import yaml
 
-from .schema import Config, ProviderConfig
 from ..utils.error import ConfigError
+from .schema import Config, ProviderConfig
 
 _ENV_VAR_PATTERN = re.compile(r"\$\{(\w+)\}")
 
@@ -51,7 +51,9 @@ def _parse(raw: dict) -> Config:
         protocol = _require_field(item, "protocol")
         model = _require_field(item, "model")
         api_key = _resolve_env(item.get("api_key", ""))
-        auth_token = _resolve_env(item["auth_token"]) if item.get("auth_token") else None
+        auth_token = (
+            _resolve_env(item["auth_token"]) if item.get("auth_token") else None
+        )
         base_url = item.get("base_url")  # 可选
         thinking = item.get("thinking", False)
 
@@ -65,27 +67,31 @@ def _parse(raw: dict) -> Config:
                 f"provider '{name}' 的 protocol 必须是 'anthropic' 或 'openai'，当前为 '{protocol}'"
             )
 
-        providers.append(ProviderConfig(
-            name=name,
-            protocol=protocol,
-            model=model,
-            api_key=api_key,
-            auth_token=auth_token,
-            base_url=base_url,
-            thinking=thinking,
-        ))
+        providers.append(
+            ProviderConfig(
+                name=name,
+                protocol=protocol,
+                model=model,
+                api_key=api_key,
+                auth_token=auth_token,
+                base_url=base_url,
+                thinking=thinking,
+            )
+        )
 
     if not providers:
         raise ConfigError("providers 列表不能为空")
 
-    _validate(config=Config(
-        provider=provider_name,
-        max_turns=max_turns,
-        system_prompt=system_prompt,
-        cleanup_period_days=cleanup_period_days,
-        default_mode=default_mode,
-        providers=providers,
-    ))
+    _validate(
+        config=Config(
+            provider=provider_name,
+            max_turns=max_turns,
+            system_prompt=system_prompt,
+            cleanup_period_days=cleanup_period_days,
+            default_mode=default_mode,
+            providers=providers,
+        )
+    )
 
     return Config(
         provider=provider_name,
@@ -107,6 +113,7 @@ def _require_field(item: dict, field: str) -> str:
 
 def _resolve_env(value: str) -> str:
     """解析 ${ENV_VAR} 占位符"""
+
     def _replace(match: re.Match) -> str:
         var_name = match.group(1)
         env_value = os.environ.get(var_name)

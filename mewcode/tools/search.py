@@ -6,9 +6,9 @@ import re
 
 from ..provider.base import ToolResult
 
-_LIST_LIMIT = 100       # list_files 返回上限
-_SEARCH_LIMIT = 50      # search_code 返回上限
-_SEARCH_SNIPPET = 200   # 每条匹配片段最大字符数
+_LIST_LIMIT = 100  # list_files 返回上限
+_SEARCH_LIMIT = 50  # search_code 返回上限
+_SEARCH_SNIPPET = 200  # 每条匹配片段最大字符数
 
 
 class ListFilesTool:
@@ -24,7 +24,10 @@ class ListFilesTool:
 
     @property
     def description(self) -> str:
-        return "按 glob 模式列出匹配的文件路径。支持 ** 递归匹配。"
+        return (
+            "按 glob 模式列出匹配的文件路径，支持 ** 递归匹配。"
+            "列出文件优先用本工具而非 shell ls。"
+        )
 
     @property
     def parameters(self) -> dict:
@@ -70,7 +73,10 @@ class SearchCodeTool:
 
     @property
     def description(self) -> str:
-        return "在指定目录下按正则表达式搜索文件内容，返回匹配的文件路径、行号和片段。"
+        return (
+            "在指定目录下按正则表达式搜索文件内容，返回匹配的文件路径、行号和片段。"
+            "搜索代码优先用本工具而非 shell grep；定位后用 read_file 精读。"
+        )
 
     @property
     def parameters(self) -> dict:
@@ -106,7 +112,11 @@ class SearchCodeTool:
         try:
             if file_glob:
                 files = glob.glob(file_glob, root_dir=cwd, recursive=True)
-                files = [os.path.join(cwd, f) for f in files if os.path.isfile(os.path.join(cwd, f))]
+                files = [
+                    os.path.join(cwd, f)
+                    for f in files
+                    if os.path.isfile(os.path.join(cwd, f))
+                ]
             else:
                 files = []
                 for root, _dirs, filenames in os.walk(cwd):

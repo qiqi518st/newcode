@@ -19,7 +19,7 @@ from ..plans.manager import PlanManager, PlanMeta
 
 
 class SessionState(Enum):
-    IDLE = "idle"           # 等待用户输入
+    IDLE = "idle"  # 等待用户输入
     STREAMING = "streaming"  # 等待/接收模型流
 
 
@@ -29,9 +29,11 @@ class AppMode(Enum):
 
 
 # 提示符风格
-_PROMPT_STYLE = Style.from_dict({
-    "prompt": "#00ff00 bold",
-})
+_PROMPT_STYLE = Style.from_dict(
+    {
+        "prompt": "#00ff00 bold",
+    }
+)
 
 
 def _create_key_bindings() -> KeyBindings:
@@ -149,9 +151,7 @@ class REPL:
         # 退出计划模式
         if text in ("/normal", "/exit-plan"):
             self.mode = AppMode.NORMAL
-            self._console.print(
-                "已退出计划模式，回到普通模式。", style="bold cyan"
-            )
+            self._console.print("已退出计划模式，回到普通模式。", style="bold cyan")
             return
 
         # 识别斜杠命令
@@ -175,15 +175,11 @@ class REPL:
                 # /do <slug>：直接执行指定 plan
                 plan_meta = self.plan_manager.get_plan(slug_arg)
                 if plan_meta is None:
-                    self._console.print(
-                        f"未找到计划: {slug_arg}", style="bold red"
-                    )
+                    self._console.print(f"未找到计划: {slug_arg}", style="bold red")
                     return
                 plan_content = self.plan_manager.read_plan_content(slug_arg)
                 if not plan_content:
-                    self._console.print(
-                        f"计划文件为空: {slug_arg}", style="bold red"
-                    )
+                    self._console.print(f"计划文件为空: {slug_arg}", style="bold red")
                     return
                 await self._run_plan_execution(plan_meta, plan_content)
                 return
@@ -304,7 +300,8 @@ class REPL:
                         elif event.type == EventType.TOOL_CALL:
                             tc = event.payload
                             params = ", ".join(
-                                f"{k}={escape(repr(v))}" for k, v in tc.arguments.items()
+                                f"{k}={escape(repr(v))}"
+                                for k, v in tc.arguments.items()
                             )
                             self._console.print(
                                 f"● {tc.tool_name}({params})",

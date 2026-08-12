@@ -59,9 +59,9 @@ class Registry:
     @staticmethod
     def default() -> "Registry":
         """预装六个核心工具的注册表"""
-        from .file_ops import ReadFileTool, WriteFileTool, EditFileTool
-        from .shell import ExecuteCommandTool
+        from .file_ops import EditFileTool, ReadFileTool, WriteFileTool
         from .search import ListFilesTool, SearchCodeTool
+        from .shell import ExecuteCommandTool
 
         registry = Registry()
         registry.register(ReadFileTool())

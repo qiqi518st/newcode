@@ -9,20 +9,13 @@ from datetime import datetime, timedelta
 
 from mewcode.plans import PlanManager, PlanMeta
 
-CONTENT_WITH_SLUG = (
-    "<!-- slug: my-plan -->\n"
-    "# 我的计划\n"
-    "- [ ] 步骤一\n"
-    "- [ ] 步骤二\n"
-)
+CONTENT_WITH_SLUG = "<!-- slug: my-plan -->\n# 我的计划\n- [ ] 步骤一\n- [ ] 步骤二\n"
 
-CONTENT_NO_SLUG = (
-    "# 我的计划\n"
-    "- [ ] 步骤一\n"
-)
+CONTENT_NO_SLUG = "# 我的计划\n- [ ] 步骤一\n"
 
 
 # ── slug 提取 ──
+
 
 def test_extract_slug_from_comment():
     m = PlanManager("/tmp/p")
@@ -51,6 +44,7 @@ def test_extract_slug_empty_comment():
 
 # ── task 提取 ──
 
+
 def test_extract_task_from_heading():
     m = PlanManager("/tmp/p")
     assert m._extract_task("# 创建登录页\n- [ ] 步骤") == "创建登录页"
@@ -63,6 +57,7 @@ def test_extract_task_fallback():
 
 
 # ── 创建与读取 ──
+
 
 def test_create_plan_writes_file_and_meta(tmp_path):
     m = PlanManager(str(tmp_path))
@@ -128,6 +123,7 @@ def test_read_plan_content_missing(tmp_path):
 
 # ── 执行标记 ──
 
+
 def test_mark_executed(tmp_path):
     m = PlanManager(str(tmp_path))
     m.create_plan("", CONTENT_WITH_SLUG)
@@ -149,6 +145,7 @@ def test_mark_executed_twice_refreshes(tmp_path):
 
 
 # ── 删除 ──
+
 
 def test_delete_plans(tmp_path):
     m = PlanManager(str(tmp_path))
@@ -174,6 +171,7 @@ def test_delete_plans_missing_file(tmp_path):
 
 
 # ── 清理 ──
+
 
 def test_cleanup_old(tmp_path):
     m = PlanManager(str(tmp_path))
@@ -209,6 +207,7 @@ def test_cleanup_old_no_expired(tmp_path):
 
 
 # ── 容错与自愈 ──
+
 
 def test_meta_corrupted(tmp_path):
     """.meta.json 损坏时降级为空列表，不崩溃"""

@@ -12,10 +12,9 @@ import tempfile
 
 from rich.console import Console
 
-from mewcode.tui.app import REPL
 from mewcode.agent.events import Event, EventType, StopReason
-from mewcode.conversation.manager import ConversationManager
 from mewcode.plans import PlanManager
+from mewcode.tui.app import REPL
 
 
 class FakeAgent:
@@ -26,7 +25,6 @@ class FakeAgent:
 
     def cancel(self) -> None:
         """ch04: Agent 需要 cancel 方法"""
-        pass
 
     async def run(self, user_input: str, mode: str = "normal", plan_content: str = ""):
         for e in self._events:
@@ -74,11 +72,13 @@ def test_consume_stream_renders_text():
 
 def test_consume_stream_adds_to_conversation():
     """done 后完整回复应记录到 cur_reply"""
-    repl, console = _make_repl([
-        Event(EventType.TEXT, "回复A"),
-        Event(EventType.TEXT, "回复B"),
-        Event(EventType.DONE, StopReason.NATURAL),
-    ])
+    repl, console = _make_repl(
+        [
+            Event(EventType.TEXT, "回复A"),
+            Event(EventType.TEXT, "回复B"),
+            Event(EventType.DONE, StopReason.NATURAL),
+        ]
+    )
     asyncio.run(repl._consume_agent_events("test", "normal", ""))
     assert repl.cur_reply == "回复A回复B"
 
@@ -99,7 +99,9 @@ def test_consume_stream_retries_then_succeeds():
         def cancel(self):
             pass
 
-        async def run(self, user_input: str, mode: str = "normal", plan_content: str = ""):
+        async def run(
+            self, user_input: str, mode: str = "normal", plan_content: str = ""
+        ):
             if attempts["n"] == 0:
                 attempts["n"] += 1
                 yield Event(EventType.ERROR, RuntimeError("第一次失败"))
@@ -118,6 +120,7 @@ def test_consume_stream_retries_then_succeeds():
 def test_tool_call_renders_tool_line():
     """TOOL_CALL 事件应渲染 Claude Code 风格工具行"""
     from mewcode.provider.base import ToolCall, ToolResult
+
     events = [
         Event(EventType.TOOL_CALL, ToolCall("read_file", {"path": "main.py"})),
         Event(EventType.TOOL_RESULT, ToolResult("ok", "import os")),
@@ -135,6 +138,7 @@ def test_tool_result_with_rich_markup_does_not_crash():
     此测试确保转义生效。
     """
     from mewcode.provider.base import ToolCall, ToolResult
+
     markup_content = "弹窗 [/do <slug> / not now] [bold]不会被解析[/bold]"
     events = [
         Event(EventType.TOOL_CALL, ToolCall("read_file", {"path": "x.txt"})),
@@ -150,11 +154,14 @@ def test_tool_result_with_rich_markup_does_not_crash():
 def test_token_usage_accumulates():
     """TOKEN_USAGE 事件应累加到会话计数"""
     from mewcode.provider.base import TokenUsage
-    repl, console = _make_repl([
-        Event(EventType.TOKEN_USAGE, TokenUsage(100, 50)),
-        Event(EventType.TOKEN_USAGE, TokenUsage(200, 80)),
-        Event(EventType.DONE, StopReason.NATURAL),
-    ])
+
+    repl, console = _make_repl(
+        [
+            Event(EventType.TOKEN_USAGE, TokenUsage(100, 50)),
+            Event(EventType.TOKEN_USAGE, TokenUsage(200, 80)),
+            Event(EventType.DONE, StopReason.NATURAL),
+        ]
+    )
     asyncio.run(repl._consume_agent_events("test", "normal", ""))
     assert repl._session_in_tokens == 300
     assert repl._session_out_tokens == 130

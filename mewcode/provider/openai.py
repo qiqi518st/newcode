@@ -1,10 +1,14 @@
-"""OpenAI Provider：SSE 流式、function_call 解析、工具结果回灌"""
+"""OpenAI Provider：SSE 流式、function_call 解析、工具结果回灌、cached_tokens 解析"""
 
-from openai import AsyncOpenAI, APIError as OpenAIAPIError
+from collections.abc import AsyncIterator
 
-from .base import Message, StreamEvent, ToolCall, ToolDefinition, TokenUsage
+from openai import APIError as OpenAIAPIError
+from openai import AsyncOpenAI
+
 from ..config.schema import ProviderConfig
+from ..prompt.assembler import PromptPayload
 from ..utils.error import ProviderError
+from .base import StreamEvent, TokenUsage, ToolCall
 
 
 class OpenAIProvider:
@@ -28,45 +32,59 @@ class OpenAIProvider:
 
     async def stream(
         self,
-        msgs: list[Message],
-        tools: list[ToolDefinition] | None = None,
-        system_suffix: str = "",
+        payload: PromptPayload,
     ) -> "AsyncIterator[StreamEvent]":
-        """发起 OpenAI 流式对话请求，支持工具调用"""
+        """发起 OpenAI 流式对话请求。
+
+        段1 稳定系统提示与段2 环境信息各为一条 user 消息（段1 在前，保稳定前缀）
+        ——OpenAI 无 cache_control，靠端点前缀自动缓存；tools 不设缓存标记。
+        """
         api_messages: list[dict] = []
-        for msg in msgs:
-            if msg.role == "system":
-                api_messages.append({
-                    "role": "system",
-                    "content": msg.content + system_suffix,
-                })
-            elif msg.role == "tool":
-                api_messages.append({
-                    "role": "tool",
-                    "tool_call_id": msg.tool_call_id or "",
-                    "name": msg.name or "",
-                    "content": msg.content,
-                })
+
+        # 段1（稳定，前缀缓存受益）+ 段2 环境信息（变化）
+        if payload.stable_prompt:
+            api_messages.append({"role": "user", "content": payload.stable_prompt})
+        if payload.env_segment:
+            api_messages.append({"role": "user", "content": payload.env_segment})
+
+        # 会话历史
+        for msg in payload.messages:
+            if msg.role == "tool":
+                api_messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": msg.tool_call_id or "",
+                        "name": msg.name or "",
+                        "content": msg.content,
+                    }
+                )
             elif msg.role == "assistant" and msg.tool_calls:
                 # OpenAI assistant tool_calls 声明格式
                 import json
-                api_messages.append({
-                    "role": "assistant",
-                    "content": None,
-                    "tool_calls": [
-                        {
-                            "id": tc["id"],
-                            "type": "function",
-                            "function": {
-                                "name": tc["name"],
-                                "arguments": json.dumps(tc["arguments"]),
-                            },
-                        }
-                        for tc in msg.tool_calls
-                    ],
-                })
+
+                api_messages.append(
+                    {
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [
+                            {
+                                "id": tc["id"],
+                                "type": "function",
+                                "function": {
+                                    "name": tc["name"],
+                                    "arguments": json.dumps(tc["arguments"]),
+                                },
+                            }
+                            for tc in msg.tool_calls
+                        ],
+                    }
+                )
             else:
                 api_messages.append({"role": msg.role, "content": msg.content})
+
+        # 轮次级 system-reminder（role=user，<system-reminder> 标签，瞬时不持久）
+        for r in payload.reminders:
+            api_messages.append({"role": "user", "content": r.content})
 
         kwargs: dict = {
             "model": self._model,
@@ -74,7 +92,7 @@ class OpenAIProvider:
             "stream": True,
             "stream_options": {"include_usage": True},
         }
-        if tools:
+        if payload.tools:
             kwargs["tools"] = [
                 {
                     "type": "function",
@@ -84,7 +102,7 @@ class OpenAIProvider:
                         "parameters": t.parameters,
                     },
                 }
-                for t in tools
+                for t in payload.tools
             ]
 
         # tool_calls 分片拼接状态：index -> {"id": ..., "name": ..., "arguments": ...}
@@ -103,7 +121,11 @@ class OpenAIProvider:
                     for tc in delta.tool_calls:
                         idx = tc.index
                         if idx not in _tool_call_buffers:
-                            _tool_call_buffers[idx] = {"id": "", "name": "", "arguments": ""}
+                            _tool_call_buffers[idx] = {
+                                "id": "",
+                                "name": "",
+                                "arguments": "",
+                            }
                         buf = _tool_call_buffers[idx]
                         if tc.id:
                             buf["id"] = tc.id
@@ -118,6 +140,7 @@ class OpenAIProvider:
                 for idx, buf in list(_tool_call_buffers.items()):
                     if buf["id"] and buf["name"] and buf["arguments"]:
                         import json
+
                         try:
                             arguments = json.loads(buf["arguments"])
                         except json.JSONDecodeError:
@@ -138,15 +161,23 @@ class OpenAIProvider:
                 if delta.content:
                     yield StreamEvent(text=delta.content)
 
-                # 捕获 usage（OpenAI 在最后一个 chunk 中返回）
+                # 捕获 usage（OpenAI 在最后一个 chunk 中返回），含 cached_tokens
                 if chunk.usage:
-                    _last_usage = TokenUsage(
-                        input_tokens=chunk.usage.prompt_tokens or 0,
-                        output_tokens=chunk.usage.completion_tokens or 0,
-                    )
+                    _last_usage = _to_usage(chunk.usage)
 
             yield StreamEvent(done=True, usage=_last_usage)
         except OpenAIAPIError as e:
             yield StreamEvent(err=ProviderError(f"OpenAI API 错误: {e}"))
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — 流式消费中任何异常都应包装为 ProviderError，不崩溃
             yield StreamEvent(err=ProviderError(f"OpenAI 请求失败: {e}"))
+
+
+def _to_usage(u: object) -> TokenUsage:
+    """解析 OpenAI usage → TokenUsage；cached_tokens 缺失按 0（N1 健壮解析）"""
+    details = getattr(u, "prompt_tokens_details", None)
+    cached = getattr(details, "cached_tokens", 0) if details is not None else 0
+    return TokenUsage(
+        input_tokens=getattr(u, "prompt_tokens", 0) or 0,
+        output_tokens=getattr(u, "completion_tokens", 0) or 0,
+        cache_read_input_tokens=cached or 0,
+    )

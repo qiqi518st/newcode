@@ -5,15 +5,27 @@ import os
 import shlex
 
 from ..provider.base import ToolResult
-from ..utils.error import CommandNotAllowedError, ToolTimeoutError
 
 _WHITELIST = {
-    "ls", "cat", "grep", "find", "python", "pytest", "git",
-    "pwd", "echo", "head", "tail", "wc", "mkdir", "touch", "sleep",
+    "ls",
+    "cat",
+    "grep",
+    "find",
+    "python",
+    "pytest",
+    "git",
+    "pwd",
+    "echo",
+    "head",
+    "tail",
+    "wc",
+    "mkdir",
+    "touch",
+    "sleep",
 }
 
-_CMD_OUTPUT_LIMIT = 10 * 1024   # 命令输出上限 10KB
-_CMD_TIMEOUT = 60               # 命令执行超时 60 秒
+_CMD_OUTPUT_LIMIT = 10 * 1024  # 命令输出上限 10KB
+_CMD_TIMEOUT = 60  # 命令执行超时 60 秒
 
 
 def _get_command_token(command: str) -> str:
@@ -40,8 +52,8 @@ class ExecuteCommandTool:
     @property
     def description(self) -> str:
         return (
-            "在指定工作目录下执行 shell 命令，返回 stdout/stderr/exit_code。"
-            "仅允许执行白名单内的安全命令。"
+            "在指定工作目录下执行 shell 命令，返回 stdout/stderr/exit_code，仅允许白名单内的命令。"
+            "优先用专用工具（read_file / search_code / list_files）而非 shell 命令。"
         )
 
     @property

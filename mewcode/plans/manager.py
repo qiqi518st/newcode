@@ -12,10 +12,11 @@ _SLUG_PATTERN = re.compile(r"<!--\s*slug:\s*([^>]+?)\s*-->", re.IGNORECASE)
 @dataclass
 class PlanMeta:
     """单个 plan 的元数据"""
-    slug: str                    # 唯一标识，如 "create-hello-world"
-    file: str                    # 文件名，如 "create-hello-world.md"
-    task: str                    # 任务描述（从 plan 内容提取）
-    created_at: str              # ISO 时间戳，如 "2026-08-08T15:30:00"
+
+    slug: str  # 唯一标识，如 "create-hello-world"
+    file: str  # 文件名，如 "create-hello-world.md"
+    task: str  # 任务描述（从 plan 内容提取）
+    created_at: str  # ISO 时间戳，如 "2026-08-08T15:30:00"
     executed_at: str | None = None  # 最近执行时间，None 表示未执行
 
     @property
@@ -107,13 +108,15 @@ class PlanManager:
                 # 自愈：.md 文件被手动删除，清除对应元数据条目
                 stale.append(slug)
                 continue
-            plans.append(PlanMeta(
-                slug=slug,
-                file=filename,
-                task=data.get("task", ""),
-                created_at=data.get("created_at", ""),
-                executed_at=data.get("executed_at"),
-            ))
+            plans.append(
+                PlanMeta(
+                    slug=slug,
+                    file=filename,
+                    task=data.get("task", ""),
+                    created_at=data.get("created_at", ""),
+                    executed_at=data.get("executed_at"),
+                )
+            )
 
         if stale:
             for slug in stale:

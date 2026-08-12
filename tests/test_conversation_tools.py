@@ -1,13 +1,14 @@
 """ConversationManager 工具消息测试"""
 
 import pytest
+
 from mewcode.conversation.manager import ConversationManager
 from mewcode.provider.base import ToolCall, ToolResult
 
 
 @pytest.mark.anyio
 async def test_tool_message_sequence():
-    cm = ConversationManager("", 20)
+    cm = ConversationManager(20)
     cm.add_user("read main.py")
     tc = ToolCall("read_file", {"path": "main.py"}, tool_call_id="tc_1")
     cm.add_tool_call(tc)
@@ -16,12 +17,12 @@ async def test_tool_message_sequence():
 
     msgs = cm.get_context()
     roles = [m.role for m in msgs]
-    assert roles == ["system", "user", "assistant", "tool", "assistant"]
+    assert roles == ["user", "assistant", "tool", "assistant"]
 
 
 @pytest.mark.anyio
 async def test_tool_message_ids():
-    cm = ConversationManager("", 20)
+    cm = ConversationManager(20)
     tc = ToolCall("read_file", {}, tool_call_id="tc_abc", tool_use_id="tu_abc")
     cm.add_tool_call(tc)
     cm.add_tool_result(tc, ToolResult("ok", "content"))
@@ -34,7 +35,7 @@ async def test_tool_message_ids():
 
 @pytest.mark.anyio
 async def test_trim_with_tool_messages():
-    cm = ConversationManager("", 2)
+    cm = ConversationManager(2)
     # 塞满 3 对 user/assistant（超过 max_turns=2）
     for i in range(3):
         cm.add_user(f"q{i}")
@@ -52,4 +53,4 @@ async def test_trim_with_tool_messages():
     roles = [m.role for m in msgs]
     # 由于 _trim 在 add_assistant 时触发，tool 消息不参与对数计算
     # 但不会被误删
-    assert len(msgs) <= 1 + 2 * 2 + 3  # system + 2 对 + 可能的 tool 消息
+    assert len(msgs) <= 2 * 2 + 3  # 2 对 + 可能的 tool 消息

@@ -10,6 +10,7 @@ from ..tools.registry import Registry
 @dataclass
 class ScheduledResult:
     """单个工具调度结果"""
+
     tool_call: ToolCall
     result: ToolResult
 
@@ -44,8 +45,7 @@ class ToolScheduler:
         # 并发执行只读组
         if concurrent_items:
             tasks = [
-                self._execute_one(idx, tc, results)
-                for idx, tc in concurrent_items
+                self._execute_one(idx, tc, results) for idx, tc in concurrent_items
             ]
             await asyncio.gather(*tasks, return_exceptions=True)
 

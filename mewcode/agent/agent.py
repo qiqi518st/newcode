@@ -1,14 +1,16 @@
-"""Agent ReAct 循环引擎：替代 ch03 的单轮闭环"""
+"""Agent ReAct 循环引擎：ch05 用 PromptPayload 组装管线（替代 system_suffix）"""
 
 import asyncio
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
-from ..provider.base import Provider, ToolCall, ToolResult
 from ..conversation.manager import ConversationManager
+from ..prompt.assembler import PayloadAssembler
+from ..prompt.reminders import plan_mode_reminder
+from ..prompt.resources import EXECUTE_DIRECTIVE
+from ..provider.base import Provider, ToolCall, ToolResult
 from ..tools.registry import Registry
-from ..prompt.resources import PLAN_MODE_REMINDER, EXECUTE_DIRECTIVE
 from .events import Event, EventType, StopReason, TokenUsage, TurnEnd
-from .scheduler import ToolScheduler, ScheduledResult
+from .scheduler import ScheduledResult, ToolScheduler
 
 # 内置常量：最大迭代轮数
 _MAX_AGENT_TURNS: int = 10
@@ -22,10 +24,15 @@ class Agent:
         provider: Provider,
         conversation: ConversationManager,
         registry: Registry,
+        stable_prompt: str = "",
+        env_segment: str = "",
     ) -> None:
         self.provider = provider
         self.conv = conversation
         self.registry = registry
+        self._stable_prompt = stable_prompt  # 段1 稳定系统提示（会话内不变，可缓存）
+        self._env_segment = env_segment  # 段2 环境信息（会话内不变，不缓存）
+        self._assembler = PayloadAssembler()
         self._scheduler = ToolScheduler(registry)
         self._cancelled = asyncio.Event()
 
@@ -54,13 +61,11 @@ class Agent:
         else:
             self.conv.add_user(user_input)
 
-        # 选择工具集
+        # 选择工具集（plan 模式只读；缓存按模式各自生效）
         if mode == "plan":
             tool_defs = self.registry.read_only_definitions()
-            system_suffix = PLAN_MODE_REMINDER
         else:
             tool_defs = self.registry.to_definitions()
-            system_suffix = ""
 
         # 未知工具连续计数
         _unknown_streak: int = 0
@@ -74,12 +79,20 @@ class Agent:
 
             yield Event(EventType.TURN_START, turn)
 
-            # ── 发起 LLM 请求 ──
-            stream = self.provider.stream(
+            # 轮次级补充消息：plan 模式按轮注入（第 0/5 轮完整，其余精简，瞬时不持久）
+            reminders = [plan_mode_reminder(turn)] if mode == "plan" else []
+
+            # 组装管线：稳定提示(段1) + 环境(段2) + 历史 + reminders + tools → PromptPayload
+            payload = self._assembler.assemble(
+                self._stable_prompt,
+                self._env_segment,
                 self.conv.get_context(),
-                tools=tool_defs if tool_defs else None,
-                system_suffix=system_suffix,
+                reminders,
+                tool_defs if tool_defs else None,
             )
+
+            # ── 发起 LLM 请求 ──
+            stream = self.provider.stream(payload)
 
             _buffer: str = ""
             _tool_calls: list[ToolCall] = []

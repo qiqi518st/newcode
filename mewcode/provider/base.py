@@ -1,50 +1,61 @@
 """LLM 协议无关类型：Provider Protocol、StreamEvent、Message、ToolCall、ToolDefinition、ToolResult、TokenUsage"""
 
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import Literal, Protocol, AsyncIterator
+from typing import TYPE_CHECKING, Literal, Protocol
 
 from ..config.schema import ProviderConfig
 from ..utils.error import ConfigError
 
+if TYPE_CHECKING:
+    from ..prompt.assembler import PromptPayload
+
 
 @dataclass
 class TokenUsage:
-    """单次 LLM API 调用的 token 用量"""
+    """单次 LLM API 调用的 token 用量（含缓存字段，兼容端点缺字段默认 0）"""
+
     input_tokens: int
     output_tokens: int
+    cache_creation_input_tokens: int = 0  # 缓存写入（首次创建）
+    cache_read_input_tokens: int = 0  # 缓存读取（命中复用）
 
 
 @dataclass
 class Message:
     """单条对话消息"""
+
     role: Literal["user", "assistant", "system", "tool"]
     content: str
-    tool_calls: list[dict] | None = None   # assistant 工具调用声明（协议无关）
-    tool_call_id: str | None = None   # OpenAI 回灌需要
-    tool_use_id: str | None = None    # Anthropic 回灌需要
-    name: str | None = None           # OpenAI tool 角色需要 tool name
+    tool_calls: list[dict] | None = None  # assistant 工具调用声明（协议无关）
+    tool_call_id: str | None = None  # OpenAI 回灌需要
+    tool_use_id: str | None = None  # Anthropic 回灌需要
+    name: str | None = None  # OpenAI tool 角色需要 tool name
 
 
 @dataclass
 class ToolCall:
     """模型请求调用的工具"""
+
     tool_name: str
-    arguments: dict = field(default_factory=dict)   # 已解析的 JSON 参数字典
-    tool_use_id: str | None = None   # Anthropic 回灌需要
+    arguments: dict = field(default_factory=dict)  # 已解析的 JSON 参数字典
+    tool_use_id: str | None = None  # Anthropic 回灌需要
     tool_call_id: str | None = None  # OpenAI 回灌需要
 
 
 @dataclass
 class ToolDefinition:
     """工具的 API 定义（协议无关）"""
+
     name: str
     description: str
-    parameters: dict = field(default_factory=dict)   # JSON Schema object
+    parameters: dict = field(default_factory=dict)  # JSON Schema object
 
 
 @dataclass
 class ToolResult:
     """工具执行结果"""
+
     status: Literal["ok", "error"]
     output: str = ""
     error: str = ""
@@ -54,11 +65,12 @@ class ToolResult:
 @dataclass
 class StreamEvent:
     """流式事件：text / tool_call / done / err 互斥"""
-    text: str = ""                             # 文本增量
-    tool_call: ToolCall | None = None          # 工具调用
-    done: bool = False                         # 本轮正常结束
-    err: Exception | None = None               # 出错（与 done 互斥）
-    usage: TokenUsage | None = None            # 流结束时的 token 用量
+
+    text: str = ""  # 文本增量
+    tool_call: ToolCall | None = None  # 工具调用
+    done: bool = False  # 本轮正常结束
+    err: Exception | None = None  # 出错（与 done 互斥）
+    usage: TokenUsage | None = None  # 流结束时的 token 用量
 
 
 class Provider(Protocol):
@@ -76,14 +88,11 @@ class Provider(Protocol):
 
     def stream(
         self,
-        msgs: list[Message],
-        tools: list[ToolDefinition] | None = None,
-        system_suffix: str = "",
+        payload: "PromptPayload",
     ) -> AsyncIterator[StreamEvent]:
-        """发起一轮流式对话；内部注入 system prompt 与 thinking 配置；
+        """发起一轮流式对话；内部把 PromptPayload 翻译为协议请求并加缓存标记；
         思考增量内部丢弃；以 async generator 吐出 StreamEvent；
         调用方 cancel() 该 task 即终止。
-        system_suffix 拼接到内置系统提示后（Plan Mode 用）。
         """
         ...
 
@@ -92,9 +101,11 @@ def new_provider(cfg: ProviderConfig) -> Provider:
     """按 protocol 构造适配器"""
     if cfg.protocol == "anthropic":
         from .anthropic import AnthropicProvider
+
         return AnthropicProvider(cfg)
     elif cfg.protocol == "openai":
         from .openai import OpenAIProvider
+
         return OpenAIProvider(cfg)
     else:
         raise ConfigError(f"Unknown protocol: {cfg.protocol}")

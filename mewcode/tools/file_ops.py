@@ -5,7 +5,7 @@ import os
 from ..provider.base import ToolResult
 from ..utils.error import PathTraversalError
 
-_READ_LIMIT = 500   # 读文件行数上限
+_READ_LIMIT = 500  # 读文件行数上限
 
 
 def _check_path(path: str) -> str:
@@ -30,7 +30,10 @@ class ReadFileTool:
 
     @property
     def description(self) -> str:
-        return "读取指定路径的文本文件内容。支持可选的行范围切片（offset/limit）。大文件自动截断。"
+        return (
+            "读取指定路径的文本文件内容，支持可选的行范围切片（offset/limit），大文件自动截断。"
+            "查看文件内容优先用本工具而非 shell cat；修改文件前必须先读取目标内容（先读后改）。"
+        )
 
     @property
     def parameters(self) -> dict:
@@ -101,7 +104,10 @@ class WriteFileTool:
 
     @property
     def description(self) -> str:
-        return "向指定路径写入文本内容。若目录不存在则自动创建，若文件已存在则覆盖。"
+        return (
+            "向指定路径写入文本内容，目录不存在自动创建，文件已存在则覆盖。"
+            "新建或整体覆盖文件时用本工具；写入前建议先 read_file 查看现有内容。"
+        )
 
     @property
     def parameters(self) -> dict:
@@ -133,7 +139,10 @@ class WriteFileTool:
             os.makedirs(os.path.dirname(abs_path), exist_ok=True)
             with open(abs_path, "w", encoding="utf-8") as f:
                 f.write(content)
-            return ToolResult(status="ok", output=f"已写入 {len(content.encode('utf-8'))} 字节到 {path}")
+            return ToolResult(
+                status="ok",
+                output=f"已写入 {len(content.encode('utf-8'))} 字节到 {path}",
+            )
         except Exception as e:
             return ToolResult(status="error", error=f"写入失败: {e}")
 
@@ -151,7 +160,10 @@ class EditFileTool:
 
     @property
     def description(self) -> str:
-        return "在指定文件中进行原文唯一匹配替换。old_string 必须在文件中恰好出现一次。"
+        return (
+            "在指定文件中进行原文唯一匹配替换，old_string 必须在文件中恰好出现一次。"
+            "修改前必须先 read_file 读取目标内容（先读后改）；old_string 需与文件内容逐字一致。"
+        )
 
     @property
     def parameters(self) -> dict:
@@ -195,7 +207,7 @@ class EditFileTool:
 
         count = content.count(old_string)
         if count == 0:
-            return ToolResult(status="error", error=f"old_string 在文件中未找到")
+            return ToolResult(status="error", error="old_string 在文件中未找到")
         if count > 1:
             return ToolResult(
                 status="error",

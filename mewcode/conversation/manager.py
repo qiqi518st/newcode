@@ -1,14 +1,12 @@
 """对话上下文管理器：维护消息列表，实现滑动窗口"""
 
 from ..provider.base import Message, ToolCall, ToolResult
-from ..prompt.resources import SYSTEM_PROMPT
 
 
 class ConversationManager:
     """对话上下文管理器，维护消息列表并实现滑动窗口"""
 
-    def __init__(self, system_prompt: str, max_turns: int) -> None:
-        self._system_prompt = system_prompt if system_prompt else SYSTEM_PROMPT
+    def __init__(self, max_turns: int) -> None:
         self._max_turns = max_turns
         self._messages: list[Message] = []
 
@@ -31,11 +29,13 @@ class ConversationManager:
             Message(
                 role="assistant",
                 content="",
-                tool_calls=[{
-                    "id": tool_call.tool_use_id or tool_call.tool_call_id or "",
-                    "name": tool_call.tool_name,
-                    "arguments": tool_call.arguments,
-                }],
+                tool_calls=[
+                    {
+                        "id": tool_call.tool_use_id or tool_call.tool_call_id or "",
+                        "name": tool_call.tool_name,
+                        "arguments": tool_call.arguments,
+                    }
+                ],
                 tool_call_id=tool_call.tool_call_id,
                 tool_use_id=tool_call.tool_use_id,
                 name=tool_call.tool_name,
@@ -61,9 +61,7 @@ class ConversationManager:
             )
         )
 
-    def add_tool_results(
-        self, results: list[tuple[ToolCall, ToolResult]]
-    ) -> None:
+    def add_tool_results(self, results: list[tuple[ToolCall, ToolResult]]) -> None:
         """按序追加 tool 结果消息"""
         for tc, tr in results:
             content = tr.output if tr.status == "ok" else tr.error
@@ -108,9 +106,8 @@ class ConversationManager:
         )
 
     def get_context(self) -> list[Message]:
-        """返回完整上下文: system prompt + 窗口内消息"""
-        system_msg = Message(role="system", content=self._system_prompt)
-        return [system_msg] + list(self._messages)
+        """返回窗口内会话历史（不含 system；稳定系统提示由组装管线负责）"""
+        return list(self._messages)
 
     def _trim(self) -> None:
         """超出 max_turns 时，丢弃最早的一对 user/assistant"""
