@@ -139,6 +139,7 @@ assert r.is_read_only("write_file") is False
 ```python
 from mewcode.conversation.manager import ConversationManager
 from mewcode.provider.base import ToolCall, ToolResult
+
 cm = ConversationManager("test", 10)
 cm.add_user("hi")
 cm.add_assistant("hello")
@@ -207,6 +208,7 @@ from mewcode.tools import Registry
 from mewcode.agent.scheduler import ToolScheduler
 from mewcode.provider.base import ToolCall
 
+
 async def test():
     r = Registry.default()
     s = ToolScheduler(r)
@@ -218,6 +220,7 @@ async def test():
     assert len(results) == 2
     assert results[0].tool_call == calls[0]
     assert results[0].result.status == "ok"
+
 
 asyncio.run(test())
 ```

@@ -30,18 +30,20 @@ provider → {config, prompt}
 ```python
 from enum import Enum
 
+
 class StopReason(Enum):
-    NATURAL = "natural"                          # 自然终止（模型不再要工具）
-    MAX_TURNS = "max_turns"                      # 达到迭代上限
-    CANCELLED = "cancelled"                       # 用户取消（ESC/Ctrl+C）
-    CONSECUTIVE_UNKNOWN_TOOLS = "unknown_tools"   # 连续未知工具
-    STREAM_ERROR = "stream_error"                 # Provider 流式错误
+    NATURAL = "natural"  # 自然终止（模型不再要工具）
+    MAX_TURNS = "max_turns"  # 达到迭代上限
+    CANCELLED = "cancelled"  # 用户取消（ESC/Ctrl+C）
+    CONSECUTIVE_UNKNOWN_TOOLS = "unknown_tools"  # 连续未知工具
+    STREAM_ERROR = "stream_error"  # Provider 流式错误
 ```
 
 ### 2. TokenUsage（新增，`agent/events.py`）
 
 ```python
 from dataclasses import dataclass
+
 
 @dataclass
 class TokenUsage:
@@ -63,14 +65,15 @@ class TurnEnd:
 
 ```python
 class EventType(Enum):
-    TEXT = "text"                  # 不变
-    TOOL_CALL = "tool_call"        # 不变
-    TOOL_RESULT = "tool_result"    # 不变
-    TOKEN_USAGE = "token_usage"    # 新增：每次 API 调用后推送
-    TURN_START = "turn_start"      # 新增：每轮迭代开始
-    TURN_END = "turn_end"          # 新增：每轮迭代结束
-    DONE = "done"                  # 不变，payload 改为 StopReason
-    ERROR = "error"                # 不变
+    TEXT = "text"  # 不变
+    TOOL_CALL = "tool_call"  # 不变
+    TOOL_RESULT = "tool_result"  # 不变
+    TOKEN_USAGE = "token_usage"  # 新增：每次 API 调用后推送
+    TURN_START = "turn_start"  # 新增：每轮迭代开始
+    TURN_END = "turn_end"  # 新增：每轮迭代结束
+    DONE = "done"  # 不变，payload 改为 StopReason
+    ERROR = "error"  # 不变
+
 
 @dataclass
 class Event:
@@ -87,7 +90,7 @@ class StreamEvent:
     tool_call: ToolCall | None = None
     done: bool = False
     err: Exception | None = None
-    usage: TokenUsage | None = None   # 新增：流结束时的 token 用量
+    usage: TokenUsage | None = None  # 新增：流结束时的 token 用量
 ```
 
 ### 6. Provider 协议扩展（修改，`provider/base.py`）
@@ -103,7 +106,7 @@ class Provider(Protocol):
         self,
         msgs: list[Message],
         tools: list[ToolDefinition] | None = None,
-        system_suffix: str = "",                 # 新增：Plan Mode 系统提示后缀
+        system_suffix: str = "",  # 新增：Plan Mode 系统提示后缀
     ) -> AsyncIterator[StreamEvent]: ...
 ```
 
@@ -118,7 +121,7 @@ class Tool(Protocol):
     @property
     def parameters(self) -> dict: ...
     @property
-    def read_only(self) -> bool: ...    # 新增：只读工具可并发
+    def read_only(self) -> bool: ...  # 新增：只读工具可并发
     async def execute(self, arguments: dict) -> ToolResult: ...
 ```
 
@@ -130,7 +133,7 @@ class Registry:
     def get(self, name: str) -> Tool | None: ...
     def to_definitions(self) -> list[ToolDefinition]: ...
     def read_only_definitions(self) -> list[ToolDefinition]: ...  # 新增
-    def is_read_only(self, name: str) -> bool: ...                # 新增
+    def is_read_only(self, name: str) -> bool: ...  # 新增
     async def execute(self, name: str, arguments: dict) -> ToolResult: ...
 ```
 
@@ -151,8 +154,8 @@ class Config:
     max_turns: int
     system_prompt: str
     providers: list[ProviderConfig]
-    plan_file: str = "plan.md"           # 新增
-    default_mode: str = "normal"         # 新增："normal" | "plan"
+    plan_file: str = "plan.md"  # 新增
+    default_mode: str = "normal"  # 新增："normal" | "plan"
 ```
 
 ### 11. Prompt 扩展（修改，`prompt/resources.py`）
@@ -244,8 +247,10 @@ EXECUTE_DIRECTIVE = """..."""
 @dataclass
 class ScheduledResult:
     """单个工具调度结果"""
+
     tool_call: ToolCall
     result: ToolResult
+
 
 class ToolScheduler:
     def __init__(self, registry: Registry): ...

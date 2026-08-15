@@ -36,8 +36,8 @@ llm → {config, prompt}
 class Message:
     role: Literal["user", "assistant", "system", "tool"]
     content: str
-    tool_call_id: str | None = None   # OpenAI 回灌需要；Anthropic 用 tool_use_id
-    name: str | None = None           # OpenAI tool 角色需要 tool name
+    tool_call_id: str | None = None  # OpenAI 回灌需要；Anthropic 用 tool_use_id
+    name: str | None = None  # OpenAI tool 角色需要 tool name
 ```
 
 - `role="tool"` 用于承载工具结果回灌。
@@ -49,7 +49,7 @@ class Message:
 @dataclass
 class StreamEvent:
     text: str = ""
-    tool_call: ToolCall | None = None   # 流中出现工具调用时填充
+    tool_call: ToolCall | None = None  # 流中出现工具调用时填充
     done: bool = False
     err: Exception | None = None
 ```
@@ -63,7 +63,7 @@ class StreamEvent:
 @dataclass
 class ToolCall:
     tool_name: str
-    arguments: dict   # 已解析的 JSON 参数字典
+    arguments: dict  # 已解析的 JSON 参数字典
 ```
 
 ### `llm.ToolDefinition`
@@ -73,7 +73,7 @@ class ToolCall:
 class ToolDefinition:
     name: str
     description: str
-    parameters: dict   # JSON Schema object
+    parameters: dict  # JSON Schema object
 ```
 
 用于 Registry 向 Provider 导出工具定义，协议无关。
@@ -98,26 +98,26 @@ class ToolResult:
 class Tool(Protocol):
     @property
     def name(self) -> str: ...
-    
+
     @property
     def description(self) -> str: ...
-    
+
     @property
-    def parameters(self) -> dict: ...   # JSON Schema
-    
-    async def execute(self, arguments: dict) -> ToolResult:
-        ...
+    def parameters(self) -> dict: ...  # JSON Schema
+
+    async def execute(self, arguments: dict) -> ToolResult: ...
 ```
 
 ### `agent.Event`
 
 ```python
 class EventType(Enum):
-    TEXT = "text"              # 文本增量（来自模型的文本或最终答复）
-    TOOL_CALL = "tool_call"    # 工具调用请求（展示工具行）
-    TOOL_RESULT = "tool_result" # 工具执行结果（展示结果摘要）
-    DONE = "done"              # 本轮结束
-    ERROR = "error"            # 出错
+    TEXT = "text"  # 文本增量（来自模型的文本或最终答复）
+    TOOL_CALL = "tool_call"  # 工具调用请求（展示工具行）
+    TOOL_RESULT = "tool_result"  # 工具执行结果（展示结果摘要）
+    DONE = "done"  # 本轮结束
+    ERROR = "error"  # 出错
+
 
 @dataclass
 class Event:
@@ -148,9 +148,9 @@ class Registry:
     def register(self, tool: Tool) -> None: ...
     def get(self, name: str) -> Tool | None: ...
     def to_definitions(self) -> list[ToolDefinition]: ...
-    
+
     @staticmethod
-    def default() -> Registry: ...   # 预装六个核心工具
+    def default() -> Registry: ...  # 预装六个核心工具
 ```
 
 - `to_definitions()` 将注册的工具批量导出为 `list[ToolDefinition]`，供 Provider 转译为 API 格式。
@@ -222,8 +222,7 @@ class Agent:
         registry: Registry,
     ) -> None: ...
 
-    async def run(self, user_input: str) -> AsyncIterator[Event]:
-        ...
+    async def run(self, user_input: str) -> AsyncIterator[Event]: ...
 ```
 
 **内部流程**：
@@ -292,8 +291,9 @@ run(user_input):
 - 新增 `ToolCall`、`ToolDefinition`、`ToolResult`（协议无关）。
 - `Provider.stream` 签名扩展：
   ```python
-  def stream(self, msgs: list[Message], tools: list[ToolDefinition] | None = None) -> AsyncIterator[StreamEvent]:
-      ...
+  def stream(
+      self, msgs: list[Message], tools: list[ToolDefinition] | None = None
+  ) -> AsyncIterator[StreamEvent]: ...
   ```
 
 #### `llm.anthropic` 扩展
@@ -301,7 +301,10 @@ run(user_input):
 **发送时**：
 - 若 `tools` 不为空，注入 `tools` 参数：
   ```python
-  tools=[{"name": t.name, "description": t.description, "input_schema": t.parameters} for t in tools]
+  tools = [
+      {"name": t.name, "description": t.description, "input_schema": t.parameters}
+      for t in tools
+  ]
   ```
 
 **消费流时**：
@@ -317,12 +320,14 @@ run(user_input):
   ```python
   {
       "role": "user",
-      "content": [{
-          "type": "tool_result",
-          "tool_use_id": tool_use_id,   # 需要从 content_block_start 保存
-          "content": result.output if result.status == "ok" else result.error,
-          "is_error": result.status == "error",
-      }]
+      "content": [
+          {
+              "type": "tool_result",
+              "tool_use_id": tool_use_id,  # 需要从 content_block_start 保存
+              "content": result.output if result.status == "ok" else result.error,
+              "is_error": result.status == "error",
+          }
+      ],
   }
   ```
 - 需要在内部保存 `tool_use_id`，与 `ToolCall` 一起传给 Agent，Agent 再回传给 Provider 回灌。
@@ -332,7 +337,17 @@ run(user_input):
 **发送时**：
 - 若 `tools` 不为空，注入 `tools` 参数：
   ```python
-  tools=[{"type": "function", "function": {"name": t.name, "description": t.description, "parameters": t.parameters}} for t in tools]
+  tools = [
+      {
+          "type": "function",
+          "function": {
+              "name": t.name,
+              "description": t.description,
+              "parameters": t.parameters,
+          },
+      }
+      for t in tools
+  ]
   ```
 
 **消费流时**：
@@ -369,6 +384,7 @@ def add_tool_call(self, tool_call: ToolCall) -> None:
     # 具体格式由 Provider 适配器在 get_context() 时构造？
     # 或 ConversationManager 保存通用结构，Provider 转译？
     ...
+
 
 def add_tool_result(self, result: ToolResult) -> None:
     """追加 tool 角色的结果消息。"""

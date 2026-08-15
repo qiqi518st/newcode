@@ -26,11 +26,11 @@
 ```python
 @dataclass
 class PlanMeta:
-    slug: str                    # 唯一标识，如 "create-hello-world"
-    file: str                    # 文件名，如 "create-hello-world.md"
-    task: str                    # 任务描述（从 plan 内容提取）
-    created_at: str              # ISO 时间戳，如 "2026-08-08T15:30:00"
-    executed_at: str | None      # 最近执行时间，None 表示未执行
+    slug: str  # 唯一标识，如 "create-hello-world"
+    file: str  # 文件名，如 "create-hello-world.md"
+    task: str  # 任务描述（从 plan 内容提取）
+    created_at: str  # ISO 时间戳，如 "2026-08-08T15:30:00"
+    executed_at: str | None  # 最近执行时间，None 表示未执行
 ```
 
 ### .meta.json 结构

@@ -29,19 +29,19 @@ main.py 启动
 ```python
 @dataclass
 class Section:
-    name: str        # 模块名，如 "identity"、"behavior"
-    content: str     # 模块指令文本
-    priority: int    # 优先级，数字越小越靠前（固定模块 1-7，可选模块 10+）
+    name: str  # 模块名，如 "identity"、"behavior"
+    content: str  # 模块指令文本
+    priority: int  # 优先级，数字越小越靠前（固定模块 1-7，可选模块 10+）
 ```
 
 ### PromptPayload（组装管线输出，协议无关）
 ```python
 @dataclass
 class PromptPayload:
-    stable_prompt: str            # 段1：七个固定模块 + 可选模块拼装结果（跨轮逐字节一致，可缓存）
-    env_segment: str              # 段2：环境信息文本（不缓存）
-    messages: list[Message]       # 会话历史（不含 system，由 ConversationManager 提供）
-    reminders: list[Message]      # 轮次级 system-reminder（瞬时不持久）
+    stable_prompt: str  # 段1：七个固定模块 + 可选模块拼装结果（跨轮逐字节一致，可缓存）
+    env_segment: str  # 段2：环境信息文本（不缓存）
+    messages: list[Message]  # 会话历史（不含 system，由 ConversationManager 提供）
+    reminders: list[Message]  # 轮次级 system-reminder（瞬时不持久）
     tools: list[ToolDefinition] | None = None
 ```
 
@@ -51,8 +51,8 @@ class PromptPayload:
 class TokenUsage:
     input_tokens: int
     output_tokens: int
-    cache_creation_input_tokens: int = 0   # 缓存写入（首次创建）
-    cache_read_input_tokens: int = 0       # 缓存读取（命中复用）
+    cache_creation_input_tokens: int = 0  # 缓存写入（首次创建）
+    cache_read_input_tokens: int = 0  # 缓存读取（命中复用）
 ```
 Provider 映射：Anthropic 读 usage 的 `cache_creation_input_tokens` / `cache_read_input_tokens`；OpenAI 读 `prompt_tokens_details.cached_tokens`（写入字段 OpenAI 不暴露，恒 0）。兼容端点缺字段按 0 处理（N1 健壮解析）。
 
@@ -62,13 +62,13 @@ Provider 映射：Anthropic 读 usage 的 `cache_creation_input_tokens` / `cache
 class EnvContext:
     cwd: str
     platform: str
-    datetime: str                  # 当前日期/时间
+    datetime: str  # 当前日期/时间
     timezone: str
-    git_branch: str | None         # git 状态，取不到为 None（N12 降级）
+    git_branch: str | None  # git 状态，取不到为 None（N12 降级）
     git_dirty: bool | None
-    version: str                   # 应用版本
-    provider: str                  # 激活 provider 名
-    model: str                     # 模型名
+    version: str  # 应用版本
+    provider: str  # 激活 provider 名
+    model: str  # 模型名
 ```
 
 ### 补充消息（F5）
@@ -94,8 +94,7 @@ class PromptBuilder:
 
 **assembler.py — assemble_payload（F2）**
 ```python
-def assemble_payload(stable, env, history, reminders, tools) -> PromptPayload:
-    ...
+def assemble_payload(stable, env, history, reminders, tools) -> PromptPayload: ...
 ```
 - 负责分类路由：stable→段1（可缓存）、env→段2（不缓存）、history→messages、reminders→messages、tools→tools
 - 对 stable 做**跨轮逐字节一致**校验：记录上一次 stable 哈希，不一致时日志告警（N8 / 缓存通道规划）

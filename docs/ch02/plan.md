@@ -330,7 +330,11 @@ mewcode --help           # 显示帮助
 #### utils/error.py
 ```python
 class MewCodeError(Exception): ...
-class ConfigError(MewCodeError): ...    # 配置相关的错误
+
+
+class ConfigError(MewCodeError): ...  # 配置相关的错误
+
+
 class ProviderError(MewCodeError): ...  # Provider 调用相关的错误
 ```
 

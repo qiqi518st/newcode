@@ -22,3 +22,8 @@ dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.10"]
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.10"]
+
+[tool.ruff]
+# 只把 *.py 当作源码，避免 ruff format/check 递归扫到 docs/ 下的 .md
+# （ruff 0.16+ 会格式化 markdown 里的 Python 代码块，曾误改历史章节文档）
+include = ["*.py"]
