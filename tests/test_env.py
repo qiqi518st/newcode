@@ -1,6 +1,5 @@
 """环境信息采集与格式化测试（ch05，spec F3 / N12）"""
 
-
 from mewcode.prompt.env import EnvContext, collect_env, format_env
 
 

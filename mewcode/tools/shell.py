@@ -2,44 +2,15 @@
 
 import asyncio
 import os
-import shlex
 
 from ..provider.base import ToolResult
-
-_WHITELIST = {
-    "ls",
-    "cat",
-    "grep",
-    "find",
-    "python",
-    "pytest",
-    "git",
-    "pwd",
-    "echo",
-    "head",
-    "tail",
-    "wc",
-    "mkdir",
-    "touch",
-    "sleep",
-}
 
 _CMD_OUTPUT_LIMIT = 10 * 1024  # 命令输出上限 10KB
 _CMD_TIMEOUT = 60  # 命令执行超时 60 秒
 
 
-def _get_command_token(command: str) -> str:
-    """解析命令的第一个 token"""
-    try:
-        tokens = shlex.split(command)
-        return tokens[0] if tokens else ""
-    except ValueError:
-        # shlex 解析失败，用简单空格分割
-        return command.split()[0] if command.strip() else ""
-
-
 class ExecuteCommandTool:
-    """在指定目录下执行 shell 命令（白名单控制）"""
+    """在指定目录下执行 shell 命令"""
 
     @property
     def read_only(self) -> bool:
@@ -52,7 +23,7 @@ class ExecuteCommandTool:
     @property
     def description(self) -> str:
         return (
-            "在指定工作目录下执行 shell 命令，返回 stdout/stderr/exit_code，仅允许白名单内的命令。"
+            "在指定工作目录下执行 shell 命令，返回 stdout/stderr/exit_code。"
             "优先用专用工具（read_file / search_code / list_files）而非 shell 命令。"
         )
 
@@ -76,13 +47,6 @@ class ExecuteCommandTool:
     async def execute(self, arguments: dict) -> ToolResult:
         command = arguments.get("command", "")
         cwd = arguments.get("cwd", os.getcwd())
-
-        token = _get_command_token(command)
-        if token not in _WHITELIST:
-            return ToolResult(
-                status="error",
-                error=f"命令 '{token}' 不在白名单",
-            )
 
         try:
             proc = await asyncio.create_subprocess_shell(

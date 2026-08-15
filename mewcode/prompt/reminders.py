@@ -18,9 +18,10 @@ def system_reminder(content: str) -> Message:
 
 
 PLAN_MODE_FULL: str = (
-    "【计划模式】当前处于只读计划模式。"
-    "你只能使用只读工具（read_file、list_files、search_code）探查代码和理解项目结构。"
-    "不能修改文件或执行命令。"
+    "【计划模式】当前处于计划模式。"
+    "你拥有全部工具的访问权限，但应优先使用只读工具（read_file、list_files、search_code）探查代码和理解项目结构。"
+    "如果任务需要修改文件或执行命令，请产出结构化的计划文档供用户审批。"
+    "\n\n若为单纯询问（无需代码改动），直接回答即可，不生成计划文件。"
     "\n\n你的唯一任务是产出一份结构化的计划文档。"
     "你的输出就是计划本身，不是执行报告，不是操作日志。"
     "\n\n计划格式要求：\n"
@@ -34,9 +35,7 @@ PLAN_MODE_FULL: str = (
     "\n记住：你只生成计划，不执行任何操作。"
 )
 
-PLAN_MODE_LEAN: str = (
-    "【计划模式】只读：仅用只读工具探查并产出计划文档，不修改文件、不执行命令。"
-)
+PLAN_MODE_LEAN: str = "【计划模式】当任务需要修改文件或命令时产出计划文档；若为单纯询问则直接回答，不生成计划。"
 
 
 def plan_mode_reminder(turn: int) -> Message:

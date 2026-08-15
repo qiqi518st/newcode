@@ -111,11 +111,12 @@ class TestExecuteCommandTool:
         assert "Python" in r.output
 
     @pytest.mark.anyio
-    async def test_denied(self):
+    async def test_command_execution(self):
+        """白名单已移除，命令执行由权限系统在 Agent 层管控"""
         t = ExecuteCommandTool()
-        r = await t.execute({"command": "rm -rf /"})
-        assert r.status == "error"
-        assert "不在白名单" in r.error
+        r = await t.execute({"command": "echo hello"})
+        assert r.status == "ok"
+        assert "hello" in r.output
 
     @pytest.mark.anyio
     async def test_timeout(self):
@@ -169,7 +170,7 @@ async def test_all():
     await TestEditFileTool().test_edit_no_match()
     await TestEditFileTool().test_edit_multiple_match()
     await TestExecuteCommandTool().test_allowed()
-    await TestExecuteCommandTool().test_denied()
+    await TestExecuteCommandTool().test_command_execution()
     await TestExecuteCommandTool().test_timeout()
     await TestListFilesTool().test_list()
     await TestListFilesTool().test_list_empty()

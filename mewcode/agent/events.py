@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from enum import Enum
 
+from ..permission.hitl import HITLRequest
 from ..provider.base import TokenUsage, ToolCall, ToolResult
 
 
@@ -36,6 +37,7 @@ class EventType(Enum):
     TURN_END = "turn_end"  # 一轮迭代结束
     DONE = "done"  # Agent 运行结束
     ERROR = "error"  # 不可恢复的错误
+    HITL_REQUEST = "hitl_request"  # 人在回路确认请求
 
 
 @dataclass
@@ -43,4 +45,14 @@ class Event:
     """Agent 输出事件"""
 
     type: EventType
-    payload: str | ToolCall | ToolResult | TokenUsage | TurnEnd | StopReason | Exception
+    payload: (
+        str
+        | int
+        | ToolCall
+        | ToolResult
+        | TokenUsage
+        | TurnEnd
+        | StopReason
+        | HITLRequest
+        | Exception
+    )

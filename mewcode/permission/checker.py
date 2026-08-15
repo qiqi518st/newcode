@@ -1,0 +1,271 @@
+"""权限检查器串联入口（L1–L4 流水线 + 参数提取 + 工具分类）
+
+流水线：
+① 分类 → extract_target → 黑名单(仅COMMAND+非空)
+② 沙箱(仅文件类，ok==False → Deny)
+③ 规则引擎(local → project → user)
+④ 模式兜底 → Allow/Ask
+bypassPermissions 跳过 ③④（规则引擎和权限模式；HITL 由Agent层跳过）
+"""
+
+import os
+import re
+import sys
+from typing import TYPE_CHECKING
+
+import yaml
+
+from .blocklist import hits_blacklist
+from .engine import RuleEngine
+from .modes import PermissionMode, ToolCategory, resolve_mode
+from .rules import (
+    RULE_FILE_LOCAL,
+    RuleLayers,
+    load_rules,
+    load_settings,
+)
+from .sandbox import check_path, resolve_root
+from .types import CheckResult, Decision, TargetInfo
+
+if TYPE_CHECKING:
+    from ..provider.base import ToolCall
+
+# 内部名 → 友好名映射
+_FRIENDLY_NAME_MAP: dict[str, str] = {
+    "Bash": "execute_command",
+    "Read": "read_file",
+    "Write": "write_file",
+    "Edit": "edit_file",
+    "Glob": "list_files",
+    "Grep": "search_code",
+}
+
+# 反向映射
+_INTERNAL_TO_FRIENDLY: dict[str, str] = {v: k for k, v in _FRIENDLY_NAME_MAP.items()}
+
+
+def friendly_name(internal: str) -> str:
+    """内部名 → 友好名；未知原样返回"""
+    return _INTERNAL_TO_FRIENDLY.get(internal, internal)
+
+
+def internal_name(friendly: str) -> str:
+    """友好名 → 内部名；未知原样返回"""
+    return _FRIENDLY_NAME_MAP.get(friendly, friendly)
+
+
+def categorize(internal: str, read_only: bool) -> ToolCategory:
+    """工具分类：read_only 属性优先于名字判定"""
+    if read_only:
+        return ToolCategory.READONLY
+    if internal in ("write_file", "edit_file"):
+        return ToolCategory.FILE_WRITE
+    # 其余（含 Bash、未知工具）→ COMMAND（最严）
+    return ToolCategory.COMMAND
+
+
+def extract_target(tool_call: "ToolCall") -> TargetInfo:
+    """从 ToolCall 中提取匹配目标，解析 arguments 参数字典"""
+    args = tool_call.arguments
+    if not isinstance(args, dict):
+        return TargetInfo("", False, False)
+
+    internal = tool_call.tool_name
+
+    # 文件类工具：取 path
+    if internal in ("read_file", "write_file", "edit_file"):
+        path = args.get("path")
+        if path is None or not isinstance(path, str):
+            return TargetInfo("", True, False)  # 缺必填字段
+        return TargetInfo(path, True, True)
+
+    # glob / grep：取 path（搜索根目录），空→"."
+    if internal in ("list_files", "search_code"):
+        path = args.get("cwd", args.get("path", ""))
+        if isinstance(path, str) and path:
+            return TargetInfo(path, True, True)
+        return TargetInfo(".", True, True)
+
+    # Bash：取 command
+    if internal == "execute_command":
+        command = args.get("command")
+        if command is None or not isinstance(command, str):
+            return TargetInfo("", False, True)  # 缺 command 视为空串
+        return TargetInfo(command, False, True)
+
+    # 未知工具
+    return TargetInfo("", False, False)
+
+
+def _escape_glob(s: str) -> str:
+    """转义字符串中的 glob 特殊字符，防止被当通配符"""
+    return re.sub(r"([*?\[\]])", r"[\1]", s)
+
+
+def get_default_mode(project_root: str) -> PermissionMode:
+    """从三层配置中读取 defaultMode，按 local > project > user 优先级"""
+    local_path = os.path.join(project_root, RULE_FILE_LOCAL)
+    project_path = os.path.join(project_root, ".mewcode/permissions.yaml")
+    user_path = os.path.expanduser("~/.config/mewcode/permissions.yaml")
+
+    for path in [local_path, project_path, user_path]:
+        settings = load_settings(path)
+        if isinstance(settings, dict):
+            mode_str = settings.get("defaultMode")
+            if mode_str and isinstance(mode_str, str):
+                parsed = PermissionMode.parse(mode_str)
+                if parsed is not None:
+                    return parsed
+    return PermissionMode.DEFAULT
+
+
+class PermissionChecker:
+    """权限检查器：串联前四层防线，Agent 调用的唯一入口"""
+
+    def __init__(
+        self,
+        project_root: str,
+        mode: PermissionMode,
+        layers: RuleLayers,
+    ) -> None:
+        self._root = project_root
+        self._mode = mode
+        self._start_mode = mode
+        self._layers = layers
+        self._engine = RuleEngine(layers)
+
+    @staticmethod
+    def create(project_root: str) -> "PermissionChecker":
+        """工厂方法：解析项目根、加载三层配置、确定启动模式。
+
+        即使致命错也返回非 null 空规则安全引擎 + stderr 警告；
+        配置格式错误只降级对应文件，不抛致命异常。
+        """
+        root = resolve_root(project_root)
+        if not os.path.exists(root):
+            print(f"警告: 项目根目录不存在或无法解析: {root}", file=sys.stderr)
+
+        layers = load_rules(project_root)
+        mode = get_default_mode(project_root)
+
+        return PermissionChecker(
+            project_root=root,
+            mode=mode,
+            layers=layers,
+        )
+
+    def check(
+        self,
+        tool_call: "ToolCall",
+        is_interactive: bool = True,
+        read_only: bool = False,
+    ) -> CheckResult:
+        """前四层流水线：
+        ① 分类 → extract_target → 黑名单(仅COMMAND+非空)
+        ② 沙箱(仅文件类，ok==False → Deny)
+        ③ 规则引擎(local → project → user)
+        ④ 模式兜底 → Allow/Ask
+        bypassPermissions 跳过 ③④（规则引擎和权限模式；HITL 由Agent层跳过）
+        """
+        # ① 分类 + 提取 target
+        cat = categorize(tool_call.tool_name, read_only)
+        info = extract_target(tool_call)
+
+        # ② 黑名单（仅 COMMAND + 非空）
+        if cat == ToolCategory.COMMAND and info.target and hits_blacklist(info.target):
+            return CheckResult(
+                decision=Decision.DENY,
+                reason=f"命中危险命令黑名单：{info.target[:80]}",
+            )
+
+        # ③ 沙箱（仅文件类）
+        if info.is_file:
+            if not info.ok:
+                return CheckResult(
+                    decision=Decision.DENY,
+                    reason="无法解析文件路径参数，安全拒绝",
+                )
+            sandbox_ok, _ = check_path(info.target, self._root)
+            if not sandbox_ok:
+                return CheckResult(
+                    decision=Decision.DENY,
+                    reason=f"路径在项目目录之外：{info.target}",
+                )
+
+        # bypassPermissions 跳过规则引擎和模式兜底
+        if self._mode == PermissionMode.BYPASS:
+            return CheckResult(decision=Decision.ALLOW, reason="")
+
+        # ④ 规则引擎
+        fn = friendly_name(tool_call.tool_name)
+        rule_result = self._engine.match(fn, info.target)
+        if rule_result is not None:
+            return rule_result
+
+        # ⑤ 模式兜底
+        decision = resolve_mode(self._mode, cat)
+        if decision == Decision.ASK:
+            return CheckResult(
+                decision=Decision.ASK,
+                reason=f"{self._mode.display_name()} 模式下 {cat.value} 类操作需确认",
+            )
+        return CheckResult(decision=Decision.ALLOW, reason="")
+
+    def set_mode(self, mode: PermissionMode) -> None:
+        """运行时切换权限模式"""
+        self._mode = mode
+
+    def persist_local_allow(self, tool_call: "ToolCall") -> None:
+        """人在回路「永久」调用：写入本地级规则文件。
+
+        - 生成精确规则（无通配）
+        - Bash 命令经 escape_glob 转义
+        - 去重后写入
+        """
+        local_path = os.path.join(self._root, RULE_FILE_LOCAL)
+        fn = friendly_name(tool_call.tool_name)
+        info = extract_target(tool_call)
+
+        if not info.ok:
+            return
+
+        # 生成精确规则字符串
+        if info.is_file:
+            rule_str = f"{fn}({info.target})"
+        else:
+            # Bash 命令：转义 glob 特殊字符
+            escaped = _escape_glob(info.target)
+            rule_str = f"{fn}({escaped})"
+
+        # 读现有配置
+        settings = load_settings(local_path)
+        if not isinstance(settings, dict):
+            settings = {}
+        permissions = settings.get("permissions", {})
+        if not isinstance(permissions, dict):
+            permissions = {}
+        allow_list = permissions.get("allow", [])
+        if not isinstance(allow_list, list):
+            allow_list = []
+
+        # 去重追加
+        if rule_str not in allow_list:
+            allow_list.append(rule_str)
+
+        permissions["allow"] = allow_list
+        settings["permissions"] = permissions
+
+        # 确保目录存在
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+
+        # 写回
+        with open(local_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(settings, f, allow_unicode=True, default_flow_style=False)
+
+    @property
+    def mode(self) -> PermissionMode:
+        return self._mode
+
+    @property
+    def start_mode(self) -> PermissionMode:
+        return self._start_mode

@@ -1,9 +1,12 @@
-"""Agent ReAct 循环引擎：ch05 用 PromptPayload 组装管线（替代 system_suffix）"""
+"""Agent ReAct 循环引擎：ch06 五层权限系统集成"""
 
 import asyncio
 from collections.abc import AsyncIterator
 
 from ..conversation.manager import ConversationManager
+from ..permission.checker import PermissionChecker, extract_target, friendly_name
+from ..permission.hitl import HITLRequest, HITLResponse
+from ..permission.types import Decision
 from ..prompt.assembler import PayloadAssembler
 from ..prompt.reminders import plan_mode_reminder
 from ..prompt.resources import EXECUTE_DIRECTIVE
@@ -26,6 +29,8 @@ class Agent:
         registry: Registry,
         stable_prompt: str = "",
         env_segment: str = "",
+        permission: PermissionChecker | None = None,
+        is_interactive: bool = True,
     ) -> None:
         self.provider = provider
         self.conv = conversation
@@ -36,9 +41,27 @@ class Agent:
         self._scheduler = ToolScheduler(registry)
         self._cancelled = asyncio.Event()
 
+        # 权限系统
+        self._permission = permission
+        self._interactive = is_interactive
+        self._hitl_event = asyncio.Event()
+        self._hitl_response: HITLResponse | None = None
+
+    @property
+    def permission(self) -> PermissionChecker | None:
+        return self._permission
+
     def cancel(self) -> None:
         """设置取消信号，TUI 在 ESC/Ctrl+C 时调用"""
         self._cancelled.set()
+        # HITL 兜底解阻塞
+        if not self._hitl_event.is_set():
+            self._hitl_event.set()
+
+    def resolve_hitl(self, response: HITLResponse) -> None:
+        """TUI 调用来回传用户选择"""
+        self._hitl_response = response
+        self._hitl_event.set()
 
     async def run(
         self,
@@ -61,11 +84,8 @@ class Agent:
         else:
             self.conv.add_user(user_input)
 
-        # 选择工具集（plan 模式只读；缓存按模式各自生效）
-        if mode == "plan":
-            tool_defs = self.registry.read_only_definitions()
-        else:
-            tool_defs = self.registry.to_definitions()
+        # 选择工具集（plan 模式暴露全部工具，由 SystemPrompt 引导自觉只读）
+        tool_defs = self.registry.to_definitions()
 
         # 未知工具连续计数
         _unknown_streak: int = 0
@@ -132,16 +152,13 @@ class Agent:
                 yield Event(EventType.DONE, StopReason.NATURAL)
                 return
 
-            # 分类已知/未知工具（plan mode 额外过滤非只读工具）
+            # 分类已知/未知工具
             known_calls: list[ToolCall] = []
             unknown_calls: list[ToolCall] = []
 
             for tc in _tool_calls:
                 tool = self.registry.get(tc.tool_name)
                 if tool is None:
-                    unknown_calls.append(tc)
-                elif mode == "plan" and not tool.read_only:
-                    # plan mode 安全网：模型可能幻觉调用非只读工具
                     unknown_calls.append(tc)
                 else:
                     known_calls.append(tc)
@@ -188,25 +205,107 @@ class Agent:
                     ),
                 )
 
-            # 执行已知工具
-            if known_calls:
-                scheduled = await self._scheduler.schedule(known_calls)
+            # ── 权限检查（ch06）──
+            # 对每个 known_call 做权限检查，分出 allowed_calls
+            allowed_calls: list[ToolCall] = []
+            permission_results: list[tuple[ToolCall, Decision, str]] = []
+
+            for tc in known_calls:
+                if self._permission is not None:
+                    is_read_only = self.registry.is_read_only(tc.tool_name)
+                    result = self._permission.check(
+                        tc, is_interactive=self._interactive, read_only=is_read_only
+                    )
+                else:
+                    # 无权限检查器 → 全部放行
+                    result = None
+
+                if result is None or result.decision == Decision.ALLOW:
+                    allowed_calls.append(tc)
+                    permission_results.append((tc, Decision.ALLOW, ""))
+                elif result.decision == Decision.DENY:
+                    # Deny：产 TOOL_CALL + TOOL_RESULT(error) 事件，写入历史，不执行
+                    tr = ToolResult(status="error", error=result.reason)
+                    yield Event(EventType.TOOL_CALL, tc)
+                    yield Event(EventType.TOOL_RESULT, tr)
+                    self.conv.add_tool_result(tc, tr)
+                    permission_results.append((tc, Decision.DENY, result.reason))
+                elif result.decision == Decision.ASK:
+                    if not self._interactive:
+                        # 非交互：直接转为 DENY
+                        tr = ToolResult(status="error", error=result.reason)
+                        yield Event(EventType.TOOL_CALL, tc)
+                        yield Event(EventType.TOOL_RESULT, tr)
+                        self.conv.add_tool_result(tc, tr)
+                        permission_results.append((tc, Decision.DENY, result.reason))
+                    else:
+                        # 交互：发 HITL 事件阻塞等待
+                        self._hitl_event.clear()
+                        self._hitl_response = None
+                        fn = friendly_name(tc.tool_name)
+                        info = extract_target(tc)
+                        params_preview = (
+                            info.target if info.target else str(tc.arguments)
+                        )
+                        request = HITLRequest(
+                            tool_name=fn,
+                            params_preview=params_preview,
+                            reason=result.reason,
+                        )
+                        yield Event(EventType.HITL_REQUEST, request)
+
+                        # 阻塞等待用户决策
+                        await self._hitl_event.wait()
+                        self._hitl_event.clear()
+                        response = self._hitl_response
+
+                        if response is None or response.action == "deny":
+                            tr = ToolResult(
+                                status="error",
+                                error="用户拒绝"
+                                if response is None
+                                else "用户拒绝了此操作",
+                            )
+                            yield Event(EventType.TOOL_CALL, tc)
+                            yield Event(EventType.TOOL_RESULT, tr)
+                            self.conv.add_tool_result(tc, tr)
+                            permission_results.append((tc, Decision.DENY, "用户拒绝"))
+                        else:
+                            # allow_once / allow_always
+                            if (
+                                response.action == "allow_always"
+                                and self._permission is not None
+                            ):
+                                try:
+                                    self._permission.persist_local_allow(tc)
+                                except OSError:
+                                    pass  # 仅记不阻断
+                            allowed_calls.append(tc)
+                            permission_results.append((tc, Decision.ALLOW, ""))
+
+            # 执行 allowed_calls
+            if allowed_calls:
+                scheduled = await self._scheduler.schedule(allowed_calls)
 
                 # 按原始顺序产出 TOOL_CALL + TOOL_RESULT 事件
-                # scheduled 保持 known_calls 的顺序，按原始位置与 unknown 交叉
-                known_idx = 0
-                known_results: dict[int, ScheduledResult] = {
+                # allowed_calls 保持原序，与 denied 项交叉
+                allowed_idx = 0
+                allowed_results: dict[int, ScheduledResult] = {
                     idx: sr for idx, sr in enumerate(scheduled)
                 }
 
                 for tc in _tool_calls:
                     if self.registry.get(tc.tool_name) is not None:
-                        sr = known_results[known_idx]
-                        yield Event(EventType.TOOL_CALL, tc)
-                        yield Event(EventType.TOOL_RESULT, sr.result)
-                        # 写入历史（配对 tool_call，保证 tool_use_id 一致）
-                        self.conv.add_tool_result(tc, sr.result)
-                        known_idx += 1
+                        # 判断此 tc 是否在 allowed_calls 中
+                        is_allowed = any(tc is ac for ac in allowed_calls)
+                        if is_allowed:
+                            sr = allowed_results[allowed_idx]
+                            yield Event(EventType.TOOL_CALL, tc)
+                            yield Event(EventType.TOOL_RESULT, sr.result)
+                            # 写入历史
+                            self.conv.add_tool_result(tc, sr.result)
+                            allowed_idx += 1
+                        # denied 的已知工具已在上面处理
                     # unknown 已在上面处理
 
             # 轮次统计
@@ -219,7 +318,6 @@ class Agent:
 
             # 每轮结束后检查取消
             if self._cancelled.is_set():
-                # 补「已取消」结果给未完成的工具（本轮已全部执行，无未完成）
                 yield Event(EventType.DONE, StopReason.CANCELLED)
                 return
 

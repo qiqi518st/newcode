@@ -11,6 +11,8 @@ from mewcode.agent.events import EventType
 from mewcode.config.loader import load as load_config
 from mewcode.config.loader import load_ccswitch
 from mewcode.conversation.manager import ConversationManager
+from mewcode.permission.checker import PermissionChecker
+from mewcode.permission.modes import PermissionMode
 from mewcode.plans import PlanManager
 from mewcode.prompt.builder import PromptBuilder
 from mewcode.prompt.env import collect_env, format_env
@@ -38,6 +40,12 @@ def main() -> None:
         "--plan",
         action="store_true",
         help="计划模式：只用只读工具探查代码，产出计划后退出",
+    )
+    parser.add_argument(
+        "--mode",
+        type=str,
+        choices=["default", "acceptEdits", "plan", "bypassPermissions"],
+        help="权限模式：default / acceptEdits / plan / bypassPermissions",
     )
     parser.add_argument(
         "--version",
@@ -81,7 +89,26 @@ def main() -> None:
         collect_env(cwd, __version__, provider.name, provider.model)
     )
 
-    agent = Agent(provider, conversation, registry, stable_prompt, env_segment)
+    # 权限系统初始化
+    project_root = os.path.abspath(os.getcwd())
+    permission = PermissionChecker.create(project_root)
+
+    # 命令行 --mode 覆盖配置
+    if args.mode:
+        cli_mode = PermissionMode.parse(args.mode)
+        if cli_mode is not None:
+            permission.set_mode(cli_mode)
+
+    is_interactive = not bool(args.command)
+    agent = Agent(
+        provider,
+        conversation,
+        registry,
+        stable_prompt,
+        env_segment,
+        permission=permission,
+        is_interactive=is_interactive,
+    )
     renderer = RichRenderer()
     plan_manager = PlanManager(os.path.join(os.getcwd(), "plans"))
 

@@ -1,4 +1,4 @@
-"""TUI REPL 循环：状态机、prompt_toolkit 输入、Agent Event 消费、计时、ESC 中断、重试、Plan Mode"""
+"""TUI REPL 循环：状态机、prompt_toolkit 输入、Agent Event 消费、计时、ESC 中断、重试、Plan Mode、权限系统"""
 
 import asyncio
 import time
@@ -15,12 +15,15 @@ from rich.markup import escape
 
 from ..agent import Agent
 from ..agent.events import EventType, StopReason
+from ..permission.hitl import HITLRequest, HITLResponse
+from ..permission.modes import PermissionMode
 from ..plans.manager import PlanManager, PlanMeta
 
 
 class SessionState(Enum):
     IDLE = "idle"  # 等待用户输入
     STREAMING = "streaming"  # 等待/接收模型流
+    APPROVING = "approving"  # 等待用户确认权限
 
 
 class AppMode(Enum):
@@ -36,14 +39,20 @@ _PROMPT_STYLE = Style.from_dict(
 )
 
 
-def _create_key_bindings() -> KeyBindings:
-    """创建 key bindings：Alt+Enter 插入换行"""
+def _create_key_bindings(on_shift_tab=None) -> KeyBindings:
+    """创建 key bindings：Alt+Enter 插入换行，Shift+Tab 切换权限模式"""
     kb = KeyBindings()
 
     @kb.add("escape", "enter")
     def _(event):
         """Alt+Enter 插入换行"""
         event.current_buffer.insert_text("\n")
+
+    @kb.add("s-tab")
+    def _(event):
+        """Shift+Tab 切换权限模式（回调到 REPL，仅 IDLE 态生效）"""
+        if on_shift_tab is not None:
+            on_shift_tab()
 
     return kb
 
@@ -82,13 +91,19 @@ class REPL:
         # 当前正在执行的 plan slug（execute 完成时标记已执行）
         self._executing_slug: str = ""
 
+        # 权限系统（ch06）
+        self._permission_mode: PermissionMode = PermissionMode.DEFAULT
+        if agent.permission is not None:
+            self._permission_mode = agent.permission.mode
+        # HITL 状态
+        self._pending_hitl: HITLRequest | None = None
+        self._approve_cursor: int = 0
+
         self._session = PromptSession(
-            key_bindings=_create_key_bindings(),
+            key_bindings=_create_key_bindings(self._cycle_permission_mode),
             style=_PROMPT_STYLE,
         )
-        # 交互选择（_ask_choice / _ask_multi_choice）使用独立 session，
-        # 避免其 key_bindings（Enter/ESC/↑↓）通过共享 session 污染主循环：
-        # 曾出现主循环回车被弹窗的 Enter 绑定捕获，导致"回车又弹执行选项"。
+        # 交互选择（_ask_choice / _ask_multi_choice）使用独立 session
         self._choice_session = PromptSession(
             style=_PROMPT_STYLE,
         )
@@ -98,11 +113,45 @@ class REPL:
         return "[plan]" if self.mode == AppMode.PLAN else "[normal]"
 
     @property
+    def _permission_mode_label(self) -> str:
+        """权限模式状态栏标签"""
+        labels = {
+            PermissionMode.DEFAULT: "DEFAULT",
+            PermissionMode.ACCEPT_EDITS: "ACCEPT EDITS",
+            PermissionMode.PLAN: "PLAN",
+            PermissionMode.BYPASS: "BYPASS",
+        }
+        mode = getattr(self, "_permission_mode", PermissionMode.DEFAULT)
+        return labels.get(mode, "DEFAULT")
+
+    def _cycle_permission_mode(self) -> None:
+        """Shift+Tab 循环切换四种权限模式（仅 IDLE 态生效）"""
+        if self.state != SessionState.IDLE:
+            return
+        order = [
+            PermissionMode.DEFAULT,
+            PermissionMode.ACCEPT_EDITS,
+            PermissionMode.PLAN,
+            PermissionMode.BYPASS,
+        ]
+        current = getattr(self, "_permission_mode", PermissionMode.DEFAULT)
+        try:
+            idx = order.index(current)
+        except ValueError:
+            idx = 0
+        nxt = order[(idx + 1) % len(order)]
+        self._permission_mode = nxt
+        if self.agent.permission is not None:
+            self.agent.permission.set_mode(nxt)
+        # scrollback 提示新模式
+        self._console.print(f"权限模式: {self._permission_mode_label}", style="yellow")
+
+    @property
     def _toolbar(self) -> str:
-        """底部状态栏"""
-        mode = self._mode_label
+        """底部状态栏：左侧权限模式，右侧 token 用量"""
+        pm = self._permission_mode_label
         tokens = f"Σ in:{self._session_in_tokens} out:{self._session_out_tokens}"
-        return f"{mode} | Alt+Enter 换行，Enter 发送 | /plan /do /delete-plan /normal /exit | {tokens}"
+        return f"{pm} | Shift+Tab 切换模式 | Alt+Enter 换行，Enter 发送 | /plan /do /delete-plan /normal /exit | {tokens}"
 
     async def run(self) -> None:
         """主循环"""
@@ -116,6 +165,9 @@ class REPL:
                 except KeyboardInterrupt:
                     if self.state == SessionState.STREAMING:
                         self._cancel_stream()
+                        continue
+                    if self.state == SessionState.APPROVING:
+                        self._cancel_approving()
                         continue
                     # IDLE 状态下 Ctrl+C → 退出
                     self._console.print("再见！")
@@ -158,13 +210,20 @@ class REPL:
         if text in ("/plan", "/plan "):
             # 无参数：进入计划模式但不启动 Agent，等用户描述任务
             self.mode = AppMode.PLAN
+            # plan 模式使用 plan 权限矩阵
+            self._permission_mode = PermissionMode.PLAN
+            if self.agent.permission is not None:
+                self.agent.permission.set_mode(PermissionMode.PLAN)
             self._console.print(
-                "已进入计划模式（只读）。请直接描述你的任务，例如：创建一个 hello.txt 文件。",
+                "已进入计划模式。请直接描述你的任务，例如：创建一个 hello.txt 文件。",
                 style="bold cyan",
             )
             return
         elif text.startswith("/plan "):
             self.mode = AppMode.PLAN
+            self._permission_mode = PermissionMode.PLAN
+            if self.agent.permission is not None:
+                self.agent.permission.set_mode(PermissionMode.PLAN)
             user_input = text.removeprefix("/plan").strip()
             agent_mode = "plan"
             plan_content = ""
@@ -233,10 +292,9 @@ class REPL:
                 default_index=1,  # 默认选 not now，防误触
             )
 
-            if confirm and confirm != "not now":
+            if confirm and confirm != "not now" and meta is not None:
                 # 用户选择执行：打印信息后执行（与 /do 路径一致）
-                if meta is not None:
-                    await self._run_plan_execution(meta, plan_buffer)
+                await self._run_plan_execution(meta, plan_buffer)
 
         # 不重置模式：plan 会话中执行/不执行后仍停留在 plan 模式
         self.state = SessionState.IDLE
@@ -256,11 +314,7 @@ class REPL:
             self._show_cancelled()
 
     async def _run_plan_execution(self, meta: PlanMeta, plan_content: str) -> None:
-        """统一执行计划入口：先打印 plan 信息，再以 execute 模式执行
-
-        所有执行计划的路径（/do <slug>、/do 选择、确认弹窗选执行）都走此方法，
-        确保"执行时先打印 plan 文件信息"这一要求一致满足。
-        """
+        """统一执行计划入口：先打印 plan 信息，再以 execute 模式执行"""
         self._print_plan_info(meta)
         self._executing_slug = meta.slug
         await self._run_stream("", "execute", plan_content)
@@ -351,7 +405,6 @@ class REPL:
                             self.cur_reply = buffer
                             elapsed = time.monotonic() - self.turn_start
 
-                            # 根据终止原因展示不同提示
                             if stop_reason == StopReason.NATURAL:
                                 self._show_done(elapsed)
                             elif stop_reason == StopReason.MAX_TURNS:
@@ -367,7 +420,6 @@ class REPL:
                                     style="bold yellow",
                                 )
                             elif stop_reason == StopReason.STREAM_ERROR:
-                                # 错误已在 ERROR 事件中展示
                                 pass
 
                             # Plan Mode 产出写入文件
@@ -390,6 +442,19 @@ class REPL:
                                 self._executing_slug = ""
 
                             return
+                        elif event.type == EventType.HITL_REQUEST:
+                            # 人在回路确认
+                            self._pending_hitl = event.payload
+                            self._approve_cursor = 0
+                            # 暂停 Live 渲染
+                            live.stop()
+                            # 展示确认框
+                            response = await self._show_hitl_confirm(event.payload)
+                            # 恢复 Live
+                            live.start()
+                            live.update(Markdown(buffer))
+                            self.agent.resolve_hitl(response)
+                            self._pending_hitl = None
                         elif event.type == EventType.ERROR:
                             error_occurred = True
                             self._show_error(event.payload)
@@ -406,12 +471,104 @@ class REPL:
             else:
                 return
 
+    async def _show_hitl_confirm(self, request: HITLRequest) -> HITLResponse:
+        """展示人在回路确认框，返回用户选择"""
+        self.state = SessionState.APPROVING
+
+        options = [
+            ("allow_once", "1. 允许本次"),
+            ("allow_always", "2. 永久允许（写入本地配置）"),
+            ("deny", "3. 拒绝本次"),
+        ]
+
+        question = (
+            f"待批准: ● {request.tool_name}\n"
+            f"  参数: {request.params_preview}\n"
+            f"  原因: {request.reason}\n"
+        )
+
+        index = [0]
+
+        def render_prompt() -> FormattedText:
+            fragments: list[tuple[str, str]] = [
+                ("bold", question),
+            ]
+            for i, (_value, label) in enumerate(options):
+                marker = "▸ " if i == index[0] else "  "
+                style = "bold cyan" if i == index[0] else "dim"
+                fragments.append((style, f"{marker}{label}\n"))
+            fragments.append(
+                ("dim", "↑↓ 选择 · 回车确认 · Esc 取消 · 1/2/3 直选 · y=允许 n=拒绝")
+            )
+            return FormattedText(fragments)
+
+        kb = KeyBindings()
+
+        @kb.add("down", eager=True)
+        @kb.add("j", eager=True)
+        def _(event):
+            index[0] = (index[0] + 1) % len(options)
+            event.app.invalidate()
+
+        @kb.add("up", eager=True)
+        @kb.add("k", eager=True)
+        def _(event):
+            index[0] = (index[0] - 1) % len(options)
+            event.app.invalidate()
+
+        @kb.add("enter", eager=True)
+        @kb.add("space", eager=True)
+        def _(event):
+            event.app.exit(result=options[index[0]][0])
+
+        @kb.add("1", eager=True)
+        def _(event):
+            event.app.exit(result="allow_once")
+
+        @kb.add("2", eager=True)
+        def _(event):
+            event.app.exit(result="allow_always")
+
+        @kb.add("3", eager=True)
+        def _(event):
+            event.app.exit(result="deny")
+
+        @kb.add("y", eager=True)
+        def _(event):
+            event.app.exit(result="allow_once")
+
+        @kb.add("n", eager=True)
+        @kb.add("d", eager=True)
+        def _(event):
+            event.app.exit(result="deny")
+
+        @kb.add("c-c", eager=True)
+        @kb.add("escape", eager=True)
+        def _(event):
+            event.app.exit(result=None)
+
+        result = await self._choice_session.prompt_async(
+            message=render_prompt,
+            key_bindings=kb,
+            bottom_toolbar=self._toolbar,
+        )
+
+        self.state = SessionState.STREAMING
+
+        if result is None:
+            return HITLResponse(action="deny")
+        return HITLResponse(action=result)
+
     def _cancel_stream(self) -> None:
         """ESC/Ctrl+C 取消当前流式 task"""
         self.agent.cancel()
-        # 等待 task 自然结束（Agent 会产出 DONE(CANCELLED)）
         if self._stream_task and not self._stream_task.done():
             self._stream_task.cancel()
+
+    def _cancel_approving(self) -> None:
+        """ESC/Ctrl+C 取消 HITL 等待"""
+        self.agent.cancel()
+        self._console.print("已取消", style="yellow italic")
 
     async def _ask_choice(
         self,
@@ -419,15 +576,10 @@ class REPL:
         options: list[tuple[str, str]],
         default_index: int = 0,
     ) -> str | None:
-        """在输入位置内联显示选项列表，↑/↓ 选择，Enter 确认。
-
-        返回选中的 value（options[i][0]）；Esc / Ctrl+C 取消返回 None。
-        类似 Claude Code 提问时的操作逻辑，而非弹出独立对话框。
-        """
+        """在输入位置内联显示选项列表，↑/↓ 选择，Enter 确认。"""
         index = [default_index]
 
         def render_prompt() -> FormattedText:
-            """动态渲染：问题 + 选项列表，当前选中项带 ▸ 标记"""
             fragments: list[tuple[str, str]] = [
                 ("bold", question),
                 ("", "\n"),
@@ -474,11 +626,7 @@ class REPL:
         question: str,
         options: list[tuple[str, str]],
     ) -> list[str] | None:
-        """在输入位置内联显示多选列表，↑/↓ 移动、空格 勾选、Enter 确认。
-
-        返回选中的 value 列表；Esc / Ctrl+C 取消返回 None。
-        类似 Claude Code 提问时的操作逻辑。
-        """
+        """在输入位置内联显示多选列表，↑/↓ 移动、空格 勾选、Enter 确认。"""
         index = [0]
         selected: set[str] = set()
 
@@ -487,13 +635,11 @@ class REPL:
                 ("bold", question),
                 ("", "（↑/↓ 移动，空格 勾选/取消，Enter 确认，Esc 取消）\n"),
             ]
-            displayed = 0
             for i, (value, label) in enumerate(options):
                 marker = "▸ " if i == index[0] else "  "
                 check = "◉ " if value in selected else "○ "
                 style = "bold cyan" if i == index[0] else "dim"
                 fragments.append((style, f"{marker}{check}{label}\n"))
-                displayed += 1
             return FormattedText(fragments)
 
         kb = KeyBindings()
@@ -536,10 +682,7 @@ class REPL:
         )
 
     def _print_plan_info(self, meta: PlanMeta, title: str = "执行计划") -> None:
-        """打印 plan 文件信息：名称、创建时间、是否已执行
-
-        所有执行计划的路径都先调用此方法打印信息，再启动执行。
-        """
+        """打印 plan 文件信息"""
         status = "已执行" if meta.executed else "未执行"
         self._console.print(f"▶ {title}: {escape(meta.file)}", style="bold cyan")
         self._console.print(f"  创建时间: {escape(meta.created_at)}", style="dim")
@@ -547,13 +690,12 @@ class REPL:
         self._console.print()
 
     async def _select_plan_interactive(self) -> tuple[PlanMeta, str] | None:
-        """/do 无参时列出所有 plan，用内联方向键选择（类似 Claude Code 提问）"""
+        """/do 无参时列出所有 plan，用内联方向键选择"""
         plans = self.plan_manager.list_plans()
         if not plans:
             self._console.print("没有已保存的计划。", style="yellow")
             return None
 
-        # 每个选项 value=slug，label 含序号/任务/状态/日期
         options: list[tuple[str, str]] = []
         for i, p in enumerate(plans, 1):
             status = "[已执行]" if p.executed else "[待执行]"
@@ -580,7 +722,7 @@ class REPL:
         return meta, plan_content
 
     async def _delete_plan_interactive(self) -> None:
-        """/delete-plan：内联多选删除 plan 文件（↑/↓ 移动、空格 勾选）"""
+        """/delete-plan：内联多选删除 plan 文件"""
         plans = self.plan_manager.list_plans()
         if not plans:
             self._console.print("没有可删除的计划。", style="yellow")
@@ -601,14 +743,13 @@ class REPL:
             self._console.print("未选中任何计划", style="yellow")
             return
 
-        # 二次确认（单选 Y/N，内联）
         confirm = await self._ask_choice(
             f"确认删除 {len(result)} 个计划？\n",
             [
                 ("yes", "yes — 确认删除"),
                 ("no", "no — 取消"),
             ],
-            default_index=1,  # 默认 no，防误删
+            default_index=1,
         )
         if confirm != "yes":
             self._console.print("已取消", style="dim")
@@ -618,17 +759,13 @@ class REPL:
         self._console.print(f"已删除 {len(result)} 个计划", style="bold green")
 
     def _show_retry(self, attempt: int) -> None:
-        """显示重试提示"""
         self._console.print(f"重试 {attempt}/3…", style="bold yellow")
 
     def _show_error(self, err: Exception) -> None:
-        """显示错误信息（转义，防止错误文本含 Rich 标记语法导致二次崩溃）"""
         self._console.print(f"错误: {escape(str(err))}", style="bold red")
 
     def _show_cancelled(self) -> None:
-        """显示取消提示"""
         self._console.print("已取消", style="yellow italic")
 
     def _show_done(self, elapsed: float) -> None:
-        """显示本轮完成耗时"""
         self._console.print(f"Done ({elapsed:.0f}s)", style="dim")

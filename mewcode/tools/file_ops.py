@@ -2,6 +2,7 @@
 
 import os
 
+from ..permission.sandbox import check_path as sandbox_check
 from ..provider.base import ToolResult
 from ..utils.error import PathTraversalError
 
@@ -9,12 +10,20 @@ _READ_LIMIT = 500  # 读文件行数上限
 
 
 def _check_path(path: str) -> str:
-    """路径安全检查：解析为绝对路径并限制在项目工作目录内"""
+    """路径安全检查：解析为绝对路径并限制在项目工作目录内
+
+    使用沙箱模块做符号链接感知的路径检查（双重保险）。
+    """
     abs_path = os.path.abspath(path)
     cwd = os.path.abspath(os.getcwd())
-    if not abs_path.startswith(cwd + os.sep) and abs_path != cwd:
+
+    # 沙箱检查（符号链接感知）
+    ok, resolved = sandbox_check(path, cwd)
+    if not ok:
         raise PathTraversalError(f"路径超出项目范围: {path}")
-    return abs_path
+
+    # 返回 resolved 路径（已解析符号链接/祖先）
+    return resolved if resolved else abs_path
 
 
 class ReadFileTool:

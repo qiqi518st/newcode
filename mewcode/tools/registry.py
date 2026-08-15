@@ -1,7 +1,21 @@
 """工具注册中心"""
 
+from ..permission.modes import ToolCategory
 from ..provider.base import ToolDefinition, ToolResult
 from .base import Tool
+
+# 友好名 → 内部名映射
+FRIENDLY_NAME_MAP: dict[str, str] = {
+    "Bash": "execute_command",
+    "Read": "read_file",
+    "Write": "write_file",
+    "Edit": "edit_file",
+    "Glob": "list_files",
+    "Grep": "search_code",
+}
+
+# 内部名 → 友好名反向映射
+INTERNAL_TO_FRIENDLY: dict[str, str] = {v: k for k, v in FRIENDLY_NAME_MAP.items()}
 
 
 class Registry:
@@ -45,6 +59,19 @@ class Registry:
         """查询指定工具是否为只读；不存在时返回 False"""
         tool = self.get(name)
         return tool.read_only if tool else False
+
+    def get_friendly_name(self, internal: str) -> str:
+        """内部名 → 友好名；未知原样返回"""
+        return INTERNAL_TO_FRIENDLY.get(internal, internal)
+
+    def get_category(self, internal: str) -> ToolCategory:
+        """工具分类：read_only 优先→READONLY；write_file/edit_file→FILE_WRITE；其余→COMMAND"""
+        tool = self.get(internal)
+        if tool is not None and tool.read_only:
+            return ToolCategory.READONLY
+        if internal in ("write_file", "edit_file"):
+            return ToolCategory.FILE_WRITE
+        return ToolCategory.COMMAND
 
     async def execute(self, name: str, arguments: dict) -> ToolResult:
         """查找并执行工具"""

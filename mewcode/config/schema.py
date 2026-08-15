@@ -28,4 +28,5 @@ class Config:
     system_prompt: str = ""  # 自定义 system prompt，空则用内置默认值
     cleanup_period_days: int = 30  # 计划文件清理周期（天），0 表示不清理
     default_mode: str = "normal"  # 默认运行模式："normal" | "plan"
+    permission_mode: str = "default"  # 启动默认权限模式
     providers: list[ProviderConfig] = field(default_factory=list)

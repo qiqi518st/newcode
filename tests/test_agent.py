@@ -232,7 +232,7 @@ async def test_agent_stream_error():
 
 @pytest.mark.anyio
 async def test_agent_plan_mode():
-    """Plan Mode 应只使用只读工具"""
+    """Plan Mode 应能正常运行（ch06: 暴露全部工具，由 SystemPrompt 引导自觉只读）"""
     provider = MockProvider(mode="text")
     registry = Registry()
     registry.register(MockTool())  # mock_tool is read_only=True
