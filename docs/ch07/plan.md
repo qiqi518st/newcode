@@ -44,7 +44,7 @@
 
 - **`mcp.config`（纯函数）**：两层 YAML 加载、按 server 名合并（项目级完整覆盖）、`${VAR}` 展开、字段校验、非法 server 隔离。返回 `dict[str, ServerConfig]`，**不碰 registry、永不抛**。
 - **`ServerConfig`（数据类）**：单个 server 的归一化定义，字段已展开、已校验。
-- **`MCPConnection`**：单 server 会话句柄。在 `connect_and_list` 内自己 `async with` 打开 SDK 传输 + `ClientSession`、握手、列工具；存 `session` 到 self；`call_tool` 包 30s 超时并翻译结果；`close()` 退出自身上下文。**每连接独立管理自己的上下文，不共享栈**（避免共享 AsyncExitStack 的并发竞态）。
+- **`MCPConnection`**：单 server 会话句柄。在 `connect_and_list` 内用每连接私有 `AsyncExitStack` 打开 SDK 传输 + `ClientSession`、握手、列工具；存 `session` 到 self；`call_tool` 包 30s 超时并翻译结果；`close()` 退出自身上下文。**每连接独立管理自己的上下文，不共享栈**（避免共享 AsyncExitStack 的并发竞态）。
 - **`MCPManager`**：生命周期编排器。`start_all()` 并发起所有连接、收集各连接产出的工具、稳定排序；`tools()` 返回工具列表副本；`close()` 并发关全部连接（单层 5s 兜底）。**与 Registry 解耦**——只产工具，注册由装配处（main）负责。
 - **`McpTool`**：实现既有 `Tool` 协议。持 `CallerSession`（Protocol），名字 `mcp__<server>__<tool>`、参数透传、只读性取 `readOnlyHint`、`execute` 转走所属 `CallerSession.call_tool`，把远端结果翻译成 repo 现有的 `ToolResult(status, output, error, truncated)`。
 - **`main._amain`（单 loop 改造）**：把整条启动链（`load_config → start_all → 注册 → repl/oneshot 跑 → close`）收进一个 `asyncio.run(_amain())`，让 MCP session 与运行循环同寿；`try/finally` 保证退出收尾。
@@ -209,33 +209,32 @@ async def McpTool.execute(self, arguments: dict) -> ToolResult: ...
   from mcp import StdioServerParameters
   params = StdioServerParameters(command=srv.command, args=srv.args,
                                   env={**os.environ, **srv.env})  # srv.env 覆盖同名宿主
-  transport_ctx = stdio_client(params)       # async with → (read, write)
+  transport_ctx = stdio_client(params)       # async with → (read_stream, write_stream)
   ```
-- http 传输：
+- http 传输（SDK 2.0：`streamable_http_client` 无 `headers` 参数，自定义 headers 经预配置的 `httpx.AsyncClient` 注入；`httpx` 名即 SDK 依赖 httpx2）：
   ```python
-  from mcp.client.streamable_http import streamablehttp_client
-  transport_ctx = streamablehttp_client(srv.url, headers=srv.headers or None)
-  # async with → (read, write, metadata)   ← 注意返回 3 元组
+  from mcp.client.streamable_http import streamable_http_client
+  import httpx
+  http_client = httpx.AsyncClient(headers=srv.headers) if srv.headers else None
+  transport_ctx = streamable_http_client(srv.url, http_client=http_client)
+  # async with → (read_stream, write_stream)   ← 与 stdio 同为 2 元组
   ```
-- 打开会话（**在 `connect_and_list` 内自己 `async with`**，每连接独立栈）：
+- 打开会话（**每连接私有 `AsyncExitStack`** 挂在 `self`，规避共享栈并发竞态；上下文不在 `connect_and_list` 返回时退出）：
   ```python
-  async with transport_ctx as transport:
-      read, write = transport[0], transport[1]      # http 第三个为 metadata，忽略
-      async with ClientSession(
-          read, write,
-          client_info=Implementation(name="mewcode", version=self._client_version)
-      ) as session:
-          await session.initialize()                 # 握手，报 client_info
-          listed = await session.list_tools()
-          self._session = session
-          self._transport_cm = transport            # 保存，供 call_tool 复用 / close 退出
-          return [make_tool(self, t) for t in listed.tools]
+  transport = await self._stack.enter_async_context(transport_ctx)
+  read_stream, write_stream = transport       # stdio / http 都是 2 元组
+  self._session = await self._stack.enter_async_context(
+      ClientSession(read_stream, write_stream,
+                    client_info=Implementation(name="mewcode", version=self._client_version))
+  )
+  await self._session.initialize()            # 握手，报 client_info
+  listed = await self._session.list_tools()
+  return [make_tool(self.server.name, self, remote) for remote in listed.tools]
   ```
-  ⚠️ 上面的 `async with` 会在方法返回时退出上下文、**关闭 session 与传输**。为了让 session 跨 `call_tool` 复用，实际实现不在方法体内退出，而是用 **`AsyncExitStack` 挂在 `self` 上**：在 `connect_and_list` 内 `self._stack.enter_async_context(transport_ctx)` 与 `enter_async_context(ClientSession(...))`，方法返回后上下文仍存活；`close()` 时 `await self._stack.aclose()`。即每连接一个**私有** `AsyncExitStack`（非共享），规避并发竞态。
-- `call_tool`：`result = await asyncio.wait_for(self._session.call_tool(remote, args), call_timeout)`；取 `result.content` 中 `isinstance(block, TextContent)` 的 `.text` 按序拼接；`result.isError` 决定 `status`；非 text 块静默丢弃 + stderr 告警（per `full_name` 限一次，用 set 去重）。
-- **三种失败统一转 `ToolResult`，不向调用方抛**（复用"不中断会话"契约）：超时 → `(status="error", error="MCP 工具调用超时 (30s)")`；`session.call_tool` 抛异常 → `(status="error", error=f"MCP 工具调用失败: {e}")`；传输断同此。
-- 结果映射（兼容 repo 现有 `ToolResult`）：远端非错 → `status="ok"`、文本进 `output`；远端 `isError==True` → `status="error"`、文本进 `error`；协议错/超时 → `status="error"`、原因进 `error`。`truncated` 保持默认 False。
-- `make_tool(server_name, caller, remote)`：`full_name = f"mcp__{srv.name}__{remote.name}"`（`srv.name` 通过连接持有的 `ServerConfig.name` 取得，但 `make_tool` 形参用 `server_name` 字符串 + `caller: CallerSession`，**不依赖具象 `MCPConnection`**，契合「CallerSession Protocol」决策）；禁用字符校验 `_VALID_NAME.fullmatch(full_name)`（`_VALID_NAME = ^[A-Za-z0-9_-]+$`）不通过 → 返回 None + 告警；`description = remote.description or f"MCP 工具（来自 server {srv.name}）"`；`parameters = dict(remote.inputSchema) or {"type":"object"}`；`read_only = bool(remote.annotations and remote.annotations.readOnlyHint)`。conn 调用形为 `make_tool(self.server.name, self, remote)`。
+- `call_tool`：`result = await asyncio.wait_for(self._session.call_tool(remote, args), call_timeout)`；**SDK 2.0 `call_tool` 返回 `CallToolResult | InputRequiredResult | Result` 联合类型**——先 `isinstance(result, CallToolResult)` 分流，非 `CallToolResult`（如 `InputRequiredResult`）按协议错处理；对 `CallToolResult`，取 `result.content` 中 `isinstance(block, TextContent)` 的 `.text` 按序拼接，`result.is_error` 决定 `status`；非 text 块静默丢弃 + stderr 告警（per `full_name` 限一次，用 set 去重）。
+- **三种失败统一转 `ToolResult`，不向调用方抛**（复用"不中断会话"契约）：超时 → `(status="error", error="MCP 工具调用超时 (30s)")`；`session.call_tool` 抛异常 → `(status="error", error=f"MCP 工具调用失败: {e}")`；返回非 `CallToolResult`（`InputRequiredResult` 等） → `(status="error", error="MCP 工具返回非预期结果类型")`；传输断同异常分支。
+- 结果映射（兼容 repo 现有 `ToolResult`）：远端非错 → `status="ok"`、文本进 `output`；远端 `is_error==True` → `status="error"`、文本进 `error`；协议错/超时 → `status="error"`、原因进 `error`。`truncated` 保持默认 False。
+- `make_tool(server_name, caller, remote)`：`full_name = f"mcp__{srv.name}__{remote.name}"`（`srv.name` 通过连接持有的 `ServerConfig.name` 取得，但 `make_tool` 形参用 `server_name` 字符串 + `caller: CallerSession`，**不依赖具象 `MCPConnection`**，契合「CallerSession Protocol」决策）；禁用字符校验 `_VALID_NAME.fullmatch(full_name)`（`_VALID_NAME = ^[A-Za-z0-9_-]+$`）不通过 → 返回 None + 告警；`description = remote.description or f"MCP 工具（来自 server {srv.name}）"`；`parameters = dict(remote.input_schema) or {"type":"object"}`（SDK 2.0 为 `input_schema` snake_case）；`read_only = bool(remote.annotations and remote.annotations.read_only_hint)`（SDK 2.0 为 `read_only_hint` snake_case）。conn 调用形为 `make_tool(self.server.name, self, remote)`。
 
 ### mewcode/mcp/wrapper.py
 **职责：** `McpTool` 适配器实现 + `CallerSession` Protocol + `make_tool`。
@@ -369,7 +368,7 @@ tests/
 | Manager / Registry 解耦 | Manager 只暴露 `tools()`，注册放在装配处（main） | Manager 可独立测试不碰 Registry；职责单一 |
 | CallerSession Protocol | `McpTool` 持 `CallerSession` 而非具体 `ClientSession` | 单测注入 stub 测 execute 各分支，无需起真 server |
 | stdio env 注入 | `{**os.environ, **server.env}`，server.env 覆盖同名宿主 | 多数 stdio server 依赖 HOME/PATH/TMPDIR 才能跑；凭据靠 `${VAR}` 不落盘注入 |
-| http 不订阅 SSE | 直接 `streamablehttp_client`，忽略返回 3 元组的 metadata | 本章只要请求-响应式调用，spec F5 明确 |
+| http 不订阅 SSE | 直接 `streamable_http_client`（SDK 2.0；自定义 headers 经 `httpx.AsyncClient` 注入），皆返回 2 元组 `(read_stream, write_stream)` | 本章只要请求-响应式调用，spec F5 明确 |
 | 调用错误回灌 | `call_tool` 把超时/协议错/传输断统一转 `ToolResult(status="error")`，不抛 | 复用"工具失败不中断 Agent Loop"契约 |
 | ToolResult 模型 | 沿用 repo 既有 `ToolResult(status, output, error, truncated)`，远端 `isError` 映射 status、文本进 output/error | 不改 ToolResult 数据结构（波及全 agent/tui）；spec F7 的 `content/is_error` 是行为描述措辞，实现按此映射 |
 | 工具名禁用字符 | `full_name` 须匹配 `[A-Za-z0-9_-]+`，否则跳过 + 告警 | 远端工具名含特殊字符会让 provider 拒收。spec F8 |

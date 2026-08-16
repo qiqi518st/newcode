@@ -37,7 +37,7 @@
 1. `mewcode/__init__.py`：`__version__` 从 `"0.6.0"` 改为 `"0.7.0"`。
 2. `pyproject.toml`：`[project] version` 从 `"0.6.0"` 改为 `"0.7.0"`；`dependencies` 列表追加 `"mcp>=1.0"`。
 3. 重装：`pip install -e .[dev]`。
-4. 核对本地 `mcp` SDK 关键导出路径以便后续正确 import——执行 `python -c "import mcp, mcp.types, mcp.client.stdio, mcp.client.streamable_http as h; print('ok')"`，并对照确认 `StdioServerParameters`、`ClientSession`、`Implementation`、`TextContent` 的实际 import 来源（顶层 `mcp` vs `mcp.client.*` vs `mcp.types`）；把结论记在首个用到它们的实现的注释里。
+4. 核对本地 `mcp` SDK 关键导出路径以便后续正确 import——执行 `python -c "import mcp, mcp.types, mcp.client.stdio, mcp.client.streamable_http as h; print('ok')"`，对照确认 `ClientSession`、`StdioServerParameters`、`Implementation`（均 `mcp`/`mcp.types`）与 `stdio_client`（`mcp.client.stdio`）、`streamable_http_client`（`mcp.client.streamable_http`，**注意是下划线连字、非 `streamablehttp_client`**）、`TextContent`/`Tool`/`CallToolResult`/`ToolAnnotations`（`mcp.types`）的实际来源；SDK 2.0 字段全 snake_case：`Tool.input_schema`、`CallToolResult.is_error`、`ToolAnnotations.read_only_hint`，`call_tool` 返回 `CallToolResult | InputRequiredResult | Result` 联合，`streamable_http_client` **无 headers 参数**（经 `httpx.AsyncClient(headers=...)` 注入）、传输皆 yield 2 元组。把结论记在首个用到它们的实现的注释里。
 
 **验证：**
 - `python -c "import mewcode; print(mewcode.__version__)"` → `0.7.0`
@@ -79,7 +79,7 @@
 1. 定义 `CallerSession(Protocol)`：`async def call_tool(self, name: str, arguments: dict) -> ToolResult: ...`。
 2. 模块级 `_VALID_NAME = re.compile(r"^[A-Za-z0-9_-]+$")`。
 3. 模块级 `_non_text_warn_once: set[str] = set()`（全进程按 `full_name` 去重非 text 块告警）。
-4. 实现 `make_tool(server_name: str, caller: CallerSession, remote) -> McpTool | None`：`full_name = f"mcp__{server_name}__{remote.name}"`；`_VALID_NAME.fullmatch(full_name)` 不通过→返回 None + stderr 告警 `[mcp] warn: skip tool <full_name>: name contains illegal characters`；`description = remote.description or f"MCP 工具（来自 server {server_name}）"`；`parameters = dict(remote.inputSchema) if remote.inputSchema else {"type":"object"}`；`read_only = bool(getattr(getattr(remote, "annotations", None), "readOnlyHint", None))`（None-safe）；返回 `McpTool(caller, full_name, remote.name, description, parameters, read_only)`。
+4. 实现 `make_tool(server_name: str, caller: CallerSession, remote) -> McpTool | None`：`full_name = f"mcp__{server_name}__{remote.name}"`；`_VALID_NAME.fullmatch(full_name)` 不通过→返回 None + stderr 告警 `[mcp] warn: skip tool <full_name>: name contains illegal characters`；`description = remote.description or f"MCP 工具（来自 server {server_name}）"`；`parameters = dict(remote.input_schema) if remote.input_schema else {"type":"object"}`（SDK 2.0 为 `input_schema`）；`read_only = bool(getattr(getattr(remote, "annotations", None), "read_only_hint", None))`（SDK 2.0 为 `read_only_hint`，None-safe）；返回 `McpTool(caller, full_name, remote.name, description, parameters, read_only)`。
 5. 实现 `McpTool` 类：`__init__` 存 `caller/_remote_name/_full_name/_desc/_params/_ro`；`@property name`→`_full_name`、`description`、`parameters`、`read_only`；`async execute(self, arguments) -> ToolResult`：`return await self.caller.call_tool(self._remote_name, arguments or {})`，不再 try/except（极端情况由 ToolScheduler 统一 except 兜底）。
 6. 写 `tests/test_mcp_wrapper.py`（`@pytest.mark.anyio`）：①命名拼接；②含非法字符（如 `mcp__s__a/b`）→`make_tool` 返回 None；③`readOnlyHint=True`→read_only True，缺失/False→False；④描述空→兜底文案；⑤inputSchema 空→`{"type":"object"}`；⑥execute 转发到 stub caller（最小 `class StubSession:` 实现 `CallerSession`）并返回其 ToolResult。⑦非 text 块的去重：直接验证 `_non_text_warn_once` 行为由 conn 测试覆盖（见 T3）——wrapper 测试只验 execute 转发。每个测试 docstring 注明防的 bug。
 
@@ -101,15 +101,16 @@
 4. 实现 `MCPConnection.__init__(self, server: ServerConfig, client_version: str)`：存 `server`、`client_version`；`_session=None`；`_stack = AsyncExitStack()`（**每连接私有栈**，规避共享 AsyncExitStack 的并发竞态）；`_closed=False`。
 5. 实现 `connect_and_list(self) -> list[McpTool]`：按 `server.type` 构造 transport ctx——
    - stdio：`StdioServerParameters(command=server.command, args=server.args, env={**os.environ, **server.env})` → `stdio_client(params)`；
-   - http：`streamablehttp_client(server.url, headers=server.headers or None)`；
-   `transport = await self._stack.enter_async_context(ctx)`；`read, write = transport[0], transport[1]`（http 返回 3 元组，第 3 个 metadata 忽略）；
-   `self._session = await self._stack.enter_async_context(ClientSession(read, write, client_info=Implementation(name="mewcode", version=self.client_version)))`；
+   - http（SDK 2.0 无 headers 参数）：`http_client = httpx.AsyncClient(headers=server.headers) if server.headers else None` → `streamable_http_client(server.url, http_client=http_client)`；
+   `transport = await self._stack.enter_async_context(ctx)`；`read_stream, write_stream = transport`（**stdio / http 都是 2 元组**）；
+   `self._session = await self._stack.enter_async_context(ClientSession(read_stream, write_stream, client_info=Implementation(name="mewcode", version=self.client_version)))`；
    `await self._session.initialize()`；`listed = await self._session.list_tools()`；
    `return [t for t in (make_tool(self.server.name, self, remote) for remote in listed.tools) if t is not None]`。
    任一步失败→`raise MCPStartupError(...)`（由 MCPManager 捕获，不外抛启动）。**上下文不在方法返回时退出**（私有 `_stack` 持有，存活到 close）。
 6. 实现 `call_tool(self, tool_name, arguments) -> ToolResult`：`try: result = await asyncio.wait_for(self._session.call_tool(tool_name, arguments=arguments or {}), call_timeout)`；
+   **SDK 2.0 `call_tool` 返回 `CallToolResult | InputRequiredResult | Result` 联合类型**——先 `if not isinstance(result, CallToolResult):` 转 `ToolResult(status="error", error="MCP 工具返回非预期结果类型")` 并 return；
    遍历 `result.content`：`isinstance(b, TextContent)`→收 `b.text`；其余类块——`full = f"mcp__{self.server.name}__{tool_name}"`，`if full not in _non_text_warn_once: _non_text_warn_once.add(full); stderr "[mcp] warn: tool <full> returned non-text content blocks (dropped)"`（**用 wrapper 模块级 `_non_text_warn_once`，全进程按 full_name 去重**）；
-   映射：`is_error = bool(result.isError)`；`status = "error" if is_error else "ok"`；`joined = "\n".join(texts)`；`output = "" if is_error else joined`；`error = joined if is_error else ""`；返回 `ToolResult(status=status, output=output, error=error)`；
+   映射：`is_error = bool(result.is_error)`（SDK 2.0 snake_case）；`status = "error" if is_error else "ok"`；`joined = "\n".join(texts)`；`output = "" if is_error else joined`；`error = joined if is_error else ""`；返回 `ToolResult(status=status, output=output, error=error)`；
    `except asyncio.TimeoutError: return ToolResult(status="error", error="MCP 工具调用超时 (30s)")`；
    `except Exception as e: return ToolResult(status="error", error=f"MCP 工具调用失败: {e}")`。**不向调用方抛**。
 7. 实现 `close(self)`：`await self._stack.aclose()`；`_closed=True`；自身不再加超时（MCPManager.close 单层 5s 兜底已覆盖）。
