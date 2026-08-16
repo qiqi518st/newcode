@@ -224,18 +224,22 @@ class PermissionChecker:
         """
         local_path = os.path.join(self._root, RULE_FILE_LOCAL)
         fn = friendly_name(tool_call.tool_name)
-        info = extract_target(tool_call)
-
-        if not info.ok:
-            return
 
         # 生成精确规则字符串
-        if info.is_file:
-            rule_str = f"{fn}({info.target})"
+        if tool_call.tool_name.startswith("mcp__"):
+            # ch07：MCP 工具 extract_target 返回 ok=False（无 target 语义），
+            # 落盘裸工具名精确规则（无括号，匹配该工具全部调用）（spec F12）
+            rule_str = fn
         else:
-            # Bash 命令：转义 glob 特殊字符
-            escaped = _escape_glob(info.target)
-            rule_str = f"{fn}({escaped})"
+            info = extract_target(tool_call)
+            if not info.ok:
+                return
+            if info.is_file:
+                rule_str = f"{fn}({info.target})"
+            else:
+                # Bash 命令：转义 glob 特殊字符
+                escaped = _escape_glob(info.target)
+                rule_str = f"{fn}({escaped})"
 
         # 读现有配置
         settings = load_settings(local_path)

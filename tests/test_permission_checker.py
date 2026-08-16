@@ -258,3 +258,59 @@ class TestCheckerMisc:
         assert local.exists()
         content = local.read_text(encoding="utf-8")
         assert "Bash(git status)" in content
+
+
+class TestPersistMcpAllow:
+    """ch07：MCP 工具 allow_always 落盘裸工具名精确规则（spec F12/AC11）。
+
+    防的 bug：MCP 工具 extract_target 返回 ok=False，泛化前 persist_local_allow
+    被 `if not info.ok: return` 短路成空操作，「永久允许」每次重启后再弹 Ask。
+    """
+
+    def test_mcp_tool_persists_bare_name(self, tmp_path):
+        c = _checker(PermissionMode.DEFAULT, _empty_layers(), str(tmp_path))
+        c.persist_local_allow(
+            _call("mcp__github__create_issue", {"repo": "x", "title": "t"})
+        )
+        local = tmp_path / ".mewcode" / "permissions.local.yaml"
+        assert local.exists()
+        content = local.read_text(encoding="utf-8")
+        # 裸工具名精确规则（无括号、无 target），匹配该工具全部调用
+        assert "mcp__github__create_issue" in content
+        assert "mcp__github__create_issue(" not in content
+
+    def test_mcp_persist_dedup(self, tmp_path):
+        # 重复「永久允许」不产生重复条目
+        c = _checker(PermissionMode.DEFAULT, _empty_layers(), str(tmp_path))
+        call = _call("mcp__github__create_issue", {"repo": "x"})
+        c.persist_local_allow(call)
+        c.persist_local_allow(call)
+        local = tmp_path / ".mewcode" / "permissions.local.yaml"
+        content = local.read_text(encoding="utf-8")
+        assert content.count("mcp__github__create_issue") == 1
+
+    def test_mcp_persisted_rule_round_trips_through_parse(self, tmp_path):
+        # 落盘的裸名规则可被 Rule.parse 重新加载并命中（重启后不再弹 Ask 的依据）
+        import yaml
+
+        from mewcode.permission.rules import Rule, RuleSet
+
+        c = _checker(PermissionMode.DEFAULT, _empty_layers(), str(tmp_path))
+        c.persist_local_allow(_call("mcp__github__create_issue", {}))
+        local = tmp_path / ".mewcode" / "permissions.local.yaml"
+        data = yaml.safe_load(local.read_text(encoding="utf-8"))
+        entries = data["permissions"]["allow"]
+        assert entries == ["mcp__github__create_issue"]
+        rule = Rule.parse(entries[0], "allow", str(local))
+        assert rule is not None
+        rs = RuleSet()
+        rs.allow.append(rule)
+        assert rs.match("mcp__github__create_issue", "") == Decision.ALLOW
+
+    def test_builtin_persist_path_unaffected(self, tmp_path):
+        # 防泛化破坏内置落盘：Bash 仍走带括号/转义路径
+        c = _checker(PermissionMode.DEFAULT, _empty_layers(), str(tmp_path))
+        c.persist_local_allow(_call("execute_command", {"command": "git push *"}))
+        local = tmp_path / ".mewcode" / "permissions.local.yaml"
+        content = local.read_text(encoding="utf-8")
+        assert "Bash(git push [*])" in content

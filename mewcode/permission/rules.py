@@ -19,8 +19,10 @@ RULE_FILE_USER = os.path.expanduser("~/.config/mewcode/permissions.yaml")
 RULE_FILE_PROJECT = ".mewcode/permissions.yaml"
 RULE_FILE_LOCAL = ".mewcode/permissions.local.yaml"
 
-# 解析规则字符串的正则：提取工具名和括号内模式
-_RULE_PARSE_RE = re.compile(r"^(Bash|Read|Write|Edit|Glob|Grep)(?:\((.*)\))?$")
+# 解析规则字符串的正则：提取工具名和括号内模式。
+# ch07 泛化：接受任意合法工具名字符集 [A-Za-z0-9_-]+（含 mcp__ 前缀），
+# 仍拒绝含空格/特殊字符的非法名。内置 6 个友好名是它的子集，行为不变。
+_RULE_PARSE_RE = re.compile(r"^([A-Za-z0-9_-]+)(?:\((.*)\))?$")
 
 
 @dataclass
@@ -92,6 +94,16 @@ def _match_parts(pat_parts: list[str], tgt_parts: list[str]) -> bool:
     return False
 
 
+def _tool_name_matches(rule_name: str, friendly: str) -> bool:
+    """工具名匹配：规则名含 * 时按 fnmatch 通配（如 mcp__github__* 匹配
+    mcp__github__create_issue），否则精确相等（ch07 泛化，spec F12）。
+    内置 6 个友好名规则不含 *，走精确分支，行为不变。
+    """
+    if "*" in rule_name:
+        return fnmatch.fnmatchcase(friendly, rule_name)
+    return rule_name == friendly
+
+
 class RuleSet:
     """单层规则集，维护 allow/deny 两个列表"""
 
@@ -102,10 +114,14 @@ class RuleSet:
     def match(self, friendly: str, target: str) -> Decision | None:
         """同层内先 deny 后 allow 遍历；命中 deny → DENY，命中 allow → ALLOW，未命中 → None"""
         for rule in self.deny:
-            if rule.tool_name == friendly and rule.match_target(target):
+            if _tool_name_matches(rule.tool_name, friendly) and rule.match_target(
+                target
+            ):
                 return Decision.DENY
         for rule in self.allow:
-            if rule.tool_name == friendly and rule.match_target(target):
+            if _tool_name_matches(rule.tool_name, friendly) and rule.match_target(
+                target
+            ):
                 return Decision.ALLOW
         return None
 

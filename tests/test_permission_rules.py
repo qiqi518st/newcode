@@ -39,14 +39,27 @@ class TestRuleParse:
         [
             "",
             "  ",
-            "Foo(git)",  # 未知工具名
             "Bash(git",  # 缺右括号
             "Bash(git)extra",  # 括号后多余
-            "bash(git)",  # 工具名大小写不符
+            "mcp__a b__x",  # ch07：工具名含空格（非法字符）
+            "mcp__demo__a/b",  # ch07：工具名含 /（LLM 工具名禁用字符）
+            "Bad Name(git)",  # 工具名含空格
         ],
     )
     def test_invalid_returns_none(self, raw):
         assert R.Rule.parse(raw, "allow", "test") is None
+
+    def test_unknown_but_legal_name_now_parses(self):
+        """ch07 泛化：任意合法字符工具名（含未知名/小写）均可解析。
+
+        防回归背景：正则放宽前只认 6 个内置友好名，Foo/bash 被拒；
+        泛化后为支持 mcp__ 前缀接受 [A-Za-z0-9_-]+（spec F12）。
+        未知名规则只是永不命中，无害。
+        """
+        rule = R.Rule.parse("Foo(git)", "allow", "test")
+        assert rule is not None and rule.tool_name == "Foo"
+        rule = R.Rule.parse("bash(git)", "allow", "test")
+        assert rule is not None and rule.tool_name == "bash"
 
     def test_empty_paren_means_match_all(self):
         # Bash() 空模式 → pattern="" → 匹配全部，与无括号等价
@@ -133,6 +146,46 @@ class TestRuleLayers:
         assert layers.match("Read", "a.txt") is None
 
 
+class TestMcpToolRules:
+    """ch07：mcp__ 前缀工具名的规则解析与通配匹配（spec F12/AC11）。
+
+    防的 bug：泛化前正则只认 6 个内置名，mcp__ 规则被静默跳过；
+    RuleSet.match 用 == 比对使 mcp__github__* 裸通配规则永不命中。
+    """
+
+    def test_parse_exact_mcp_name(self):
+        rule = R.Rule.parse("mcp__github__create_issue", "allow", "test")
+        assert rule is not None
+        assert rule.tool_name == "mcp__github__create_issue"
+        assert rule.pattern == ""  # 无括号 -> 匹配该工具全部调用
+
+    def test_parse_mcp_name_with_parens(self):
+        rule = R.Rule.parse("mcp__fs__read_file(/tmp/x)", "deny", "test")
+        assert rule is not None
+        assert rule.tool_name == "mcp__fs__read_file"
+        assert rule.pattern == "/tmp/x"
+
+    def test_bare_wildcard_matches_same_server_tools(self):
+        # 防的 bug：mcp__github__* 曾无法匹配任何工具（== 比对）
+        rs = R.RuleSet()
+        rs.allow.append(R.Rule("mcp__github__*", "", "allow", "t"))
+        assert rs.match("mcp__github__create_issue", "") == Decision.ALLOW
+        assert rs.match("mcp__github__search", "") == Decision.ALLOW
+        assert rs.match("mcp__other__create_issue", "") is None
+
+    def test_exact_mcp_name_no_cross_tool_leak(self):
+        rs = R.RuleSet()
+        rs.allow.append(R.Rule("mcp__github__create_issue", "", "allow", "t"))
+        assert rs.match("mcp__github__delete_repo", "") is None
+
+    def test_builtin_rules_unaffected_by_wildcard_branch(self):
+        # 内置名规则不含 *，仍走精确分支（防泛化破坏既有行为）
+        rs = R.RuleSet()
+        rs.allow.append(R.Rule("Bash", "git *", "allow", "t"))
+        assert rs.match("Bash", "git status") == Decision.ALLOW
+        assert rs.match("Read", "git status") is None
+
+
 class TestLoadRules:
     def _write(self, path, data: dict):
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -185,7 +238,12 @@ class TestLoadRules:
         project = tmp_path / ".mewcode" / "permissions.yaml"
         self._write(
             project,
-            {"permissions": {"allow": ["Bash(git status)", "NotATool(x)", 42]}},
+            {
+                "permissions": {
+                    # "Bad Name(x)" 含空格 -> 非法名；42 非字符串
+                    "allow": ["Bash(git status)", "Bad Name(x)", 42]
+                }
+            },
         )
         layers = R.load_rules(str(tmp_path))
         # 合法规则仍生效，非法条目跳过
