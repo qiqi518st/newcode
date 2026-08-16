@@ -27,6 +27,7 @@ class ListFilesTool:
         return (
             "按 glob 模式列出匹配的文件路径，支持 ** 递归匹配。"
             "列出文件优先用本工具而非 shell ls。"
+            "找到文件后只报告结果，询问用户是否需要读取内容。"
         )
 
     @property

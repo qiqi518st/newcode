@@ -244,9 +244,10 @@ class REPL:
                 return
             else:
                 # /do（无参）：内联列出所有 plan 供选择
-                plan_meta, plan_content = await self._select_plan_interactive()
-                if plan_meta is None:
+                result = await self._select_plan_interactive()
+                if result is None:
                     return
+                plan_meta, plan_content = result
                 await self._run_plan_execution(plan_meta, plan_content)
                 return
         else:
@@ -582,7 +583,7 @@ class REPL:
         def render_prompt() -> FormattedText:
             fragments: list[tuple[str, str]] = [
                 ("bold", question),
-                ("", "\n"),
+                ("", "（↑/↓ 移动，Enter 确认，Esc 取消）\n"),
             ]
             for i, (_value, label) in enumerate(options):
                 marker = "▸ " if i == index[0] else "  "

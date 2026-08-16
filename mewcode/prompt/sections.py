@@ -41,6 +41,8 @@ _TOOL_USAGE = (
     "你可以使用工具来观察项目状态和完成用户请求。工具使用原则：\n"
     "- 优先用专用工具而不是 Bash：查看文件用 read_file，搜索代码用 search_code，"
     "列目录用 list_files，而不是用 execute_command 拼 shell 命令。\n"
+    "- 使用 list_files 或 search_code 这类定位/搜索工具后，只报告找到的文件/匹配位置，"
+    "然后向用户提问「需要我读取内容吗？」——不要自动调用 read_file。\n"
     "- 编辑前必先读：修改文件前必须先 read_file 查看目标内容，再用 edit_file / write_file 修改。\n"
     "- 多个独立的工具调用放在同一轮并行执行，不要串行。\n"
     "- sh 命令的 description 参数要写清楚这条命令做什么。\n"

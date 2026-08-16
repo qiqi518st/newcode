@@ -80,7 +80,7 @@ def check_path(target_path: str, project_root: str) -> tuple[bool, str]:
     except (OSError, ValueError):
         return False, ""
 
-    root = project_root
+    root = resolve_root(project_root)
 
     # 按段比对，避免 /rootfoo 误匹配 /root/foo
     if resolved == root:
