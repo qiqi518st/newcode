@@ -17,6 +17,7 @@ venv/
 
 # MewCode 权限本地规则（个人本地，不随仓库分发）
 .mewcode/permissions.local.yaml
+.mewcode/permissions.yaml
 
 # Plan files (runtime data in project root, NOT mewcode/plans code package)
 /plans/
