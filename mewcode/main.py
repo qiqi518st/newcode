@@ -114,7 +114,10 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
 
     # ── ch07：MCP 初始化（进 TUI 前同步完成，失败只告警不阻塞） ──
     mcp_mgr = MCPManager(load_mcp_servers(cwd), client_version=__version__)
-    await mcp_mgr.start_all()
+    summary = await mcp_mgr.start_all()
+    # 可观测性：有 server 被尝试（成功或失败）时打一行启动摘要（spec N5）
+    if not summary.is_empty:
+        print(MCPManager.format_summary(summary), file=sys.stderr)
     for tool in mcp_mgr.tools():
         registry.register(tool)
 

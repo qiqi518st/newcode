@@ -95,13 +95,21 @@ async def test_all_success_sorted_by_full_name(fake_conn):
         "a": [_tool("mcp__a__z")],
     }
     m = MCPManager({"b": _server("b"), "a": _server("a")}, "0.7.0-test")
-    await m.start_all()
+    summary = await m.start_all()
     assert [t.full_name for t in m.tools()] == [
         "mcp__a__z",
         "mcp__b__x0",
         "mcp__b__x1",
     ]
     assert len(m.connections) == 2
+    # spec N5：启动摘要记录成功 server 与工具总数
+    assert dict(summary.connected) == {"a": 1, "b": 2}
+    assert summary.failed == []
+    assert summary.total_tools == 3
+    assert (
+        MCPManager.format_summary(summary)
+        == "[mcp] startup: a(1 tools), b(2 tools) | total 3 tools"
+    )
     _no_dangling_tasks(before)
 
 
@@ -112,10 +120,18 @@ async def test_failure_isolated_other_server_kept(fake_conn, capsys):
     fake_conn.fail = {"bad"}
     fake_conn.tools_map = {"good": [_tool("mcp__good__alpha")]}
     m = MCPManager({"bad": _server("bad"), "good": _server("good")}, "v")
-    await m.start_all()
+    summary = await m.start_all()
     assert [t.full_name for t in m.tools()] == ["mcp__good__alpha"]
     assert [c.server.name for c in m.connections] == ["good"]
+    # 摘要含失败项（spec N5）
+    assert dict(summary.connected) == {"good": 1}
+    assert [n for n, _ in summary.failed] == ["bad"]
+    assert (
+        MCPManager.format_summary(summary)
+        == "[mcp] startup: good(1 tools), bad:failed | total 1 tools"
+    )
     err = capsys.readouterr().err
+    # _start_one 的逐项告警（摘要行由装配处打印，非 manager 职责）
     assert "connect server bad failed" in err
     _no_dangling_tasks(before)
 
@@ -178,8 +194,11 @@ async def test_duplicate_tool_warn_and_later_wins(fake_conn, capsys):
 async def test_empty_servers_start_and_close_noop():
     before = _task_baseline()
     m = MCPManager({}, "v")
-    await m.start_all()
+    summary = await m.start_all()
     assert m.tools() == []
+    # spec N5：无 server 被尝试 -> 摘要空 -> 装配处不打印（避免噪音）
+    assert summary.is_empty is True
+    assert MCPManager.format_summary(summary) == "[mcp] startup:  | total 0 tools"
     await m.close()  # 立即返回不抛
     _no_dangling_tasks(before)
 

@@ -1,10 +1,13 @@
 """MCPConnection：单 server 会话的生命周期与调用，封装官方 mcp SDK 传输 + ClientSession。
 
 关键设计：
-- 每连接一个私有 AsyncExitStack（不共享，规避并发 enter 竞态），传输 / http client /
-  ClientSession 全部进栈；上下文不在 connect_and_list 返回时退出，存活到 close()。
-- 连接失败或被取消（含 manager 的 wait_for 超时取消）时立即收栈，防止已拉起的
-  stdio 子进程泄漏（spec N7）。
+- 传输 / session / http client 全部在一个长寿命 holder task 内经一个 AsyncExitStack 持有。
+  holder 在 connect_and_list 返回后继续存活（停在 stop event 上），保持上下文不退出；
+  close() 通过取消 holder task 触发上下文在 **holder 自己的 task 内** 退出。
+  这规避了 anyio cancel scope「跨 task 退出」错误（stdio_client 用 anyio 实现，
+  其 cancel scope 绑定进入它的 task；跨 task aclose 会抛 RuntimeError，spec N7）。
+- connect_and_list 仅等 holder 完成 initialize + list_tools 后返回工具列表；
+  连接失败/被取消（含 manager 的 wait_for 超时）时取消 holder 并等其收尾。
 - call_tool 把超时/协议错/非预期返回类型统一翻译成 ToolResult(status="error")，
   绝不向调用方抛 Python 异常（复用「不中断会话」契约，spec F7/F10）。
 """
@@ -12,9 +15,9 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import sys
-from contextlib import AsyncExitStack
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -36,78 +39,126 @@ class MCPStartupError(Exception):
 
 
 class MCPConnection:
-    """单 server 会话句柄。"""
+    """单 server 会话句柄。
+
+    传输上下文由内部 holder task 持有；close 经取消 holder 触发同 task 退出。
+    """
 
     def __init__(self, server: ServerConfig, client_version: str) -> None:
         self.server = server
         self._client_version = client_version
         self._session: ClientSession | None = None
-        self._stack: AsyncExitStack = AsyncExitStack()
         self._closed = False
+        self._holder: asyncio.Task[None] | None = None
+        self._stop: asyncio.Event = asyncio.Event()
+        self._ready: asyncio.Event = asyncio.Event()
+        self._connect_error: BaseException | None = None
+        self._tools: list[McpTool] = []
 
     @property
     def server_name(self) -> str:
         return self.server.name
 
     async def connect_and_list(self) -> list[McpTool]:
-        """打开传输 + 握手 + 列工具；失败抛 MCPStartupError（并收栈防泄漏）。"""
-        if self._session is not None or self._closed:
+        """打开传输 + 握手 + 列工具；失败抛 MCPStartupError（并让 holder 收尾防泄漏）。"""
+        if self._session is not None or self._closed or self._holder is not None:
             raise MCPStartupError(
                 f"server {self.server.name} already connected or closed"
             )
+        self._holder = asyncio.create_task(
+            self._hold(), name=f"mcp-hold-{self.server.name}"
+        )
         try:
-            if self.server.type == "stdio":
-                # env 与宿主环境合并后注入，server.env 覆盖同名宿主变量（spec F4）
-                params = StdioServerParameters(
-                    command=self.server.command,
-                    args=list(self.server.args),
-                    env={**os.environ, **self.server.env},
-                )
-                transport_ctx = stdio_client(params)
-            else:
-                # SDK 2.0：streamable_http_client 无 headers 参数，
-                # 经官方 create_mcp_http_client（httpx2，MCP 默认超时/redirect）注入
-                http_client = (
-                    create_mcp_http_client(headers=dict(self.server.headers))
-                    if self.server.headers
-                    else None
-                )
-                if http_client is not None:
-                    # AsyncClient 需上下文管理收尾，一并挂到私有栈
-                    await self._stack.enter_async_context(http_client)
-                transport_ctx = streamable_http_client(
-                    self.server.url, http_client=http_client
-                )
-            transport = await self._stack.enter_async_context(transport_ctx)
-            read_stream, write_stream = transport  # stdio / http 都 yield 2 元组
-            session = await self._stack.enter_async_context(
-                ClientSession(
-                    read_stream,
-                    write_stream,
-                    client_info=Implementation(
-                        name="mewcode", version=self._client_version
-                    ),
-                )
-            )
-            await session.initialize()
-            listed = await session.list_tools()
-            self._session = session
-            tools = (
-                make_tool(self.server.name, self, remote) for remote in listed.tools
-            )
-            return [t for t in tools if t is not None]
+            await self._ready.wait()
         except asyncio.CancelledError:
-            # manager 的 wait_for 超时会取消本协程：先收栈再放行取消
-            await self._safe_close_stack()
+            # manager 的 wait_for 超时取消本协程：取消 holder 并等其在自身 task 内收尾
+            await self._teardown_holder()
             self._closed = True
             raise
-        except Exception as e:
-            # 失败也要收掉已进入的上下文，防已拉起的子进程/连接泄漏（spec N7）
-            await self._safe_close_stack()
+        if self._connect_error is not None:
+            # holder 已在自身 task 内退栈；等它结束即可
+            await self._teardown_holder()
             self._closed = True
+            err = self._connect_error
             raise MCPStartupError(
-                f"connect server {self.server.name} failed: {e}"
-            ) from e
+                f"connect server {self.server.name} failed: {err}"
+            ) from err
+        return list(self._tools)
+
+    async def _hold(self) -> None:
+        """长寿命 task：持有传输/session/http client 上下文，直到被 close 取消。
+
+        上下文经 async with AsyncExitStack 持有；无论正常结束、被取消还是出错，
+        栈都在 **本 task 内** 退出，anyio cancel scope 不会跨 task 退出（spec N7）。
+        """
+        try:
+            async with contextlib.AsyncExitStack() as stack:
+                if self.server.type == "stdio":
+                    # env 与宿主环境合并后注入，server.env 覆盖同名宿主变量（spec F4）
+                    params = StdioServerParameters(
+                        command=self.server.command,
+                        args=list(self.server.args),
+                        env={**os.environ, **self.server.env},
+                    )
+                    transport_ctx = stdio_client(params)
+                else:
+                    # SDK 2.0：streamable_http_client 无 headers 参数，
+                    # 经官方 create_mcp_http_client（httpx2，MCP 默认超时/redirect）注入
+                    http_client = (
+                        create_mcp_http_client(headers=dict(self.server.headers))
+                        if self.server.headers
+                        else None
+                    )
+                    if http_client is not None:
+                        await stack.enter_async_context(http_client)
+                    transport_ctx = streamable_http_client(
+                        self.server.url, http_client=http_client
+                    )
+                transport = await stack.enter_async_context(transport_ctx)
+                read_stream, write_stream = transport  # stdio / http 都 yield 2 元组
+                session = await stack.enter_async_context(
+                    ClientSession(
+                        read_stream,
+                        write_stream,
+                        client_info=Implementation(
+                            name="mewcode", version=self._client_version
+                        ),
+                    )
+                )
+                await session.initialize()
+                listed = await session.list_tools()
+                self._session = session
+                self._tools = [
+                    t
+                    for t in (
+                        make_tool(self.server.name, self, remote)
+                        for remote in listed.tools
+                    )
+                    if t is not None
+                ]
+                self._ready.set()
+                # 停在此处保持上下文存活，直到 close() 取消本 task
+                await self._stop.wait()
+        except asyncio.CancelledError:
+            # close() 取消本 task：async with 在本 task 内退栈（cancel scope 正确退出）
+            raise
+        except BaseException as e:  # noqa: BLE001 -- 记录连接错误供 connect_and_list 读取
+            self._connect_error = e
+            self._ready.set()
+            # 栈已在本 task 内自动退出
+
+    async def _teardown_holder(self) -> None:
+        """取消 holder 并等其收尾（上下文在 holder 自身 task 内退出）。"""
+        if self._holder is None:
+            return
+        self._stop.set()
+        self._holder.cancel()
+        try:
+            await self._holder
+        except (asyncio.CancelledError, Exception):  # noqa: S110,BLE001 -- 收尾路径吞掉 holder 退出异常
+            pass
+        finally:
+            self._holder = None
 
     async def call_tool(self, tool_name: str, arguments: dict) -> ToolResult:
         """调用远端工具；超时/协议错/非预期返回统一转 ToolResult(status="error")。"""
@@ -150,24 +201,11 @@ class MCPConnection:
         return ToolResult(status="ok", output=joined)
 
     async def close(self) -> None:
-        """退出私有栈（传输 / session / http client 一并收尾）；自身不加超时。
+        """取消 holder task 触发上下文在 holder 自身 task 内退出；幂等，不抛。
 
         MCPManager.close 的单层 5s 兜底已覆盖本方法卡住的情形（spec F11）。
         """
         if self._closed:
             return
         self._closed = True
-        try:
-            await self._stack.aclose()
-        except Exception as e:  # noqa: BLE001 -- close 收尾不得向上抛（spec N7）
-            print(
-                f"[mcp] warn: close server {self.server.name} failed: {e}",
-                file=sys.stderr,
-            )
-
-    async def _safe_close_stack(self) -> None:
-        """收栈且吞掉收栈自身的异常（清理路径不应再抛）。"""
-        try:
-            await self._stack.aclose()
-        except Exception:  # noqa: S110 BLE001 -- 清理路径有意吞掉，防止掩盖原始错误
-            pass
+        await self._teardown_holder()

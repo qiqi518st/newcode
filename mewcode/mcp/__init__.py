@@ -6,7 +6,7 @@
 
 from .config import ServerConfig, load_mcp_servers
 from .conn import MCPConnection, MCPStartupError
-from .manager import MCPManager
+from .manager import MCPManager, StartupSummary
 from .wrapper import CallerSession, McpTool
 
 __all__ = [
@@ -16,5 +16,6 @@ __all__ = [
     "MCPStartupError",
     "McpTool",
     "ServerConfig",
+    "StartupSummary",
     "load_mcp_servers",
 ]

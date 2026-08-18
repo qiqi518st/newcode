@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from dataclasses import dataclass, field
 
 from .config import ServerConfig
 from .conn import MCPConnection, call_timeout  # 统一超时入口，供调用方复用
@@ -22,10 +23,37 @@ close_timeout: float = 5.0
 
 __all__ = [
     "MCPManager",
+    "StartupSummary",
     "call_timeout",
     "close_timeout",
     "connect_timeout",
 ]
+
+
+@dataclass
+class StartupSummary:
+    """MCP 启动结果摘要（供装配处打印可观测摘要，spec N5）。"""
+
+    connected: list[tuple[str, int]] = field(default_factory=list)
+    """[(server_name, tool_count), ...]，按 server 名排序"""
+    failed: list[tuple[str, str]] = field(default_factory=list)
+    """[(server_name, reason), ...]，按 server 名排序"""
+    total_tools: int = 0
+
+    @property
+    def is_empty(self) -> bool:
+        """无任何 server 被尝试（既无成功也无失败）——打摘要时可跳过。"""
+        return not self.connected and not self.failed
+
+
+def _format_summary(summary: StartupSummary) -> str:
+    """把启动摘要格式化成单行 stderr 文案（spec N5 可观测性）。"""
+    parts = [f"{n}({c} tools)" for n, c in summary.connected]
+    if summary.failed:
+        parts.extend(f"{n}:failed" for n, _ in summary.failed)
+    return (
+        "[mcp] startup: " + ", ".join(parts) + f" | total {summary.total_tools} tools"
+    )
 
 
 class MCPManager:
@@ -36,6 +64,7 @@ class MCPManager:
         self._client_version = client_version
         self._connections: list[MCPConnection] = []
         self._tools: list[McpTool] = []
+        self._failures: dict[str, str] = {}
 
     @property
     def connections(self) -> list[MCPConnection]:
@@ -48,30 +77,36 @@ class MCPManager:
         try:
             tools = await asyncio.wait_for(conn.connect_and_list(), connect_timeout)
         except asyncio.TimeoutError:
-            print(
-                f"[mcp] warn: connect server {name} timeout after {connect_timeout}s",
-                file=sys.stderr,
-            )
+            reason = f"timeout after {connect_timeout}s"
+            self._failures[name] = reason
+            print(f"[mcp] warn: connect server {name} {reason}", file=sys.stderr)
             return None
         except Exception as e:  # noqa: BLE001 -- 单 server 任意失败只跳过自身（spec F9 隔离契约）
+            reason = str(e) or type(e).__name__
+            self._failures[name] = reason
             print(
-                f"[mcp] warn: connect server {name} failed: {e}",
-                file=sys.stderr,
+                f"[mcp] warn: connect server {name} failed: {reason}", file=sys.stderr
             )
             return None
         self._connections.append(conn)
         return tools
 
-    async def start_all(self) -> None:
-        """并发连接所有 server，收集工具并按 full_name 稳定排序。本方法不可失败。"""
+    async def start_all(self) -> StartupSummary:
+        """并发连接所有 server，收集工具并按 full_name 稳定排序。本方法不可失败。
+
+        返回启动摘要（spec N5），供装配处打印可观测信息。
+        """
         results = await asyncio.gather(
             *[self._start_one(n, s) for n, s in self._servers.items()],
             return_exceptions=True,
         )
+        # 按 server 名记录每个连接产出的工具数（用于摘要）
+        per_server_counts: dict[str, int] = {}
         by_name: dict[str, McpTool] = {}
-        for res in results:
+        for (name, _srv), res in zip(self._servers.items(), results):
             if not isinstance(res, list):
-                continue  # 失败/超时的 server（None）或异常，已在 _start_one 告警
+                continue  # 失败/超时（None）或异常，已在 _start_one 记录
+            per_server_counts[name] = len(res)
             for tool in res:
                 if tool.full_name in by_name:
                     # spec F8：同名工具（同 server 自报多个同名）后入者保留 + 告警
@@ -82,10 +117,21 @@ class MCPManager:
                     )
                 by_name[tool.full_name] = tool
         self._tools = [by_name[k] for k in sorted(by_name)]
+        summary = StartupSummary(
+            connected=sorted(per_server_counts.items()),
+            failed=sorted(self._failures.items()),
+            total_tools=len(self._tools),
+        )
+        return summary
 
     def tools(self) -> list[McpTool]:
         """返回按 full_name 排序的工具列表副本（防外部修改）。"""
         return list(self._tools)
+
+    @staticmethod
+    def format_summary(summary: StartupSummary) -> str:
+        """格式化摘要为单行文案（供 main 打印）。"""
+        return _format_summary(summary)
 
     async def close(self) -> None:
         """并发关全部连接；整体 5s 兜底，超时放弃未关完的（不再等）。"""
