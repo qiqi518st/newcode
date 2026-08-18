@@ -27,6 +27,7 @@
 - [ ] **权限模式兜底对 MCP**：`read_only==True` 的 MCP 工具归只读类（DEFAULT 下放行、可并发）；非只读归命令执行类（DEFAULT/acceptEdits 下触发人在回路 Ask）；bypass 下放行。**permission 包源码对 MCP 路径无新增依赖**，靠 `friendly_name` 原样 + `categorize` 按 `read_only` 优先 + `extract_target` 对未知工具降级。（验证：`python -m pytest tests/test_permission_rules.py -q` 验 `_RULE_PARSE_RE` 接受 `mcp__` 名 + `_tool_name_matches` 通配；代码层面 `git diff mewcode/permission/` 仅见泛化改动（正则放宽 + match 通配 + persist 裸名），无破坏内置工具既有行为）【F12、AC11（模式层）】
 - [ ] **provider 适配层零 diff**：MCP 工具与 provider（Anthropic/OpenAI）无关；provider 适配层对本章无修改。（验证：`git diff --stat mewcode/provider/` 对 ch07 分支无改动）【N3、AC12】
 - [ ] **装配处注册无感**：`main._amain` 在 `Registry.default()` 之后加载 MCP 配置、启动 manager、把 `mgr.tools()` 注册进 registry；Agent 与 provider 适配层不感知工具来自远端。（验证：`git diff mewcode/main.py` 仅见 `_amain` 单 loop + MCP 起停 + finally close，Agent 构造与既有一致；`python -c "import mewcode.main; print('ok')"` import 链不断）【F8/F9、AC6/AC12】
+- [ ] **启动摘要可观测（N5 补强）**：有 server 被尝试时，进 TUI 前 stderr 打印一行 `[mcp] startup: ... | total N tools`（成功 server 带工具数、失败 server 标 `:failed`）；无任何 server 时不打印（避免噪音）。（验证：配好 server 后 `python -m mewcode` 观察 stderr 摘要行；`python -m pytest tests/test_mcp_manager.py -q` 含 `format_summary` 文案断言）【N5】
 
 ## 编译与测试
 

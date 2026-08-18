@@ -98,25 +98,27 @@
 1. 实现前用 `python -c` 核对 `streamablehttp_client`/`stdio_client`/`ClientSession`/`Implementation`/`TextContent` 真实 import 路径（T0 步骤 4 结论落地）。
 2. 定义 `class MCPStartupError(Exception)`。
 3. 模块级 `call_timeout: float = 30.0`（manager import 复用，避免循环依赖；`connect_timeout`/`close_timeout` 在 manager 定义）。
-4. 实现 `MCPConnection.__init__(self, server: ServerConfig, client_version: str)`：存 `server`、`client_version`；`_session=None`；`_stack = AsyncExitStack()`（**每连接私有栈**，规避共享 AsyncExitStack 的并发竞态）；`_closed=False`。
-5. 实现 `connect_and_list(self) -> list[McpTool]`：按 `server.type` 构造 transport ctx——
+4. 实现 `MCPConnection.__init__(self, server: ServerConfig, client_version: str)`：存 `server`、`client_version`；`_session=None`；`_closed=False`；`_holder: asyncio.Task|None=None`；`_stop=asyncio.Event()`；`_ready=asyncio.Event()`；`_connect_error=None`；`_tools: list[McpTool]=[]`。（**长寿命 holder task 设计**，取代原私有 AsyncExitStack——见下）
+5. 实现 `connect_and_list(self) -> list[McpTool]`：创建 holder task `self._holder = asyncio.create_task(self._hold())`，`await self._ready.wait()`（被取消则 `_teardown_holder` + 标记关闭 + raise）；ready 后若 `_connect_error` 非空→teardown + raise `MCPStartupError`；否则 `return list(self._tools)`。
+6. 实现 `_hold(self) -> None`（长寿命 task，**核心生命周期**）：`async with contextlib.AsyncExitStack() as stack:` 内按 `server.type` 构造 transport ctx——
    - stdio：`StdioServerParameters(command=server.command, args=server.args, env={**os.environ, **server.env})` → `stdio_client(params)`；
-   - http（SDK 2.0 无 headers 参数）：`http_client = httpx.AsyncClient(headers=server.headers) if server.headers else None` → `streamable_http_client(server.url, http_client=http_client)`；
-   `transport = await self._stack.enter_async_context(ctx)`；`read_stream, write_stream = transport`（**stdio / http 都是 2 元组**）；
-   `self._session = await self._stack.enter_async_context(ClientSession(read_stream, write_stream, client_info=Implementation(name="mewcode", version=self.client_version)))`；
-   `await self._session.initialize()`；`listed = await self._session.list_tools()`；
-   `return [t for t in (make_tool(self.server.name, self, remote) for remote in listed.tools) if t is not None]`。
-   任一步失败→`raise MCPStartupError(...)`（由 MCPManager 捕获，不外抛启动）。**上下文不在方法返回时退出**（私有 `_stack` 持有，存活到 close）。
-6. 实现 `call_tool(self, tool_name, arguments) -> ToolResult`：`try: result = await asyncio.wait_for(self._session.call_tool(tool_name, arguments=arguments or {}), call_timeout)`；
+   - http（SDK 2.0 无 headers 参数）：`http_client = create_mcp_http_client(headers=dict(server.headers)) if server.headers else None`（有则先 `stack.enter_async_context(http_client)`）→ `streamable_http_client(server.url, http_client=http_client)`；
+   `transport = await stack.enter_async_context(ctx)`；`read_stream, write_stream = transport`（**stdio / http 都是 2 元组**）；
+   `session = await stack.enter_async_context(ClientSession(read_stream, write_stream, client_info=Implementation(name="mewcode", version=self._client_version)))`；
+   `await session.initialize()`；`listed = await session.list_tools()`；`self._session = session`；`self._tools = [t for t in (make_tool(self.server.name, self, remote) for remote in listed.tools) if t is not None]`；`self._ready.set()`；`await self._stop.wait()`（停在此处保持上下文存活，直到 close 取消本 task）。
+   `except asyncio.CancelledError: raise`（close 取消时，`async with` 在本 task 内退栈——**规避 anyio cancel scope 跨 task 退出 RuntimeError**，spec N7）；`except BaseException as e: self._connect_error=e; self._ready.set()`（栈已在本 task 内自动退出）。
+7. 实现 `call_tool(self, tool_name, arguments) -> ToolResult`：`try: result = await asyncio.wait_for(self._session.call_tool(tool_name, arguments=arguments or {}), call_timeout)`；
    **SDK 2.0 `call_tool` 返回 `CallToolResult | InputRequiredResult | Result` 联合类型**——先 `if not isinstance(result, CallToolResult):` 转 `ToolResult(status="error", error="MCP 工具返回非预期结果类型")` 并 return；
    遍历 `result.content`：`isinstance(b, TextContent)`→收 `b.text`；其余类块——`full = f"mcp__{self.server.name}__{tool_name}"`，`if full not in _non_text_warn_once: _non_text_warn_once.add(full); stderr "[mcp] warn: tool <full> returned non-text content blocks (dropped)"`（**用 wrapper 模块级 `_non_text_warn_once`，全进程按 full_name 去重**）；
    映射：`is_error = bool(result.is_error)`（SDK 2.0 snake_case）；`status = "error" if is_error else "ok"`；`joined = "\n".join(texts)`；`output = "" if is_error else joined`；`error = joined if is_error else ""`；返回 `ToolResult(status=status, output=output, error=error)`；
    `except asyncio.TimeoutError: return ToolResult(status="error", error="MCP 工具调用超时 (30s)")`；
    `except Exception as e: return ToolResult(status="error", error=f"MCP 工具调用失败: {e}")`。**不向调用方抛**。
-7. 实现 `close(self)`：`await self._stack.aclose()`；`_closed=True`；自身不再加超时（MCPManager.close 单层 5s 兜底已覆盖）。
-8. 写 `tests/test_mcp_conn.py`（`@pytest.mark.anyio`）：
-   **call_tool 各分支**——构造 fake `_session`（最小 stub 实现 `.call_tool` 返回预设 result，含 `.content` 列表与 `.isError`），白盒 set `conn._session`，测：①多个 `TextContent`→按序拼进 `output`、`is_error=False`；②远端 `isError=True`→文本进 `error`、`status="error"`；③非 text 块→被丢弃、不混进 output + stderr 告警（同 `full_name` 多次只告警一次，验证 `_non_text_warn_once`）；④`call_tool` 抛异常→`ToolResult(status="error", error=...)` 不抛；⑤超时——monkeypatch 把 `mewcode.mcp.conn.call_timeout` 临时改 0.2 + fake `call_tool` 内 `await asyncio.Event().wait()` 挂起→走超时分支，restore 收尾。
-   **connect_and_list 包装路径**——monkeypatch `conn._stack.enter_async_context` 返回 fake read/write + 用一个返回 `mcp.types.Tool` 列表的 fake `ClientSession`（实现 `initialize`/`list_tools`），断言返回的 `McpTool` 列表名字前缀正确（`mcp__<server>__...`）、禁用字符工具被跳过。真 transport 连接留 T8 人工验证。测试 docstring 注明防的 bug（如「TextContent 拼进了 error 而非 output」「非 text 块把告警刷屏」）。
+8. 实现 `_teardown_holder(self) -> None`：`self._stop.set()`；`self._holder.cancel()`；`try: await self._holder` `except (CancelledError, Exception): pass`（吞掉 holder 退出异常）；`finally: self._holder=None`。
+9. 实现 `close(self)`：幂等（`if self._closed: return; self._closed=True`）；`await self._teardown_holder()`（取消 holder 触发上下文在 holder 自身 task 内退出）。自身不加超时（MCPManager.close 单层 5s 兜底已覆盖）。
+10. 写 `tests/test_mcp_conn.py`（`@pytest.mark.anyio`）：
+    **call_tool 各分支**——构造 fake `_session`（最小 stub 实现 `.call_tool` 返回预设 result，含 `.content` 列表与 `.is_error`），白盒 set `conn._session`，测：①多个 `TextContent`→按序拼进 `output`、`is_error=False`；②远端 `is_error=True`→文本进 `error`、`status="error"`；③非 text 块→被丢弃、不混进 output + stderr 告警（同 `full_name` 多次只告警一次，验证 `_non_text_warn_once`）；④`call_tool` 抛异常→`ToolResult(status="error", error=...)` 不抛；⑤超时——monkeypatch 把 `mewcode.mcp.conn.call_timeout` 临时改 0.2 + fake `call_tool` 内 `await asyncio.Event().wait()` 挂起→走超时分支，restore；⑥非 `CallToolResult` 返回→「非预期结果类型」错误；⑦未连接调用→「未连接」错误而非 AttributeError。
+    **connect_and_list 包装路径**——monkeypatch `conn_mod.stdio_client` 返回 fake transport ctx（`__aenter__` 返回 `(obj,obj)`）+ monkeypatch `conn_mod.ClientSession` 返回包装 fake session（实现 `initialize`/`list_tools`）的 ctx；断言返回的 `McpTool` 列表名字前缀正确（`mcp__<server>__...`）、禁用字符工具被跳过、`c._session` 已置位。
+    **connect_and_list 失败收尾**——fake session 的 `initialize` 抛错→`MCPStartupError` 且 `c._session is None`、`c._closed is True`、`close()` 幂等不抛（spec N7）。真 transport 连接留 T10 人工验证。测试 docstring 注明防的 bug。
 
 **验证：**
 - `ruff format --check mewcode/mcp/conn.py tests/test_mcp_conn.py` 无 diff
@@ -134,11 +136,12 @@
 1. 模块级 `connect_timeout: float = 30.0`、`close_timeout: float = 5.0`（`call_timeout` 从 conn import 复用）。
 2. 实现 `MCPManager.__init__(self, servers: dict[str, ServerConfig], client_version: str)`：存 `servers`、`client_version`；`_connections: list[MCPConnection] = []`；`_tools: list[McpTool] = []`。
 3. 实现 `async _start_one(self, name, srv) -> list[McpTool] | None`：`conn = MCPConnection(srv, self._client_version)`；`try: tools = await asyncio.wait_for(conn.connect_and_list(), connect_timeout)`；`except asyncio.TimeoutError:` stderr 告警 `[mcp] warn: connect server <name> timeout after <connect_timeout>s` 并 `return None`；`except Exception as e:` 告警 `[mcp] warn: connect server <name> failed: <e>` 并 `return None`；成功→`self._connections.append(conn)` + `return tools`。
-4. 实现 `async start_all(self) -> None`：`await asyncio.gather(*[self._start_one(n, s) for n, s in self.servers.items()], return_exceptions=True)`；收集非 None 的 tools 汇总进 `self._tools`，按 `tool.full_name` 稳定排序。**同名告警归收集阶段（spec F8）**：汇总时若某 `full_name` 已被前序工具占用，stderr 告警 `[mcp] warn: duplicate tool <full_name>, later registration overrides earlier`，保留后入者。**本方法不可失败**——空 servers 空列表 gather 立即返回。`_start_one` 已内捕，不会抛。
+4. 实现 `async start_all(self) -> StartupSummary`：`await asyncio.gather(*[self._start_one(n, s) for n, s in self.servers.items()], return_exceptions=True)`；收集非 None 的 tools 汇总进 `self._tools`，按 `tool.full_name` 稳定排序。**同名告警归收集阶段（spec F8）**：汇总时若某 `full_name` 已被前序工具占用，stderr 告警 `[mcp] warn: duplicate tool <full_name>, later registration overrides earlier`，保留后入者。**本方法不可失败**——空 servers 空列表 gather 立即返回。`_start_one` 已内捕，不会抛。返回 `StartupSummary(connected=sorted(per_server_counts.items()), failed=sorted(self._failures.items()), total_tools=len(self._tools))`（spec N5 可观测性，供装配处打印）。
 5. 实现 `tools(self) -> list[McpTool]`：返回 `list(self._tools)` 副本。
 6. 实现 `async close(self) -> None`：`try: await asyncio.wait_for(asyncio.gather(*[c.close() for c in self._connections], return_exceptions=True), close_timeout)`；`except asyncio.TimeoutError:` stderr 告警 `[mcp] warn: close timeout (<close_timeout>s), some sessions may leak`，不再等。
-7. `@property connections(self) -> list[MCPConnection]`：返回 `list(self._connections)`（测试用只读视图）。
-8. 写 `tests/test_mcp_manager.py`（`@pytest.mark.anyio`），用 monkeypatch 把 `manager.MCPConnection` 换成可控 fake 构造，测：
+7. 定义 `@dataclass StartupSummary`（`connected: list[tuple[str,int]]`、`failed: list[tuple[str,str]]`、`total_tools: int`、`is_empty` 属性）+ 模块函数 `_format_summary` + 静态方法 `MCPManager.format_summary(summary)` 输出单行文案 `[mcp] startup: a(1 tools), b:failed | total N tools`。
+8. `@property connections(self) -> list[MCPConnection]`：返回 `list(self._connections)`（测试用只读视图）。
+9. 写 `tests/test_mcp_manager.py`（`@pytest.mark.anyio`），用 monkeypatch 把 `manager.MCPConnection` 换成可控 fake 构造，测：
    ①全部成功——工具汇总且按 `full_name` 排序（顺序由 sort 决定，与 task 完成顺序无关）；
    ②**失败隔离（真坏 command + 注入 stub 成功组合）**——起两个 server：一个直接构造 `MCPConnection` 指向 `command="/no/such/bin"` 的 stdio（真触发 SDK `stdio_client` 失败路径），另一个 monkeypatch 让其 `connect_and_list` 返回 fake 工具；断言 fake 工具被收集、坏 server 仅产生 stderr 告警且其连接不进 `_connections`；
    ③超时收尾——注入挂起的 fake `connect_and_list`（`await asyncio.Event().wait()`），把 `connect_timeout` 临时改 0.2，断言 `start_all` 在 ~0.2s 内返回且 stderr 有 timeout 告警，restore；
@@ -211,7 +214,7 @@
 **步骤：**
 1. 顶部 import：`from mewcode.mcp import MCPManager, load_mcp_servers`、`from mewcode import __version__`。
 2. 把 `main()` 的「建 registry → 跑 TUI/oneshot → 退出」收进 `async def _amain(args, config, provider)`；`main()` 末尾改为 `asyncio.run(_amain(args, config, provider))`（**取代原 main.py:123/133 的两次 asyncio.run**，TUI / oneshot / MCP 共享同一 loop）。
-3. `_amain` 内：`registry = Registry.default()`；`permission = PermissionChecker.create(project_root)`（建在 MCP 之前）；`--mode` 覆盖仍在；`mcp_servers = load_mcp_servers(os.getcwd())`；`mcp_mgr = MCPManager(mcp_servers, client_version=__version__)`；`await mcp_mgr.start_all()`；`for t in mcp_mgr.tools(): registry.register(t)`；构造 agent/renderer/plan_manager（原逻辑）。
+3. `_amain` 内：`registry = Registry.default()`；`permission = PermissionChecker.create(project_root)`（建在 MCP 之前）；`--mode` 覆盖仍在；`mcp_servers = load_mcp_servers(os.getcwd())`；`mcp_mgr = MCPManager(mcp_servers, client_version=__version__)`；`summary = await mcp_mgr.start_all()`；`if not summary.is_empty: print(MCPManager.format_summary(summary), file=sys.stderr)`（**启动可观测摘要，spec N5**）；`for t in mcp_mgr.tools(): registry.register(t)`；构造 agent/renderer/plan_manager（原逻辑）。
 4. `try:` 跑 `await _oneshot(...)`（`_oneshot` 从 `def` 改 `async def`，去掉其内部 `sys.exit(1)`，改为 raise 让 finally 跑）或 `await repl.run()`；`finally: await mcp_mgr.close()`。banner 打印条件不变。`REPL.run` 已 async，无需改。
 5. 版本号、provider 解析等同步部分保持。
 
@@ -333,5 +336,5 @@ T0 ─┬─► T1 ─┐
 - **占位符扫描**：无「类似 TX」模糊引用；步骤具体到符号名与行号锚点（rules.py:23/104、checker.py:218、main.py:123/133）。
 - **依赖链**：T0→T3→T4→T5→T8→T10→T11、T6→T7→T8、T2→T3、T1→T9、T1→T8，无环。
 - **验证完整性**：可自动验证任务均含 ruff format/check + pytest；T10 明确标「待人工验证」不混入通过；每测试 docstring 注明防的 bug。
-- **类型一致性**：与 plan.md 一致——`ServerConfig`（含 `name`）、`MCPConnection.connect_and_list/call_tool/close`、`MCPManager.start_all/tools/close`、`McpTool`、`make_tool(server_name, caller, remote)`、`CallerSession`、模块级 `connect_timeout`（conn 之 `call_timeout` 由 manager import）、每连接私有 `AsyncExitStack`。
+- **类型一致性**：与 plan.md 一致——`ServerConfig`（含 `name`）、`MCPConnection.connect_and_list/call_tool/close`（holder task 持有传输上下文）、`MCPManager.start_all(->StartupSummary)/tools/close/format_summary`、`McpTool`、`make_tool(server_name, caller, remote)`、`CallerSession`、`StartupSummary`、模块级 `connect_timeout`（conn 之 `call_timeout` 由 manager import）。
 - **异步测试标记**：ch07 新测试沿用 repo 约定 `@pytest.mark.anyio`（与 tests/test_agent.py、tests/test_tools.py 一致），非 `pytest-asyncio`/`@pytest.mark.asyncio`。

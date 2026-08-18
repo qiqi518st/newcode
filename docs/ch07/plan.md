@@ -44,7 +44,7 @@
 
 - **`mcp.config`（纯函数）**：两层 YAML 加载、按 server 名合并（项目级完整覆盖）、`${VAR}` 展开、字段校验、非法 server 隔离。返回 `dict[str, ServerConfig]`，**不碰 registry、永不抛**。
 - **`ServerConfig`（数据类）**：单个 server 的归一化定义，字段已展开、已校验。
-- **`MCPConnection`**：单 server 会话句柄。在 `connect_and_list` 内用每连接私有 `AsyncExitStack` 打开 SDK 传输 + `ClientSession`、握手、列工具；存 `session` 到 self；`call_tool` 包 30s 超时并翻译结果；`close()` 退出自身上下文。**每连接独立管理自己的上下文，不共享栈**（避免共享 AsyncExitStack 的并发竞态）。
+- **`MCPConnection`**：单 server 会话句柄。传输 / session 上下文由**内部长寿命 holder task** 经 `AsyncExitStack` 持有（holder 在 connect_and_list 返回后继续存活，close 取消 holder 触发上下文在 holder 自身 task 内退出）；`call_tool` 包 30s 超时并翻译结果。**规避共享 AsyncExitStack 并发竞态与 anyio cancel scope 跨 task 退出**（spec N7）。
 - **`MCPManager`**：生命周期编排器。`start_all()` 并发起所有连接、收集各连接产出的工具、稳定排序；`tools()` 返回工具列表副本；`close()` 并发关全部连接（单层 5s 兜底）。**与 Registry 解耦**——只产工具，注册由装配处（main）负责。
 - **`McpTool`**：实现既有 `Tool` 协议。持 `CallerSession`（Protocol），名字 `mcp__<server>__<tool>`、参数透传、只读性取 `readOnlyHint`、`execute` 转走所属 `CallerSession.call_tool`，把远端结果翻译成 repo 现有的 `ToolResult(status, output, error, truncated)`。
 - **`main._amain`（单 loop 改造）**：把整条启动链（`load_config → start_all → 注册 → repl/oneshot 跑 → close`）收进一个 `asyncio.run(_amain())`，让 MCP session 与运行循环同寿；`try/finally` 保证退出收尾。
@@ -219,18 +219,33 @@ async def McpTool.execute(self, arguments: dict) -> ToolResult: ...
   transport_ctx = streamable_http_client(srv.url, http_client=http_client)
   # async with → (read_stream, write_stream)   ← 与 stdio 同为 2 元组
   ```
-- 打开会话（**每连接私有 `AsyncExitStack`** 挂在 `self`，规避共享栈并发竞态；上下文不在 `connect_and_list` 返回时退出）：
+- 打开会话（**长寿命 holder task 持有上下文**，替代共享/私有 AsyncExitStack——见决策表「传输上下文管理」）：
   ```python
-  transport = await self._stack.enter_async_context(transport_ctx)
-  read_stream, write_stream = transport       # stdio / http 都是 2 元组
-  self._session = await self._stack.enter_async_context(
-      ClientSession(read_stream, write_stream,
-                    client_info=Implementation(name="mewcode", version=self._client_version))
-  )
-  await self._session.initialize()            # 握手，报 client_info
-  listed = await self._session.list_tools()
-  return [make_tool(self.server.name, self, remote) for remote in listed.tools]
+  # connect_and_list：spawn holder，等 ready
+  self._holder = asyncio.create_task(self._hold())
+  await self._ready.wait()          # 失败时 _connect_error 被置位
+  if self._connect_error is not None:
+      raise MCPStartupError(...)
+  return list(self._tools)
+
+  # _hold：在自身 task 内经 AsyncExitStack 持有传输/session，停在 _stop 上
+  async with contextlib.AsyncExitStack() as stack:
+      transport = await stack.enter_async_context(transport_ctx)
+      read_stream, write_stream = transport       # stdio / http 都是 2 元组
+      session = await stack.enter_async_context(
+          ClientSession(read_stream, write_stream,
+                        client_info=Implementation(name="mewcode", version=self._client_version))
+      )
+      await session.initialize()            # 握手，报 client_info
+      listed = await session.list_tools()
+      self._session = session
+      self._tools = [t for t in (make_tool(self.server.name, self, remote)
+                                 for remote in listed.tools) if t is not None]
+      self._ready.set()
+      await self._stop.wait()              # 保持上下文存活，直到 close 取消本 task
+  # close：_stop.set() + _holder.cancel() → async with 在 holder 自身 task 内退栈
   ```
+  为什么用 holder：`stdio_client` 用 anyio 实现，其 cancel scope 绑定进入它的 task；若在 `connect_and_list` 所在 task 进栈、`close()` 在另一 task 调 `aclose()` 退栈，anyio 抛「Attempted to exit cancel scope in a different task」。holder 让上下文始终在**同一 task** 进出（spec N7 退出干净，实测曾出现该告警）。
 - `call_tool`：`result = await asyncio.wait_for(self._session.call_tool(remote, args), call_timeout)`；**SDK 2.0 `call_tool` 返回 `CallToolResult | InputRequiredResult | Result` 联合类型**——先 `isinstance(result, CallToolResult)` 分流，非 `CallToolResult`（如 `InputRequiredResult`）按协议错处理；对 `CallToolResult`，取 `result.content` 中 `isinstance(block, TextContent)` 的 `.text` 按序拼接，`result.is_error` 决定 `status`；非 text 块静默丢弃 + stderr 告警（per `full_name` 限一次，用 set 去重）。
 - **三种失败统一转 `ToolResult`，不向调用方抛**（复用"不中断会话"契约）：超时 → `(status="error", error="MCP 工具调用超时 (30s)")`；`session.call_tool` 抛异常 → `(status="error", error=f"MCP 工具调用失败: {e}")`；返回非 `CallToolResult`（`InputRequiredResult` 等） → `(status="error", error="MCP 工具返回非预期结果类型")`；传输断同异常分支。
 - 结果映射（兼容 repo 现有 `ToolResult`）：远端非错 → `status="ok"`、文本进 `output`；远端 `is_error==True` → `status="error"`、文本进 `error`；协议错/超时 → `status="error"`、原因进 `error`。`truncated` 保持默认 False。
@@ -363,7 +378,7 @@ tests/
 | 决策点 | 选择 | 理由 |
 |--------|------|------|
 | 协议栈 | 官方 `mcp` SDK，不自研 | JSON-RPC 帧/能力协商/版本兼容坑多；集中精力做适配。spec F6 明确 |
-| 传输上下文管理 | **每连接私有 `AsyncExitStack`**（conn 内 `enter_async_context` 传输 + session），**不共享栈** | SDK 传输是资源型上下文，必须横跨连接生命周期持有；共享 AsyncExitStack 在并发 `enter` 时有竞态（AsyncExitStack 非并发安全） |
+| 传输上下文管理 | **长寿命 holder task** 经 `AsyncExitStack` 持有传输/session；`close` 取消 holder 触发上下文在 **holder 自身 task** 内退出 | SDK 传输是资源型上下文，必须横跨连接生命周期持有；且 `stdio_client` 用 anyio cancel scope 绑定进入它的 task，跨 task `aclose()` 会抛 RuntimeError（实测曾现「Attempted to exit cancel scope in a different task」）；holder 让上下文始终同一 task 进出 |
 | 单一事件循环 | `main._amain` 把 start_all → app → close 收进一个 `asyncio.run` | MCP session 的底层 transport 绑定所在 loop；多 `asyncio.run` 会让 session 在新 loop 失效。session 必须与运行循环同寿 |
 | Manager / Registry 解耦 | Manager 只暴露 `tools()`，注册放在装配处（main） | Manager 可独立测试不碰 Registry；职责单一 |
 | CallerSession Protocol | `McpTool` 持 `CallerSession` 而非具体 `ClientSession` | 单测注入 stub 测 execute 各分支，无需起真 server |
