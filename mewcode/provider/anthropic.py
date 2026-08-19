@@ -6,6 +6,7 @@ from anthropic import APIError as AnthropicAPIError
 from anthropic import AsyncAnthropic
 
 from ..config.schema import ProviderConfig
+from ..llm import PromptTooLongError
 from ..prompt.assembler import PromptPayload
 from ..utils.error import ProviderError
 from .base import StreamEvent, TokenUsage, ToolCall
@@ -105,7 +106,7 @@ class AnthropicProvider:
         kwargs: dict = {
             "model": self._model,
             "messages": api_messages,
-            "max_tokens": 4096,
+            "max_tokens": payload.max_output_tokens or 4096,
         }
         if self._thinking:
             kwargs["thinking"] = {"type": "enabled", "budget_tokens": 1024}
@@ -193,7 +194,7 @@ class AnthropicProvider:
                 await stream.close()
 
         except AnthropicAPIError as e:
-            yield StreamEvent(err=ProviderError(f"Anthropic API 错误: {e}"))
+            yield StreamEvent(err=_wrap_anthropic_error(e))
         except Exception as e:  # noqa: BLE001 — 流式消费中任何异常都应包装为 ProviderError，不崩溃
             yield StreamEvent(err=ProviderError(f"Anthropic 请求失败: {e}"))
 
@@ -206,3 +207,14 @@ def _to_usage(u: object) -> TokenUsage:
         cache_creation_input_tokens=getattr(u, "cache_creation_input_tokens", 0) or 0,
         cache_read_input_tokens=getattr(u, "cache_read_input_tokens", 0) or 0,
     )
+
+
+def _wrap_anthropic_error(e: AnthropicAPIError) -> PromptTooLongError | ProviderError:
+    """Anthropic 400 错误中识别 PTL 关键词，wrap 为 PromptTooLongError 哨兵（保留 __cause__）。"""
+    if getattr(e, "status_code", None) == 400:
+        msg = str(e)
+        if "prompt is too long" in msg or "context length" in msg:
+            wrapped = PromptTooLongError(str(e))
+            wrapped.__cause__ = e
+            return wrapped
+    return ProviderError(f"Anthropic API 错误: {e}")

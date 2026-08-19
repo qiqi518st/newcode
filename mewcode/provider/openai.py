@@ -6,6 +6,7 @@ from openai import APIError as OpenAIAPIError
 from openai import AsyncOpenAI
 
 from ..config.schema import ProviderConfig
+from ..llm import PromptTooLongError
 from ..prompt.assembler import PromptPayload
 from ..utils.error import ProviderError
 from .base import StreamEvent, TokenUsage, ToolCall
@@ -167,7 +168,7 @@ class OpenAIProvider:
 
             yield StreamEvent(done=True, usage=_last_usage)
         except OpenAIAPIError as e:
-            yield StreamEvent(err=ProviderError(f"OpenAI API 错误: {e}"))
+            yield StreamEvent(err=_wrap_openai_error(e))
         except Exception as e:  # noqa: BLE001 — 流式消费中任何异常都应包装为 ProviderError，不崩溃
             yield StreamEvent(err=ProviderError(f"OpenAI 请求失败: {e}"))
 
@@ -181,3 +182,14 @@ def _to_usage(u: object) -> TokenUsage:
         output_tokens=getattr(u, "completion_tokens", 0) or 0,
         cache_read_input_tokens=cached or 0,
     )
+
+
+def _wrap_openai_error(e: OpenAIAPIError) -> PromptTooLongError | ProviderError:
+    """OpenAI 400 错误中识别 PTL 关键词/code，wrap 为 PromptTooLongError 哨兵（保留 __cause__）。"""
+    if getattr(e, "status_code", None) == 400:
+        msg = str(e)
+        if getattr(e, "code", "") == "context_length_exceeded" or "maximum context length" in msg:
+            wrapped = PromptTooLongError(str(e))
+            wrapped.__cause__ = e
+            return wrapped
+    return ProviderError(f"OpenAI API 错误: {e}")
