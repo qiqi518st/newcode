@@ -26,7 +26,6 @@ from ..context.skill import SkillRegistry
 from ..context.summarize import CompactOutcome, SummarizeConfig, Summarizer
 from ..context.tokens import estimate_tokens, usage_to_anchor
 from ..context.window import get_context_window_for_model
-from ..conversation.manager import ConversationManager
 from ..provider.base import Provider, TokenUsage, ToolDefinition
 
 logger = logging.getLogger(__name__)
@@ -47,7 +46,7 @@ class ContextManager:
     def __init__(
         self,
         provider: Provider,
-        conversation: ConversationManager,
+        conversation: object,  # ConversationManager（延迟导入避循环：conversation.manager → context.dropper → context）
         model: str,
         protocol: str,
         file_tracker: FileTracker,

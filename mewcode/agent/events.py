@@ -38,6 +38,8 @@ class EventType(Enum):
     DONE = "done"  # Agent 运行结束
     ERROR = "error"  # 不可恢复的错误
     HITL_REQUEST = "hitl_request"  # 人在回路确认请求
+    CONTEXT_COMPACTING = "context_compacting"  # 压缩中（payload: str "auto"/"force"）
+    COMPACT_FAILED = "compact_failed"  # 压缩失败/熔断（payload: CompactOutcome）
 
 
 @dataclass
