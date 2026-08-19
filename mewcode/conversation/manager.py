@@ -1,6 +1,11 @@
-"""对话上下文管理器：维护消息列表，实现滑动窗口"""
+"""对话上下文管理器：维护消息列表，实现滑动窗口（ch08：裁剪改按 user 分组整组丢，保配对）"""
 
+from ..context.dropper import MessageGroupDropper
 from ..provider.base import Message, ToolCall, ToolResult
+
+# 降级条数兜底倍数：仅当组数超过 max_turns * 2 才触发裁剪（主裁剪权已交 context，
+# 本裁剪是防止 context 未接入/失败时的无界增长兜底，语义从「每轮对」放宽为「每组」）
+_TRIM_GROUP_CAP_MULTIPLIER = 2
 
 
 class ConversationManager:
@@ -109,10 +114,27 @@ class ConversationManager:
         """返回窗口内会话历史（不含 system；稳定系统提示由组装管线负责）"""
         return list(self._messages)
 
+    def get_messages_ref(self) -> list[Message]:
+        """返回 self._messages **原始引用**（非副本），供 offload_and_snip 就地改写 content。
+
+        注意：调用方就地改写会污染内部状态——这是刻意设计（ch08 L1 替换）；
+        get_context 仍返回副本不变（Agent assemble 用副本，副本取自压缩后的原始列表）。
+        """
+        return self._messages
+
+    def replace_history(self, new_messages: list[Message]) -> None:
+        """整段替换历史（第二层摘要成功后的新消息列表，spec F15）。"""
+        self._messages = list(new_messages)
+
     def _trim(self) -> None:
-        """超出 max_turns 时，丢弃最早的一对 user/assistant"""
-        # 统计 user/assistant 消息对数
-        pairs = len(self._messages) // 2
-        if pairs > self._max_turns:
-            excess = (pairs - self._max_turns) * 2
-            self._messages = self._messages[excess:]
+        """超出 max_turns 时，从头部按「user 分界的组」整组丢弃（不拆 tool_use/tool_result 对）。
+
+        ch08 语义变更：原实现按 user/assistant 对整对丢弃，会切开工具回合；现按
+        MessageGroupDropper.group_by_user 分组、整组丢，天然保对。触发阈值放宽到
+        max_turns * _TRIM_GROUP_CAP_MULTIPLIER（降级条数兜底，主裁剪权已交 context）。
+        """
+        groups = MessageGroupDropper.group_by_user(self._messages)
+        cap = self._max_turns * _TRIM_GROUP_CAP_MULTIPLIER
+        if len(groups) > cap:
+            keep = groups[len(groups) - cap :]
+            self._messages = [m for g in keep for m in g]
