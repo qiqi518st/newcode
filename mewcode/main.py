@@ -216,6 +216,14 @@ async def _oneshot(command: str, agent: Agent, mode: str = "normal") -> None:
             elif event.type == EventType.ERROR:
                 print(f"\n错误: {event.payload}", file=sys.stderr)
                 sys.exit(1)
+            elif event.type == EventType.CONTEXT_COMPACTING:
+                pass  # 单次模式不展示压缩提示
+            elif event.type == EventType.COMPACT_FAILED:
+                outcome = event.payload
+                print(
+                    f"\n压缩失败: {getattr(outcome, 'failure_reason', '未知')}",
+                    file=sys.stderr,
+                )
     except SystemExit:
         # SystemExit 经 _amain 的 finally（关 MCP）后正常向外传播退出
         raise

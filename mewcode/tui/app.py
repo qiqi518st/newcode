@@ -151,7 +151,7 @@ class REPL:
         """底部状态栏：左侧权限模式，右侧 token 用量"""
         pm = self._permission_mode_label
         tokens = f"Σ in:{self._session_in_tokens} out:{self._session_out_tokens}"
-        return f"{pm} | Shift+Tab 切换模式 | Alt+Enter 换行，Enter 发送 | /plan /do /delete-plan /normal /exit | {tokens}"
+        return f"{pm} | Shift+Tab 切换模式 | Alt+Enter 换行，Enter 发送 | /plan /do /compact /delete-plan /normal /exit | {tokens}"
 
     async def run(self) -> None:
         """主循环"""
@@ -184,6 +184,11 @@ class REPL:
                 if text in ("/exit", "/quit"):
                     self._console.print("再见！")
                     break
+
+                # ch08：/compact 手动压缩命令（不写 conversation，直接调 run_force_compact）
+                if text in ("/compact", "/compact "):
+                    await self._handle_compact()
+                    continue
 
                 await self._process_input(text)
 
@@ -460,9 +465,23 @@ class REPL:
                             error_occurred = True
                             self._show_error(event.payload)
                             break
+                        elif event.type == EventType.CONTEXT_COMPACTING:
+                            # ch08 压缩中提示（F24a 自动 / F24b 紧急）
+                            prefix = (
+                                "上下文撞墙，自动压缩中..."
+                                if event.payload == "force"
+                                else "正在压缩上下文..."
+                            )
+                            self._console.print(prefix, style="bold yellow")
+                        elif event.type == EventType.COMPACT_FAILED:
+                            # ch08 熔断收尾菜单（F28）：暂停 Live，弹选择菜单
+                            live.stop()
+                            await self._show_compact_failed_menu(event.payload)
+                            live.start()
+                            live.update(Markdown(buffer))
             except asyncio.CancelledError:
                 raise
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — 流式消费兜底，既有行为
                 error_occurred = True
                 self._show_error(e)
 
@@ -570,6 +589,65 @@ class REPL:
         """ESC/Ctrl+C 取消 HITL 等待"""
         self.agent.cancel()
         self._console.print("已取消", style="yellow italic")
+
+    async def _handle_compact(self) -> None:
+        """ch08：手动 /compact——调 run_force_compact，展示结果或弹熔断菜单（F24/F28 手动路径）。"""
+        self.state = SessionState.STREAMING
+        try:
+            tool_defs = self.agent.registry.to_definitions()
+            outcome = await self.agent.run_force_compact(tool_defs)
+        except Exception as e:  # noqa: BLE001 — 压缩异常不崩 TUI
+            self._show_error(e)
+            self.state = SessionState.IDLE
+            return
+        if outcome is not None and getattr(outcome, "success", False):
+            # F24：展示压缩前后 token 变化
+            saved = outcome.before_tokens - outcome.after_tokens
+            self._console.print(
+                f"已压缩，token 从 {outcome.before_tokens} 降至 {outcome.after_tokens}"
+                f"（节省 {saved}）",
+                style="bold green",
+            )
+        else:
+            # F28 手动路径：弹熔断菜单
+            await self._show_compact_failed_menu(outcome)
+        self.state = SessionState.IDLE
+
+    async def _show_compact_failed_menu(self, outcome) -> None:
+        """ch08 熔断收尾菜单（F28 三路径统一）：重试 / 分组丢弃重试 / 放弃 / 退出。
+
+        当前为骨架：选中即视为放弃本次行动（菜单驱动的分组丢弃重试属新的压缩行动，
+        后续按 MessageGroupDropper 步进再试；此处先提供选项与文案，执行兜底为放弃）。
+        """
+        reason = getattr(outcome, "failure_reason", "未知") if outcome else "未知"
+        question = (
+            f"压缩失败（原因: {reason}）。\n请选择处置方式：\n"
+        )
+        choice = await self._ask_choice(
+            question,
+            [
+                ("retry", "重试本次压缩"),
+                ("drop_retry", "分组丢弃重试（每次丢 2 组×3 次，再每次丢 20%）"),
+                ("abort", "放弃本次压缩"),
+                ("exit", "退出会话"),
+            ],
+            default_index=2,
+        )
+        if choice == "exit":
+            self._console.print("再见！")
+            raise SystemExit(0)
+        elif choice == "retry":
+            # 新的压缩行动（又有自己的 3 次重试，F28）
+            await self._handle_compact()
+        elif choice == "drop_retry":
+            # 菜单分支分组丢弃重试：后续接 MessageGroupDropper 步进
+            # 当前骨架先提示，按 plan 后续补全丢组循环
+            self._console.print(
+                "分组丢弃重试：该路径将按 user 分组逐步丢弃最旧组重试（F28 菜单分支）。",
+                style="yellow",
+            )
+        else:
+            self._console.print("已放弃本次压缩。", style="dim")
 
     async def _ask_choice(
         self,
