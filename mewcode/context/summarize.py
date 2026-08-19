@@ -272,10 +272,10 @@ class Summarizer:
             recent_tail = _expand_to_turns(messages, recent_tail, config.keep_recent_turns)
             old_block = messages[: len(messages) - len(recent_tail)]
             if not old_block:
-                # 退化：最近轮已覆盖全对话，无需调用摘要（正常压缩触发时不会出现）
-                new_msgs = _join_after_summary(Message(role="user", content=""), recent_tail)
+                # 退化：全对话都在「近期原文」范围内（< RECENT_TOKEN_FLOOR），
+                # 无需摘要——直接以近期原文为新历史，不塞空摘要消息（F11 语义）。
                 return CompactOutcome(
-                    True, before, estimate_messages(new_msgs), 0, True, "", new_msgs
+                    True, before, estimate_messages(recent_tail), 0, True, "", recent_tail
                 )
             summary_text = await self._run_with_retry(old_block, context_window, config)
             new_msgs = await self._assemble_new_messages(
