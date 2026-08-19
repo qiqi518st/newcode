@@ -51,7 +51,9 @@ class FileTracker:
         调用方改动不影响 tracker 内部状态。
         """
         async with self._lock:
-            items = sorted(self._files.values(), key=lambda f: f.timestamp_ns, reverse=True)
+            items = sorted(
+                self._files.values(), key=lambda f: f.timestamp_ns, reverse=True
+            )
             return [
                 TrackedFile(path=f.path, content=f.content, timestamp_ns=f.timestamp_ns)
                 for f in items[:limit]

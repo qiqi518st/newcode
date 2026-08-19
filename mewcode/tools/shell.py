@@ -83,13 +83,13 @@ class ExecuteCommandTool:
             try:
                 proc.kill()
                 await proc.wait()
-            except Exception:
+            except Exception:  # noqa: S110, BLE001 - cleanup must not mask timeout
                 pass
             return ToolResult(
                 status="error",
                 error="命令执行超时（60 秒）",
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - convert process failures to ToolResult
             return ToolResult(
                 status="error",
                 error=f"命令执行失败: {e}",

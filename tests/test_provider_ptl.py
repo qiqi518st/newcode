@@ -68,7 +68,9 @@ def test_openai_ptl_wrapped():
 
 def test_openai_ptl_keyword_fallback():
     """AC：OpenAI 400 + 'maximum context length' 文案 → PTL（code 缺失时兜底）。"""
-    e = _openai_err(400, "This model's maximum context length is 8192 tokens", code=None)
+    e = _openai_err(
+        400, "This model's maximum context length is 8192 tokens", code=None
+    )
     wrapped = _wrap_openai_error(e)
     assert isinstance(wrapped, PromptTooLongError)
 

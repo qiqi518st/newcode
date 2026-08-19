@@ -137,7 +137,9 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
         active_provider_cfg.protocol if active_provider_cfg else "anthropic",
         file_tracker,
         skill_registry=skill_registry,
-        emit_event=lambda kind, payload: agent_ref[0]._context_events.append((kind, payload)),
+        emit_event=lambda kind, payload: agent_ref[0]._context_events.append(
+            (kind, payload)
+        ),
         workspace=cwd,
     )
     # 延迟绑定 agent 引用（emit_event 闭包需访问 agent，但 agent 在下方构造）

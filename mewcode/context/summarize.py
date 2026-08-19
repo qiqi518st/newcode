@@ -9,6 +9,7 @@ import json
 import logging
 import math
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from ..context.constants import (
@@ -101,8 +102,14 @@ def serialize_conversation(msgs: list[Message]) -> str:
             lines.append(f"{msg.role}: {msg.content}")
             if msg.role == "assistant" and msg.tool_calls:
                 for tc in msg.tool_calls:
-                    args = json.dumps(tc.get("arguments", {}), ensure_ascii=False, separators=(",", ":"))
-                    lines.append(f"[call {tc.get('name', '')} id={tc.get('id', '')} args={args}]")
+                    args = json.dumps(
+                        tc.get("arguments", {}),
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    )
+                    lines.append(
+                        f"[call {tc.get('name', '')} id={tc.get('id', '')} args={args}]"
+                    )
     return "\n".join(lines)
 
 
@@ -156,7 +163,9 @@ def pick_recent_tail(msgs: list[Message]) -> list[Message]:
     return list(msgs[start:])
 
 
-def _join_after_summary(summary_and_recovery: Message, recent: list[Message]) -> list[Message]:
+def _join_after_summary(
+    summary_and_recovery: Message, recent: list[Message]
+) -> list[Message]:
     """把「摘要+恢复」单条 user 消息与近期原文拼接，保证无连续 user（spec F15）。
 
     - recent 空 → 只有摘要消息。
@@ -249,10 +258,13 @@ class Summarizer:
         provider: Provider,
         recovery_builder: RecoveryBuilder,
         file_tracker: FileTracker,
+        trace_factory: Callable[[list[Message]], dict[str, object] | None]
+        | None = None,
     ) -> None:
         self._provider = provider
         self._recovery_builder = recovery_builder
         self._file_tracker = file_tracker
+        self._trace_factory = trace_factory
 
     async def summarize(
         self,
@@ -269,13 +281,21 @@ class Summarizer:
         before = estimate_messages(messages)
         try:
             recent_tail = pick_recent_tail(messages)
-            recent_tail = _expand_to_turns(messages, recent_tail, config.keep_recent_turns)
+            recent_tail = _expand_to_turns(
+                messages, recent_tail, config.keep_recent_turns
+            )
             old_block = messages[: len(messages) - len(recent_tail)]
             if not old_block:
                 # 退化：全对话都在「近期原文」范围内（< RECENT_TOKEN_FLOOR），
                 # 无需摘要——直接以近期原文为新历史，不塞空摘要消息（F11 语义）。
                 return CompactOutcome(
-                    True, before, estimate_messages(recent_tail), 0, True, "", recent_tail
+                    True,
+                    before,
+                    estimate_messages(recent_tail),
+                    0,
+                    True,
+                    "",
+                    recent_tail,
                 )
             summary_text = await self._run_with_retry(old_block, context_window, config)
             new_msgs = await self._assemble_new_messages(
@@ -286,7 +306,9 @@ class Summarizer:
             )
         except Exception as e:  # 单次摘要失败不崩进程（N11）
             logger.exception("摘要行动失败")
-            return CompactOutcome(True, before, before, 0, False, _classify_error(e), None)
+            return CompactOutcome(
+                True, before, before, 0, False, _classify_error(e), None
+            )
 
     async def _run_with_retry(
         self, old_block: list[Message], context_window: int, config: SummarizeConfig
@@ -317,6 +339,7 @@ class Summarizer:
             messages=msgs,
             tools=None,
             max_output_tokens=_SUMMARY_MAX_OUTPUT_TOKENS,
+            trace_context=(self._trace_factory(msgs) if self._trace_factory else None),
         )
         buffer = ""
         stream = self._provider.stream(payload)
@@ -329,7 +352,9 @@ class Summarizer:
                 break
         return (extract_summary(buffer), None)
 
-    async def _ptl_retry(self, messages: list[Message], first_err: Exception | None) -> str:
+    async def _ptl_retry(
+        self, messages: list[Message], first_err: Exception | None
+    ) -> str:
         """F27：摘要请求自身 PTL 的统一处理（自动/手动/紧急三路径共用）。
 
         按 user 分界分组 → 最多 PTL_DIRECT_RETRY_LIMIT 次每次丢最旧 1 组直接重试 →
@@ -370,7 +395,10 @@ class Summarizer:
         raise last_err
 
     async def _assemble_new_messages(
-        self, summary_text: str, recent_tail: list[Message], tool_defs: list[ToolDefinition]
+        self,
+        summary_text: str,
+        recent_tail: list[Message],
+        tool_defs: list[ToolDefinition],
     ) -> list[Message]:
         """摘要正文 + 恢复三块拼成单条 user 消息，再接近期原文（role 衔接修正，F15）。"""
         bundle = await self._recovery_builder.build(self._file_tracker, tool_defs)

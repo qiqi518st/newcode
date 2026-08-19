@@ -22,6 +22,9 @@ venv/
 # MewCode 上下文管理落盘目录（会话级，运行时数据，不入库）
 .mewcode/sessions/
 
+# MewCode 本地监控数据（运行时写入，不入库）
+.mewcode/monitor/
+
 # Plan files (runtime data in project root, NOT mewcode/plans code package)
 /plans/
 

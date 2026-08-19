@@ -4,7 +4,7 @@ import json
 import os
 import re
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 _SLUG_PATTERN = re.compile(r"<!--\s*slug:\s*([^>]+?)\s*-->", re.IGNORECASE)
 
@@ -63,7 +63,7 @@ class PlanManager:
             slug = re.sub(r"[^a-zA-Z0-9\-]", "-", slug).strip("-").lower()
             if slug:
                 return slug
-        return datetime.now().strftime("plan-%Y%m%d-%H%M%S")
+        return datetime.now(timezone.utc).strftime("plan-%Y%m%d-%H%M%S")
 
     def _extract_task(self, content: str) -> str:
         """从 plan 内容中提取任务描述：首个 # 标题，或首个非注释行"""
@@ -89,7 +89,7 @@ class PlanManager:
         meta[slug] = {
             "file": filename,
             "task": self._extract_task(content) or task,
-            "created_at": datetime.now().isoformat(timespec="seconds"),
+            "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "executed_at": None,
         }
         self._save_meta(meta)
@@ -158,7 +158,9 @@ class PlanManager:
         """标记 plan 已执行，刷新 executed_at"""
         meta = self._load_meta()
         if slug in meta:
-            meta[slug]["executed_at"] = datetime.now().isoformat(timespec="seconds")
+            meta[slug]["executed_at"] = datetime.now(timezone.utc).isoformat(
+                timespec="seconds"
+            )
             self._save_meta(meta)
 
     def delete_plans(self, slugs: list[str]) -> None:
@@ -179,7 +181,7 @@ class PlanManager:
         """清理超过 N 天的 plan，返回删除数量。days<=0 时不清理"""
         if days <= 0:
             return 0
-        cutoff = datetime.now() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
         meta = self._load_meta()
         to_delete: list[str] = []
 
@@ -189,6 +191,8 @@ class PlanManager:
                 created = datetime.fromisoformat(created_at)
             except (ValueError, TypeError):
                 continue
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
             if created < cutoff:
                 to_delete.append(slug)
 

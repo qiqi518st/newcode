@@ -15,7 +15,9 @@ import sys
 _CHARS_PER_TOKEN = 3.5
 
 
-def _build_provider(protocol: str, model: str, base_url: str | None, api_key: str | None):
+def _build_provider(
+    protocol: str, model: str, base_url: str | None, api_key: str | None
+):
     """按协议构造 provider 适配器（复用 mewcode.provider，探测路径独立于 Agent）。"""
     from mewcode.config.schema import ProviderConfig
     from mewcode.provider.base import new_provider
@@ -69,11 +71,15 @@ async def _binary_probe(provider, lo: int, hi: int, max_iter: int = 20) -> int:
             hi = mid
         else:
             lo = mid
-        print(f"  探测 {mid} tokens → {'超长' if too_long else '通过'}", file=sys.stderr)
+        print(
+            f"  探测 {mid} tokens → {'超长' if too_long else '通过'}", file=sys.stderr
+        )
     return lo
 
 
-async def _run(protocol: str, model: str, base_url: str | None, api_key: str | None) -> int:
+async def _run(
+    protocol: str, model: str, base_url: str | None, api_key: str | None
+) -> int:
     provider = _build_provider(protocol, model, base_url, api_key)
     print(f"探测 {protocol}/{model} 的上下文窗口边界...", file=sys.stderr)
     # 先指数增长找上界，再二分

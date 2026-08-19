@@ -6,7 +6,7 @@ from ..permission.sandbox import check_path as sandbox_check
 from ..provider.base import ToolResult
 from ..utils.error import PathTraversalError
 
-_READ_LIMIT = 500  # 读文件行数上限
+_DEFAULT_READ_LIMIT = 500  # 未传 limit 时的默认读取行数
 
 
 def _check_path(path: str) -> str:
@@ -40,7 +40,7 @@ class ReadFileTool:
     @property
     def description(self) -> str:
         return (
-            "读取指定路径的文本文件内容，支持可选的行范围切片（offset/limit），大文件自动截断。"
+            "读取指定路径的文本文件内容，支持可选的行范围切片（offset/limit）。"
             "查看文件内容优先用本工具而非 shell cat；修改文件前必须先读取目标内容（先读后改）。"
         )
 
@@ -56,10 +56,12 @@ class ReadFileTool:
                 "offset": {
                     "type": "integer",
                     "description": "起始行号（从 0 开始，可选）",
+                    "minimum": 0,
                 },
                 "limit": {
                     "type": "integer",
-                    "description": "最大读取行数（可选，默认 500）",
+                    "description": "最大读取行数（可选，不设置时默认 500；无固定上限）",
+                    "minimum": 1,
                 },
             },
             "required": ["path"],
@@ -68,7 +70,12 @@ class ReadFileTool:
     async def execute(self, arguments: dict) -> ToolResult:
         path = arguments.get("path", "")
         offset = arguments.get("offset", 0)
-        limit = arguments.get("limit", _READ_LIMIT)
+        limit = arguments.get("limit", _DEFAULT_READ_LIMIT)
+
+        if not isinstance(offset, int) or not isinstance(limit, int):
+            return ToolResult(status="error", error="offset 和 limit 必须是整数")
+        if offset < 0 or limit <= 0:
+            return ToolResult(status="error", error="offset 必须非负，limit 必须为正数")
 
         try:
             abs_path = _check_path(path)
@@ -82,11 +89,11 @@ class ReadFileTool:
             return ToolResult(status="error", error=f"不是普通文件: {path}")
 
         try:
-            with open(abs_path, "r", encoding="utf-8") as f:
+            with open(abs_path, "r", encoding="utf-8") as f:  # noqa: ASYNC230
                 lines = f.readlines()
         except UnicodeDecodeError:
             return ToolResult(status="error", error=f"不是文本文件: {path}")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - convert tool failures to ToolResult
             return ToolResult(status="error", error=f"读取失败: {e}")
 
         total = len(lines)
@@ -95,7 +102,7 @@ class ReadFileTool:
         truncated = len(sliced) < total
 
         if truncated:
-            content += f"\n...（已截断，共 {total} 行，显示 {offset + 1}–{offset + len(sliced)} 行）"
+            content += "\n...（本次调用未返回全部文件）"
 
         return ToolResult(status="ok", output=content, truncated=truncated)
 
@@ -146,13 +153,13 @@ class WriteFileTool:
 
         try:
             os.makedirs(os.path.dirname(abs_path), exist_ok=True)
-            with open(abs_path, "w", encoding="utf-8") as f:
+            with open(abs_path, "w", encoding="utf-8") as f:  # noqa: ASYNC230
                 f.write(content)
             return ToolResult(
                 status="ok",
                 output=f"已写入 {len(content.encode('utf-8'))} 字节到 {path}",
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - convert tool failures to ToolResult
             return ToolResult(status="error", error=f"写入失败: {e}")
 
 
@@ -209,9 +216,9 @@ class EditFileTool:
             return ToolResult(status="error", error=f"文件不存在: {path}")
 
         try:
-            with open(abs_path, "r", encoding="utf-8") as f:
+            with open(abs_path, "r", encoding="utf-8") as f:  # noqa: ASYNC230
                 content = f.read()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - convert tool failures to ToolResult
             return ToolResult(status="error", error=f"读取失败: {e}")
 
         count = content.count(old_string)
@@ -226,9 +233,9 @@ class EditFileTool:
         new_content = content.replace(old_string, new_string, 1)
 
         try:
-            with open(abs_path, "w", encoding="utf-8") as f:
+            with open(abs_path, "w", encoding="utf-8") as f:  # noqa: ASYNC230
                 f.write(new_content)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - convert tool failures to ToolResult
             return ToolResult(status="error", error=f"写入失败: {e}")
 
         return ToolResult(status="ok", output=f"已替换 1 处（{path}）")

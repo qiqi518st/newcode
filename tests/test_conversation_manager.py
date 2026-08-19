@@ -68,9 +68,9 @@ def test_trim_keeps_pair():
     # 无 tool 落单：每个 tool 消息前必有带 tool_calls 的 assistant，id 一致
     for i, m in enumerate(msgs):
         if m.role == "tool":
-            assert i > 0 and msgs[i - 1].role == "assistant" and msgs[i - 1].tool_calls, (
-                f"tool 落单 at {i}"
-            )
+            assert (
+                i > 0 and msgs[i - 1].role == "assistant" and msgs[i - 1].tool_calls
+            ), f"tool 落单 at {i}"
             assert msgs[i - 1].tool_calls[0]["id"] == m.tool_use_id, "配对 id 一致"
 
 

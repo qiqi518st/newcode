@@ -48,7 +48,9 @@ async def test_decide_once_kept_freeze():
     assert call_count[0] == 1
 
     # 再评：即使 decide 想返回 replaced，也因已 seen 直接返回原文
-    second = state.decide_once("id2", "ORIGINAL", lambda: ("replaced", "SHOULD_NOT_WIN"))
+    second = state.decide_once(
+        "id2", "ORIGINAL", lambda: ("replaced", "SHOULD_NOT_WIN")
+    )
     assert second == "ORIGINAL"
     assert call_count[0] == 1  # decide 仍不被调用
 
@@ -90,7 +92,6 @@ async def test_decide_once_concurrent_atomic():
 
     state = ContentReplacementState()
     call_count = [0]
-    lock = asyncio.Lock()
 
     def decide():
         call_count[0] += 1

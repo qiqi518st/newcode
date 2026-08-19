@@ -72,7 +72,7 @@ def test_consume_stream_renders_text():
 
 def test_consume_stream_adds_to_conversation():
     """done 后完整回复应记录到 cur_reply"""
-    repl, console = _make_repl(
+    repl, _console = _make_repl(
         [
             Event(EventType.TEXT, "回复A"),
             Event(EventType.TEXT, "回复B"),
@@ -155,7 +155,7 @@ def test_token_usage_accumulates():
     """TOKEN_USAGE 事件应累加到会话计数"""
     from mewcode.provider.base import TokenUsage
 
-    repl, console = _make_repl(
+    repl, _console = _make_repl(
         [
             Event(EventType.TOKEN_USAGE, TokenUsage(100, 50)),
             Event(EventType.TOKEN_USAGE, TokenUsage(200, 80)),

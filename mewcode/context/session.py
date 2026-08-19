@@ -33,7 +33,9 @@ def _new_session_id() -> str:
 def new_session_context(workspace: str) -> SessionContext:
     """构造会话上下文并创建落盘目录（已存在不报错，spec F33）。"""
     session_id = _new_session_id()
-    spill_dir = str(Path(workspace) / ".mewcode" / "sessions" / session_id / "tool-results")
+    spill_dir = str(
+        Path(workspace) / ".mewcode" / "sessions" / session_id / "tool-results"
+    )
     Path(spill_dir).mkdir(parents=True, exist_ok=True)
     return SessionContext(session_id=session_id, spill_dir=spill_dir)
 
@@ -43,7 +45,28 @@ class SessionPaths:
 
     def __init__(self, session: SessionContext) -> None:
         self._spill_dir = Path(session.spill_dir)
+        self._session_id = session.session_id
+        self._session_dir = self._spill_dir.parent
         self._fallback = itertools.count(1)
+        self._request_counter = itertools.count(1)
+
+    @property
+    def session_id(self) -> str:
+        return self._session_id
+
+    @property
+    def session_dir(self) -> Path:
+        return self._session_dir
+
+    @property
+    def spill_dir(self) -> Path:
+        return self._spill_dir
+
+    def request_trace_path(self) -> Path:
+        """Return a unique request record path for the current session."""
+        trace_dir = self._session_dir / "requests"
+        trace_dir.mkdir(parents=True, exist_ok=True)
+        return trace_dir / f"request-{next(self._request_counter):06d}.json"
 
     def path_for(self, tool_use_id: str) -> Path:
         """返回落盘路径；空 id 兜底为 unknown-{n}（不抛，spec F3）。"""

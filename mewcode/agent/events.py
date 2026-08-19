@@ -40,6 +40,8 @@ class EventType(Enum):
     HITL_REQUEST = "hitl_request"  # 人在回路确认请求
     CONTEXT_COMPACTING = "context_compacting"  # 压缩中（payload: str "auto"/"force"）
     COMPACT_FAILED = "compact_failed"  # 压缩失败/熔断（payload: CompactOutcome）
+    CONTEXT_OFFLOADED = "context_offloaded"  # 大结果落盘（payload: dict）
+    CONTEXT_COMPACTED = "context_compacted"  # 压缩完成（payload: CompactOutcome）
 
 
 @dataclass
@@ -57,4 +59,5 @@ class Event:
         | StopReason
         | HITLRequest
         | Exception
+        | dict
     )

@@ -3,7 +3,6 @@
 防 bug：阈值触发、自动闸、强制 L1、窗口下界、并发互斥、锚点重置。
 """
 
-
 import pytest
 
 from mewcode.context.files import FileTracker
@@ -38,11 +37,15 @@ def _fail_script(i):
 def _build_conv(cm, turns=15, big_first=True):
     for k in range(turns):
         cm.add_user(f"用户{k}：" + "x" * 3000)
-        tc = ToolCall(tool_name="read_file", arguments={"path": "f"}, tool_use_id=f"t{k}")
+        tc = ToolCall(
+            tool_name="read_file", arguments={"path": "f"}, tool_use_id=f"t{k}"
+        )
         cm.add_assistant_with_tool_calls("", [tc])
         cm.add_tool_result(
             tc,
-            ToolResult(status="ok", output="y" * 60000 if (big_first and k == 0) else "ok"),
+            ToolResult(
+                status="ok", output="y" * 60000 if (big_first and k == 0) else "ok"
+            ),
         )
 
 

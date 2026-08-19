@@ -1,10 +1,14 @@
 """Provider 工具解析测试"""
 
 import json
+from types import SimpleNamespace
 
 import pytest
 
-from mewcode.provider.base import ToolCall
+from mewcode.prompt.assembler import PromptPayload
+from mewcode.provider.anthropic import AnthropicProvider
+from mewcode.provider.base import Message, ToolCall
+from mewcode.provider.openai import OpenAIProvider
 
 
 class TestAnthropicToolParsing:
@@ -52,6 +56,79 @@ class TestAnthropicToolParsing:
                 assert tc.tool_use_id == "tu_123"
 
 
+class TestAnthropicToolMessageAssembly:
+    @pytest.mark.anyio
+    async def test_multiple_tool_results_are_one_immediate_user_message(self, tmp_path):
+        """防回归：多个 tool_use 必须紧邻一个包含全部 tool_result 的 user 消息。"""
+
+        class FakeStream:
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                if hasattr(self, "done"):
+                    raise StopAsyncIteration
+                self.done = True
+                return SimpleNamespace(type="message_stop")
+
+            async def close(self):
+                pass
+
+        class FakeMessages:
+            def __init__(self):
+                self.kwargs = None
+
+            async def create(self, **kwargs):
+                self.kwargs = kwargs
+                return FakeStream()
+
+        provider = object.__new__(AnthropicProvider)
+        provider._model = "test-model"
+        provider._thinking = False
+        client_messages = FakeMessages()
+        provider._client = SimpleNamespace(messages=client_messages)
+        payload = PromptPayload(
+            stable_prompt="stable",
+            env_segment="",
+            messages=[
+                Message(
+                    role="assistant",
+                    content="",
+                    tool_calls=[
+                        {"id": "call_a", "name": "read_file", "arguments": {}},
+                        {"id": "call_b", "name": "list_files", "arguments": {}},
+                    ],
+                ),
+                Message(role="tool", content="a", tool_use_id="call_a"),
+                Message(role="tool", content="b", tool_use_id="call_b"),
+            ],
+            trace_context={"path": str(tmp_path / "anthropic.json")},
+        )
+
+        [event async for event in provider.stream(payload)]
+
+        messages = client_messages.kwargs["messages"]
+        assert messages[-1] == {
+            "role": "user",
+            "content": [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": "call_a",
+                    "content": "a",
+                    "is_error": False,
+                },
+                {
+                    "type": "tool_result",
+                    "tool_use_id": "call_b",
+                    "content": "b",
+                    "is_error": False,
+                },
+            ],
+        }
+        trace = json.loads((tmp_path / "anthropic.json").read_text(encoding="utf-8"))
+        assert trace["provider_request"]["messages"] == messages
+
+
 class TestOpenAIToolParsing:
     """模拟 OpenAI SDK 流事件序列"""
 
@@ -85,3 +162,38 @@ class TestOpenAIToolParsing:
         assert tc.tool_name == "read_file"
         assert tc.arguments == {"path": "main.py"}
         assert tc.tool_call_id == "fc_123"
+
+    @pytest.mark.anyio
+    async def test_provider_trace_contains_final_messages(self, tmp_path):
+        class FakeStream:
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                raise StopAsyncIteration
+
+        class FakeCompletions:
+            def __init__(self):
+                self.kwargs = None
+
+            async def create(self, **kwargs):
+                self.kwargs = kwargs
+                return FakeStream()
+
+        completions = FakeCompletions()
+        provider = object.__new__(OpenAIProvider)
+        provider._model = "test-model"
+        provider._client = SimpleNamespace(
+            chat=SimpleNamespace(completions=completions)
+        )
+        payload = PromptPayload(
+            stable_prompt="stable",
+            env_segment="",
+            messages=[Message(role="user", content="hello")],
+            trace_context={"path": str(tmp_path / "openai.json")},
+        )
+
+        [event async for event in provider.stream(payload)]
+
+        trace = json.loads((tmp_path / "openai.json").read_text(encoding="utf-8"))
+        assert trace["provider_request"]["messages"] == completions.kwargs["messages"]

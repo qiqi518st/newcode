@@ -26,6 +26,7 @@ from ..context.skill import SkillRegistry
 from ..context.summarize import CompactOutcome, SummarizeConfig, Summarizer
 from ..context.tokens import estimate_tokens, usage_to_anchor
 from ..context.window import get_context_window_for_model
+from ..monitor.protocol import is_monitor_active
 from ..provider.base import Provider, TokenUsage, ToolDefinition
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,8 @@ logger = logging.getLogger(__name__)
 # T20 将 kind 映射为 agent.events 的 CONTEXT_COMPACTING / COMPACT_FAILED。
 EMIT_COMPACTING = "context_compacting"  # payload: str（"auto"/"force"）
 EMIT_FAILED = "compact_failed"  # payload: CompactOutcome
+EMIT_OFFLOADED = "context_offloaded"  # payload: dict
+EMIT_COMPACTED = "context_compacted"  # payload: CompactOutcome
 
 
 class ContextManager:
@@ -61,11 +64,15 @@ class ContextManager:
         self._lock = asyncio.Lock()  # 会话级互斥（F34），管 context 三方法
         self._state = ContentReplacementState()
         self._auto_gate = AutoCompactGate()
-        self._session = SessionPaths(
-            new_session_context(workspace or os.getcwd())
-        )
+        self._workspace = os.path.abspath(workspace or os.getcwd())
+        self._session = SessionPaths(new_session_context(self._workspace))
         self._recovery_builder = RecoveryBuilder(skill_registry)
-        self._summarizer = Summarizer(provider, self._recovery_builder, file_tracker)
+        self._summarizer = Summarizer(
+            provider,
+            self._recovery_builder,
+            file_tracker,
+            trace_factory=self._prepare_summary_trace,
+        )
         self._context_window = get_context_window_for_model(model, protocol)
         # 外部锚点状态（纯函数估算用，由 Agent 主对话路径维护）
         self._usage_anchor = 0
@@ -94,21 +101,24 @@ class ContextManager:
                     self._context_window,
                 )
                 async with self._lock:
-                    await offload_and_snip(
+                    replaced = await offload_and_snip(
                         self._conv.get_messages_ref(), self._state, self._session
                     )
+                    self._emit_offloaded(replaced)
                 return
             # 自动闸（F28）：连续失败达上限 → 静默跳过 L2，仅 L1，不弹菜单
             if self._auto_gate.auto_disabled():
                 async with self._lock:
-                    await offload_and_snip(
+                    replaced = await offload_and_snip(
                         self._conv.get_messages_ref(), self._state, self._session
                     )
+                    self._emit_offloaded(replaced)
                 return
             async with self._lock:
                 replaced = await offload_and_snip(
                     self._conv.get_messages_ref(), self._state, self._session
                 )
+                self._emit_offloaded(replaced)
                 estimate = estimate_tokens(
                     self._usage_anchor,
                     self._conv.get_messages_ref(),
@@ -130,6 +140,7 @@ class ContextManager:
                     self._conv.replace_history(outcome.messages or [])
                     self.reset_anchor()
                     self._auto_gate.record_auto_success()
+                    self._emit(EMIT_COMPACTED, outcome)
                     logger.info(
                         "auto-compact ok: %d → %d tokens, L1 replaced %d results",
                         outcome.before_tokens,
@@ -149,7 +160,9 @@ class ContextManager:
             async with self._lock:
                 outcome = await self._summarizer.summarize(
                     self._conv.get_messages_ref(),
-                    SummarizeConfig(safety_margin=MANUAL_SAFETY_MARGIN, keep_recent_turns=6),
+                    SummarizeConfig(
+                        safety_margin=MANUAL_SAFETY_MARGIN, keep_recent_turns=6
+                    ),
                     self._context_window,
                     tool_defs,
                 )
@@ -175,7 +188,9 @@ class ContextManager:
                 )
                 outcome = await self._summarizer.summarize(
                     self._conv.get_messages_ref(),
-                    SummarizeConfig(safety_margin=MANUAL_SAFETY_MARGIN, keep_recent_turns=3),
+                    SummarizeConfig(
+                        safety_margin=MANUAL_SAFETY_MARGIN, keep_recent_turns=3
+                    ),
                     self._context_window,
                     tool_defs,
                 )
@@ -186,15 +201,14 @@ class ContextManager:
                 self._conv.replace_history(outcome.messages or [])
                 self.reset_anchor()
                 # F25a：重估 < 窗口-3000 才允许 Agent 重试原请求，否则不可恢复
-                estimate = estimate_tokens(
-                    0, self._conv.get_messages_ref(), 0
-                )
+                estimate = estimate_tokens(0, self._conv.get_messages_ref(), 0)
                 if estimate >= self._context_window - MANUAL_SAFETY_MARGIN:
                     outcome.success = False
                     outcome.failure_reason = "irrecoverable"
                     outcome.messages = None
                     self._emit(EMIT_FAILED, outcome)
                     return outcome
+                self._emit(EMIT_COMPACTED, outcome)
                 return outcome
         except Exception:  # N11
             logger.exception("force_compact failed")
@@ -219,3 +233,36 @@ class ContextManager:
             self._emit_event(kind, payload)
         except Exception:
             logger.exception("emit_event(%s) failed", kind)
+
+    def _emit_offloaded(self, replaced: int) -> None:
+        if replaced:
+            self._emit(
+                EMIT_OFFLOADED,
+                {"count": replaced, "spill_dir": str(self._session.spill_dir)},
+            )
+
+    def prepare_request_trace(
+        self,
+        user_input: str,
+        turn: int,
+        run_id: str | None = None,
+        request_kind: str = "conversation",
+    ) -> dict[str, object] | None:
+        """Reserve a trace file only while the standalone monitor is active."""
+        if not is_monitor_active(self._workspace):
+            return None
+        return {
+            "path": str(self._session.request_trace_path()),
+            "session_id": self._session.session_id,
+            "pid": os.getpid(),
+            "workspace": self._workspace,
+            "request_kind": request_kind,
+            "user_input": user_input,
+            "turn": turn,
+            "run_id": run_id,
+        }
+
+    def _prepare_summary_trace(
+        self, messages: list[object]
+    ) -> dict[str, object] | None:
+        return self.prepare_request_trace("", -1, request_kind="context_summary")

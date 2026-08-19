@@ -34,9 +34,11 @@ class AppMode(Enum):
 # 提示符风格
 _PROMPT_STYLE = Style.from_dict(
     {
-        "prompt": "#00ff00 bold",
+        "prompt": "#ffffff bold",
     }
 )
+
+_CONTEXT_STYLE = "bold white"
 
 
 def _create_key_bindings(on_shift_tab=None) -> KeyBindings:
@@ -197,6 +199,13 @@ class REPL:
 
     async def _process_input(self, text: str) -> None:
         """提交用户输入，根据命令切换模式，启动 Agent"""
+        if text.startswith("/") and not self._is_known_command(text):
+            self._console.print(
+                "未知命令。可用命令：/plan /do /compact /normal /exit",
+                style="yellow",
+            )
+            return
+
         # 重置执行标记（/do 或确认弹窗时重新设置）
         self._executing_slug = ""
 
@@ -304,6 +313,21 @@ class REPL:
 
         # 不重置模式：plan 会话中执行/不执行后仍停留在 plan 模式
         self.state = SessionState.IDLE
+
+    @staticmethod
+    def _is_known_command(text: str) -> bool:
+        """Return whether a slash command belongs to the REPL command surface."""
+        command = text.split(maxsplit=1)[0]
+        return command in {
+            "/compact",
+            "/delete-plan",
+            "/do",
+            "/exit",
+            "/exit-plan",
+            "/normal",
+            "/plan",
+            "/quit",
+        }
 
     async def _run_stream(self, user_input: str, mode: str, plan_content: str) -> None:
         """启动并等待 Agent 流式执行"""
@@ -472,9 +496,31 @@ class REPL:
                                 if event.payload == "force"
                                 else "正在压缩上下文..."
                             )
-                            self._console.print(prefix, style="bold yellow")
+                            prefix = "○ " + prefix
+                            self._console.print(prefix, style=_CONTEXT_STYLE)
+                        elif event.type == EventType.CONTEXT_OFFLOADED:
+                            info = event.payload
+                            self._console.print(
+                                f"○ 大结果已落盘：{info.get('count', 0)} 个 "
+                                f"（{info.get('spill_dir', '')}）",
+                                style=_CONTEXT_STYLE,
+                            )
+                        elif event.type == EventType.CONTEXT_COMPACTED:
+                            outcome = event.payload
+                            saved = outcome.before_tokens - outcome.after_tokens
+                            self._console.print(
+                                f"○ 上下文压缩完成：token "
+                                f"{outcome.before_tokens} -> {outcome.after_tokens} "
+                                f"（节省 {saved}，落盘替换 "
+                                f"{outcome.replaced_results} 个）",
+                                style=_CONTEXT_STYLE,
+                            )
                         elif event.type == EventType.COMPACT_FAILED:
                             # ch08 熔断收尾菜单（F28）：暂停 Live，弹选择菜单
+                            reason = getattr(event.payload, "failure_reason", "未知")
+                            self._console.print(
+                                f"○ 上下文压缩失败：{reason}", style=_CONTEXT_STYLE
+                            )
                             live.stop()
                             await self._show_compact_failed_menu(event.payload)
                             live.start()
@@ -592,6 +638,7 @@ class REPL:
 
     async def _handle_compact(self) -> None:
         """ch08：手动 /compact——调 run_force_compact，展示结果或弹熔断菜单（F24/F28 手动路径）。"""
+        self._console.print("○ 正在手动压缩上下文...", style=_CONTEXT_STYLE)
         self.state = SessionState.STREAMING
         try:
             tool_defs = self.agent.registry.to_definitions()
@@ -604,9 +651,10 @@ class REPL:
             # F24：展示压缩前后 token 变化
             saved = outcome.before_tokens - outcome.after_tokens
             self._console.print(
-                f"已压缩，token 从 {outcome.before_tokens} 降至 {outcome.after_tokens}"
-                f"（节省 {saved}）",
-                style="bold green",
+                f"○ 上下文压缩完成：token "
+                f"{outcome.before_tokens} -> {outcome.after_tokens} "
+                f"（节省 {saved}，落盘替换 {outcome.replaced_results} 个）",
+                style=_CONTEXT_STYLE,
             )
         else:
             # F28 手动路径：弹熔断菜单
@@ -620,9 +668,7 @@ class REPL:
         后续按 MessageGroupDropper 步进再试；此处先提供选项与文案，执行兜底为放弃）。
         """
         reason = getattr(outcome, "failure_reason", "未知") if outcome else "未知"
-        question = (
-            f"压缩失败（原因: {reason}）。\n请选择处置方式：\n"
-        )
+        question = f"压缩失败（原因: {reason}）。\n请选择处置方式：\n"
         choice = await self._ask_choice(
             question,
             [

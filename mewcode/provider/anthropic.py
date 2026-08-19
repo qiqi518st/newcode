@@ -7,6 +7,7 @@ from anthropic import AsyncAnthropic
 
 from ..config.schema import ProviderConfig
 from ..llm import PromptTooLongError
+from ..monitor.protocol import write_request_record
 from ..prompt.assembler import PromptPayload
 from ..utils.error import ProviderError
 from .base import StreamEvent, TokenUsage, ToolCall
@@ -63,24 +64,30 @@ class AnthropicProvider:
         if first_content:
             api_messages.append({"role": "user", "content": first_content})
 
+        # Anthropic 要求同一 assistant 消息中的多个 tool_use，必须由紧邻的
+        # 一个 user 消息承载全部 tool_result block。
+        pending_tool_results: list[dict] = []
+
+        def flush_tool_results() -> None:
+            if pending_tool_results:
+                api_messages.append(
+                    {"role": "user", "content": list(pending_tool_results)}
+                )
+                pending_tool_results.clear()
+
         # 会话历史
         for msg in payload.messages:
             if msg.role == "tool":
-                # Anthropic tool_result 格式
-                api_messages.append(
+                pending_tool_results.append(
                     {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "tool_result",
-                                "tool_use_id": msg.tool_use_id or "",
-                                "content": msg.content,
-                                "is_error": False,
-                            }
-                        ],
+                        "type": "tool_result",
+                        "tool_use_id": msg.tool_use_id or "",
+                        "content": msg.content,
+                        "is_error": False,
                     }
                 )
             elif msg.role == "assistant" and msg.tool_calls:
+                flush_tool_results()
                 # Anthropic assistant tool_use 声明格式
                 api_messages.append(
                     {
@@ -97,7 +104,9 @@ class AnthropicProvider:
                     }
                 )
             else:
+                flush_tool_results()
                 api_messages.append({"role": msg.role, "content": msg.content})
+        flush_tool_results()
 
         # 轮次级 system-reminder（role=user，<system-reminder> 标签，瞬时不持久）
         for r in payload.reminders:
@@ -120,6 +129,8 @@ class AnthropicProvider:
                 }
                 for t in payload.tools
             ]
+
+        write_request_record(payload, "anthropic", self._model, kwargs)
 
         # 流式消费状态
         _tool_name: str | None = None

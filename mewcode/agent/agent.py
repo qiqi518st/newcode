@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import uuid
 from collections.abc import AsyncIterator
 
 from ..conversation.manager import ConversationManager
@@ -88,6 +89,7 @@ class Agent:
         try:
             # 重置取消信号
             self._cancelled.clear()
+            run_id = uuid.uuid4().hex[:12]
 
             # 注入用户消息
             if mode == "execute" and plan_content:
@@ -116,15 +118,10 @@ class Agent:
 
                 # ch08：每轮组装前自动上下文管理（L1 全量 + L2 阈值检查）
                 if self._context_mgr is not None:
-                    self._context_events: list[tuple[str, object]] = []
-                    await self._context_mgr.manage_context(tool_defs)
-                    # 透传 context 期间累积的压缩事件（CONTEXT_COMPACTING/COMPACT_FAILED）
-                    for kind, payload in self._context_events:
-                        if kind == "context_compacting":
-                            yield Event(EventType.CONTEXT_COMPACTING, payload)
-                        elif kind == "compact_failed":
-                            yield Event(EventType.COMPACT_FAILED, payload)
                     self._context_events = []
+                    await self._context_mgr.manage_context(tool_defs)
+                    for context_event in self._drain_context_events():
+                        yield context_event
 
                 # 轮次级补充消息：plan 模式按轮注入（第 0/5 轮完整，其余精简，瞬时不持久）
                 reminders = [plan_mode_reminder(turn)] if mode == "plan" else []
@@ -137,6 +134,7 @@ class Agent:
                     reminders,
                     tool_defs if tool_defs else None,
                 )
+                self._attach_request_trace(payload, user_input, turn, run_id)
 
                 # ── 发起 LLM 请求 ──
                 stream = self.provider.stream(payload)
@@ -172,6 +170,8 @@ class Agent:
                     ):
                         _emergency_retried = True
                         outcome = await self._context_mgr.force_compact(tool_defs)
+                        for context_event in self._drain_context_events():
+                            yield context_event
                         if outcome.success:
                             # 用新历史重组 payload 重试本轮（不进下一 turn）
                             payload = self._assembler.assemble(
@@ -180,6 +180,9 @@ class Agent:
                                 self.conv.get_context(),
                                 reminders,
                                 tool_defs if tool_defs else None,
+                            )
+                            self._attach_request_trace(
+                                payload, user_input, turn, run_id
                             )
                             stream = self.provider.stream(payload)
                             _buffer = ""
@@ -318,7 +321,9 @@ class Agent:
                             yield Event(EventType.TOOL_CALL, tc)
                             yield Event(EventType.TOOL_RESULT, tr)
                             self.conv.add_tool_result(tc, tr)
-                            permission_results.append((tc, Decision.DENY, result.reason))
+                            permission_results.append(
+                                (tc, Decision.DENY, result.reason)
+                            )
                         else:
                             # 交互：发 HITL 事件阻塞等待
                             self._hitl_event.clear()
@@ -350,7 +355,9 @@ class Agent:
                                 yield Event(EventType.TOOL_CALL, tc)
                                 yield Event(EventType.TOOL_RESULT, tr)
                                 self.conv.add_tool_result(tc, tr)
-                                permission_results.append((tc, Decision.DENY, "用户拒绝"))
+                                permission_results.append(
+                                    (tc, Decision.DENY, "用户拒绝")
+                                )
                             else:
                                 # allow_once / allow_always
                                 if (
@@ -415,7 +422,7 @@ class Agent:
                     yield Event(EventType.DONE, StopReason.CANCELLED)
                     return
 
-        # 达到迭代上限
+            # 达到迭代上限
             if _buffer:
                 self.conv.add_assistant(_buffer)
             yield Event(EventType.DONE, StopReason.MAX_TURNS)
@@ -432,6 +439,37 @@ class Agent:
 
                 return CompactOutcome(True, 0, 0, 0, False, "no context", None)
             return await self._context_mgr.compact_now(tool_defs)
+
+    def _drain_context_events(self):
+        """Translate ContextManager callbacks into public Agent events."""
+        events = self._context_events
+        self._context_events = []
+        mapping = {
+            "context_compacting": EventType.CONTEXT_COMPACTING,
+            "compact_failed": EventType.COMPACT_FAILED,
+            "context_offloaded": EventType.CONTEXT_OFFLOADED,
+            "context_compacted": EventType.CONTEXT_COMPACTED,
+        }
+        return (
+            Event(mapping[kind], payload) for kind, payload in events if kind in mapping
+        )
+
+    def _attach_request_trace(
+        self, payload, user_input: str, turn: int, run_id: str
+    ) -> None:
+        if self._context_mgr is None:
+            return
+        prepare = getattr(self._context_mgr, "prepare_request_trace", None)
+        if prepare is None:
+            return
+        try:
+            try:
+                payload.trace_context = prepare(user_input, turn, run_id)
+            except TypeError:
+                payload.trace_context = prepare(user_input, turn)
+        except (AttributeError, OSError, RuntimeError, TypeError):
+            # Request tracing is observability only and must never break a turn.
+            payload.trace_context = None
 
 
 def _strip_truncation(output: str) -> str:

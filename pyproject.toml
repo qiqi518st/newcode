@@ -13,6 +13,7 @@ dependencies = [
 
 [project.scripts]
 mewcode = "mewcode.main:main"
+mewcode-monitor = "mewcode.monitor.app:main"
 
 [build-system]
 requires = ["hatchling"]

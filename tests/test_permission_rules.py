@@ -165,6 +165,13 @@ class TestMcpToolRules:
         assert rule.tool_name == "mcp__fs__read_file"
         assert rule.pattern == "/tmp/x"
 
+    def test_parse_mcp_wildcard_name(self):
+        """AC11：YAML 中的 mcp__server__* 规则必须能被解析，而非启动时跳过。"""
+        rule = R.Rule.parse("mcp__mysql-server__*", "allow", "test")
+        assert rule is not None
+        assert rule.tool_name == "mcp__mysql-server__*"
+        assert rule.pattern == ""
+
     def test_bare_wildcard_matches_same_server_tools(self):
         # 防的 bug：mcp__github__* 曾无法匹配任何工具（== 比对）
         rs = R.RuleSet()
@@ -221,6 +228,20 @@ class TestLoadRules:
         assert layers.match("Bash", "git status") == Decision.ALLOW
         # 用户级 deny 的 glob
         assert layers.match("Write", "build/app.log") == Decision.DENY
+
+    def test_load_mcp_wildcard_rule_from_yaml(self, tmp_path, monkeypatch):
+        """防回归：项目权限 YAML 中的 MCP 通配规则应实际命中工具。"""
+        monkeypatch.setattr(R, "RULE_FILE_USER", str(tmp_path / "user.yaml"))
+        project = tmp_path / ".mewcode" / "permissions.yaml"
+        self._write(
+            project,
+            {"permissions": {"allow": ["mcp__mysql-server__*"]}},
+        )
+
+        layers = R.load_rules(str(tmp_path))
+
+        assert layers.match("mcp__mysql-server__query", "") == Decision.ALLOW
+        assert layers.match("mcp__other-server__query", "") is None
 
     def test_invalid_yaml_degrades_gracefully(self, tmp_path, monkeypatch, capsys):
         monkeypatch.setattr(R, "RULE_FILE_USER", str(tmp_path / "user.yaml"))

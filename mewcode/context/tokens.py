@@ -30,9 +30,9 @@ def message_chars(msgs: list[Message]) -> int:
         total += len(msg.content.encode("utf-8"))
         if msg.tool_calls:
             total += len(
-                json.dumps(msg.tool_calls, ensure_ascii=False, separators=(",", ":")).encode(
-                    "utf-8"
-                )
+                json.dumps(
+                    msg.tool_calls, ensure_ascii=False, separators=(",", ":")
+                ).encode("utf-8")
             )
     return total
 
@@ -46,7 +46,7 @@ def estimate_tokens(anchor: int, all_msgs: list[Message], anchor_msg_len: int) -
     注意：all_msgs 必须是 L1（offload_and_snip）之后的消息列表，否则估算偏高、
     过早触发 L2。anchor=0 且 anchor_msg_len=0（首轮/摘要后重置）时退化为纯字符估算。
     """
-    tail = all_msgs[max(0, anchor_msg_len):]
+    tail = all_msgs[max(0, anchor_msg_len) :]
     return anchor + math.ceil(message_chars(tail) / ESTIMATE_CHARS_PER_TOKEN)
 
 

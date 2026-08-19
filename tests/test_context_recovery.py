@@ -5,8 +5,8 @@
 
 import pytest
 
-from mewcode.context.recovery import BOUNDARY_NOTICE, RecoveryBuilder
 from mewcode.context.files import FileTracker
+from mewcode.context.recovery import BOUNDARY_NOTICE, RecoveryBuilder
 from mewcode.provider.base import ToolDefinition
 
 
@@ -49,7 +49,9 @@ async def test_tools_exact_reference():
     """
     ft = FileTracker()
     defs = [
-        ToolDefinition(name="read_file", description="读文件", parameters={"type": "object"}),
+        ToolDefinition(
+            name="read_file", description="读文件", parameters={"type": "object"}
+        ),
         ToolDefinition(name="grep", description="搜索", parameters={}),
     ]
     builder = RecoveryBuilder()
@@ -58,8 +60,6 @@ async def test_tools_exact_reference():
     assert "- read_file: 读文件" in text
     assert "- grep: 搜索" in text
     # 空参数不附 schema 行
-    lines = text.split("\n")
-    grep_line_idx = next(i for i, l in enumerate(lines) if "grep" in l)
     # grep 后若无 schema（参数为空），下一行应是另一个工具或无
     assert "object" in text  # read_file 的 schema 出现
 

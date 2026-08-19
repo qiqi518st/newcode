@@ -19,7 +19,10 @@ class PromptPayload:
         default_factory=list
     )  # 轮次级 system-reminder（瞬时不持久）
     tools: list[ToolDefinition] | None = None  # 工具定义（可缓存）
-    max_output_tokens: int | None = None  # 输出 token 上限覆盖（摘要等独立请求用；None=provider 默认）
+    max_output_tokens: int | None = (
+        None  # 输出 token 上限覆盖（摘要等独立请求用；None=provider 默认）
+    )
+    trace_context: dict[str, object] | None = None
 
 
 class PayloadAssembler:

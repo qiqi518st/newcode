@@ -8,10 +8,8 @@ import os
 import pytest
 
 from mewcode.context.constants import (
-    AGGREGATE_LIMIT,
     PREVIEW_MAX_BYTES,
     PREVIEW_MAX_LINES,
-    SINGLE_RESULT_THRESHOLD,
 )
 from mewcode.context.offload import _head_preview, build_preview, offload_and_snip
 from mewcode.context.replacement import ContentReplacementState
@@ -28,7 +26,7 @@ def _setup(tmp_path):
 @pytest.mark.anyio
 async def test_single_result_offload(tmp_path):
     """AC1：60000 字节超 SINGLE_RESULT_THRESHOLD → 替换为预览、文件落盘、预览含四项信息。"""
-    sc, sp = _setup(tmp_path)
+    _sc, sp = _setup(tmp_path)
     state = ContentReplacementState()
     msgs = [
         Message(role="assistant", content="", tool_calls=[{"id": "t1"}]),
@@ -43,7 +41,7 @@ async def test_single_result_offload(tmp_path):
     assert "[head preview]" in content
     # 文件落盘
     assert (tmp_path / "spill" / "t1").exists()
-    with open(tmp_path / "spill" / "t1", "rb") as f:
+    with open(tmp_path / "spill" / "t1", "rb") as f:  # noqa: ASYNC230
         assert f.read() == b"X" * 60_000
 
 
@@ -67,10 +65,12 @@ async def test_aggregate_offload(tmp_path):
     5 条各 45000（均 ≤ SINGLE_RESULT_THRESHOLD，走 F2 聚合分支）= 225000 > 200000，
     落 1 条（45000）后 180000 ≤ 200000 → 替换数=1。
     """
-    sc, sp = _setup(tmp_path)
+    _sc, sp = _setup(tmp_path)
     state = ContentReplacementState()
     msgs = [
-        Message(role="assistant", content="", tool_calls=[{"id": f"t{i}"} for i in range(5)]),
+        Message(
+            role="assistant", content="", tool_calls=[{"id": f"t{i}"} for i in range(5)]
+        ),
         Message(role="tool", content="A" * 45_000, tool_use_id="t0"),
         Message(role="tool", content="B" * 45_000, tool_use_id="t1"),
         Message(role="tool", content="C" * 45_000, tool_use_id="t2"),
@@ -79,14 +79,16 @@ async def test_aggregate_offload(tmp_path):
     ]
     n = await offload_and_snip(msgs, state, sp)
     assert n == 1, f"应落 1 条达标，实际 {n}"
-    replaced = [m.tool_use_id for m in msgs[1:] if m.content.startswith("[content offloaded]")]
+    replaced = [
+        m.tool_use_id for m in msgs[1:] if m.content.startswith("[content offloaded]")
+    ]
     assert len(replaced) == 1
 
 
 @pytest.mark.anyio
 async def test_single_threshold_takes_priority(tmp_path):
     """AC1：单条 > SINGLE_RESULT_THRESHOLD 必落（F1 优先于 F2 聚合）。"""
-    sc, sp = _setup(tmp_path)
+    _sc, sp = _setup(tmp_path)
     state = ContentReplacementState()
     # 1 条 60000（>50000 F1 必落）+ 1 条 100（小）
     msgs = [
@@ -103,7 +105,7 @@ async def test_single_threshold_takes_priority(tmp_path):
 @pytest.mark.anyio
 async def test_spill_idempotent(tmp_path):
     """AC3：同 id 两次落盘 → 文件 mtime 不变（幂等，不覆盖）。"""
-    sc, sp = _setup(tmp_path)
+    _sc, sp = _setup(tmp_path)
     state = ContentReplacementState()
     msgs = [Message(role="tool", content="X" * 60_000, tool_use_id="t1")]
     await offload_and_snip(msgs, state, sp)
@@ -118,7 +120,7 @@ async def test_spill_idempotent(tmp_path):
 @pytest.mark.anyio
 async def test_decision_freeze(tmp_path):
     """AC4：同 id 两轮 → 预览逐字节一致（决策冻结，复用不重造）。"""
-    sc, sp = _setup(tmp_path)
+    _sc, sp = _setup(tmp_path)
     state = ContentReplacementState()
     msgs1 = [Message(role="tool", content="X" * 60_000, tool_use_id="t1")]
     await offload_and_snip(msgs1, state, sp)
@@ -132,7 +134,7 @@ async def test_decision_freeze(tmp_path):
 @pytest.mark.anyio
 async def test_spill_failure_retryable(tmp_path, monkeypatch):
     """AC4 子：落盘抛 OSError → 保持原文、不进账本、下轮重评。"""
-    sc, sp = _setup(tmp_path)
+    _sc, sp = _setup(tmp_path)
     state = ContentReplacementState()
 
     # monkeypatch _spill_to_path 抛 OSError
@@ -161,7 +163,7 @@ async def test_spill_failure_retryable(tmp_path, monkeypatch):
 @pytest.mark.anyio
 async def test_three_step_atomic(tmp_path, monkeypatch):
     """F2a：落盘失败时 content 未改写 + 账本未写（三步原子，无中间态）。"""
-    sc, sp = _setup(tmp_path)
+    _sc, sp = _setup(tmp_path)
     state = ContentReplacementState()
 
     import mewcode.context.offload as offload_mod
@@ -184,7 +186,7 @@ async def test_kept_decision_skipped(tmp_path):
 
     手动标 kept 后 offload 应跳过、保持原文。
     """
-    sc, sp = _setup(tmp_path)
+    _sc, sp = _setup(tmp_path)
     state = ContentReplacementState()
     # 先标 kept
     state.decide_once("t1", "X" * 60_000, lambda: ("kept", ""))

@@ -65,6 +65,6 @@ class ToolScheduler:
         """执行单个工具，结果写入 results[idx]"""
         try:
             result = await self._registry.execute(tc.tool_name, tc.arguments)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - isolate individual tool failures
             result = ToolResult(status="error", error=str(e))
         results[idx] = ScheduledResult(tool_call=tc, result=result)

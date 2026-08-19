@@ -37,7 +37,20 @@ class TestReadFileTool:
         r = await t.execute({"path": "mewcode/main.py", "limit": 5})
         assert r.status == "ok"
         assert r.truncated is True
-        assert "已截断" in r.output
+        assert "未返回全部文件" in r.output
+        assert "limit=" not in r.output
+
+    @pytest.mark.anyio
+    async def test_read_limit_can_exceed_default(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        path = tmp_path / "large.txt"
+        path.write_text("\n".join(f"line-{i}" for i in range(600)), encoding="utf-8")
+
+        result = await ReadFileTool().execute({"path": "large.txt", "limit": 600})
+
+        assert result.status == "ok"
+        assert result.truncated is False
+        assert result.output.count("\n") == 599
 
 
 class TestWriteFileTool:

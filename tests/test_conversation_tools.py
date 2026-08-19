@@ -28,7 +28,7 @@ async def test_tool_message_ids():
     cm.add_tool_result(tc, ToolResult("ok", "content"))
 
     msgs = cm.get_context()
-    tool_msg = [m for m in msgs if m.role == "tool"][0]
+    tool_msg = next(m for m in msgs if m.role == "tool")
     assert tool_msg.tool_call_id == "tc_abc"
     assert tool_msg.name == "read_file"
 
@@ -60,9 +60,9 @@ async def test_trim_with_tool_messages():
     # test_conversation_manager.py::test_trim_keeps_pair 用 tool_use_id 覆盖）
     for i, m in enumerate(msgs):
         if m.role == "tool":
-            assert i > 0 and msgs[i - 1].role == "assistant" and msgs[i - 1].tool_calls, (
-                f"tool 落单 at {i}"
-            )
+            assert (
+                i > 0 and msgs[i - 1].role == "assistant" and msgs[i - 1].tool_calls
+            ), f"tool 落单 at {i}"
     # 组数不超过 cap（4 组）
     user_count = sum(1 for m in msgs if m.role == "user")
     assert user_count <= 4, f"裁剪后 user 组数应 ≤ 4，实际 {user_count}"

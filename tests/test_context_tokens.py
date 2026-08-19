@@ -71,8 +71,12 @@ def test_estimate_messages_chars_only():
 
 def test_message_chars_includes_tool_calls():
     """防 bug：tool_calls 序列化字节漏算 → tool_use 声明不计入估算。"""
-    m = Message(role="assistant", content="hi", tool_calls=[{"id": "t1", "name": "r", "arguments": {"p": "x"}}])
-    plain = len("hi".encode("utf-8"))
+    m = Message(
+        role="assistant",
+        content="hi",
+        tool_calls=[{"id": "t1", "name": "r", "arguments": {"p": "x"}}],
+    )
+    plain = len(b"hi")
     assert message_chars([m]) > plain
 
 

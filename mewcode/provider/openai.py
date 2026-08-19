@@ -7,6 +7,7 @@ from openai import AsyncOpenAI
 
 from ..config.schema import ProviderConfig
 from ..llm import PromptTooLongError
+from ..monitor.protocol import write_request_record
 from ..prompt.assembler import PromptPayload
 from ..utils.error import ProviderError
 from .base import StreamEvent, TokenUsage, ToolCall
@@ -106,6 +107,8 @@ class OpenAIProvider:
                 for t in payload.tools
             ]
 
+        write_request_record(payload, "openai", self._model, kwargs)
+
         # tool_calls 分片拼接状态：index -> {"id": ..., "name": ..., "arguments": ...}
         _tool_call_buffers: dict[int, dict] = {}
         _last_usage: TokenUsage | None = None
@@ -188,7 +191,10 @@ def _wrap_openai_error(e: OpenAIAPIError) -> PromptTooLongError | ProviderError:
     """OpenAI 400 错误中识别 PTL 关键词/code，wrap 为 PromptTooLongError 哨兵（保留 __cause__）。"""
     if getattr(e, "status_code", None) == 400:
         msg = str(e)
-        if getattr(e, "code", "") == "context_length_exceeded" or "maximum context length" in msg:
+        if (
+            getattr(e, "code", "") == "context_length_exceeded"
+            or "maximum context length" in msg
+        ):
             wrapped = PromptTooLongError(str(e))
             wrapped.__cause__ = e
             return wrapped

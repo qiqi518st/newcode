@@ -54,5 +54,9 @@ def test_no_cross_kind_methods():
     """
     public = {m for m in dir(AutoCompactGate) if not m.startswith("_")}
     # 不应存在 record_manual_failure / record_force_failure 等跨种类方法
-    forbidden = {"record_manual_failure", "record_force_failure", "record_emergency_failure"}
+    forbidden = {
+        "record_manual_failure",
+        "record_force_failure",
+        "record_emergency_failure",
+    }
     assert not (public & forbidden), f"存在跨种类方法: {public & forbidden}"

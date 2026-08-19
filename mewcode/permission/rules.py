@@ -20,9 +20,9 @@ RULE_FILE_PROJECT = ".mewcode/permissions.yaml"
 RULE_FILE_LOCAL = ".mewcode/permissions.local.yaml"
 
 # 解析规则字符串的正则：提取工具名和括号内模式。
-# ch07 泛化：接受任意合法工具名字符集 [A-Za-z0-9_-]+（含 mcp__ 前缀），
-# 仍拒绝含空格/特殊字符的非法名。内置 6 个友好名是它的子集，行为不变。
-_RULE_PARSE_RE = re.compile(r"^([A-Za-z0-9_-]+)(?:\((.*)\))?$")
+# ch07 泛化：接受任意合法工具名字符集，并允许权限规则工具名使用 * 通配符
+# （如 mcp__github__*）；仍拒绝空格、斜杠等非法字符。内置 6 个友好名是其子集。
+_RULE_PARSE_RE = re.compile(r"^([A-Za-z0-9_*-]+)(?:\((.*)\))?$")
 
 
 @dataclass

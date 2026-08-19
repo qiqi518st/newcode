@@ -57,7 +57,7 @@ class ListFilesTool:
             matches = matches[:_LIST_LIMIT]
             output = "\n".join(matches) if matches else "（无匹配文件）"
             return ToolResult(status="ok", output=output)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - convert filesystem failures to ToolResult
             return ToolResult(status="error", error=f"列出文件失败: {e}")
 
 
@@ -123,13 +123,15 @@ class SearchCodeTool:
                 for root, _dirs, filenames in os.walk(cwd):
                     for fname in filenames:
                         files.append(os.path.join(root, fname))
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - convert filesystem failures to ToolResult
             return ToolResult(status="error", error=f"遍历目录失败: {e}")
 
         results = []
         for fpath in files:
             try:
-                with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
+                with open(  # noqa: ASYNC230
+                    fpath, "r", encoding="utf-8", errors="ignore"
+                ) as f:
                     for lineno, line in enumerate(f, start=1):
                         if regex.search(line):
                             snippet = line.strip()
@@ -139,7 +141,7 @@ class SearchCodeTool:
                             results.append(f"{rel_path}:{lineno}: {snippet}")
                             if len(results) >= _SEARCH_LIMIT:
                                 break
-            except Exception:
+            except Exception:  # noqa: S112, BLE001 - skip unreadable files
                 continue
             if len(results) >= _SEARCH_LIMIT:
                 break

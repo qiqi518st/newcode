@@ -58,7 +58,9 @@ class RecoveryBuilder:
 
         skill_registry 参数未传时回退到构造时持有的 registry（兼容两种装配方式）。
         """
-        registry = skill_registry if skill_registry is not None else self._skill_registry
+        registry = (
+            skill_registry if skill_registry is not None else self._skill_registry
+        )
         recent = await file_tracker.recent(MAX_RECENT_FILES)
         if registry is not None and registry.list():
             # TODO(ch08): Skill 内容加载待后续章节实现——当前 Skill.content 始终为空，

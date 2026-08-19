@@ -36,4 +36,6 @@ ONE_M_WINDOW = 1_000_000  # [1m] 后缀窗口
 DEFAULT_WINDOW_ANTHROPIC = 200_000  # anthropic 协议默认窗口
 DEFAULT_WINDOW_OPENAI = 128_000  # openai 协议默认窗口
 CAPABILITY_TABLE_FLOOR = 100_000  # 能力表收录下限（≥100K 才进表）
-CONTEXT_WINDOW_FLOOR = 33_000  # context_window 下界（SUMMARY_RESERVE+AUTO_MARGIN，spec F7 下界检查）
+CONTEXT_WINDOW_FLOOR = (
+    33_000  # context_window 下界（SUMMARY_RESERVE+AUTO_MARGIN，spec F7 下界检查）
+)

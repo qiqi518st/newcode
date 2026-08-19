@@ -5,7 +5,7 @@
 """
 
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from mewcode.plans import PlanManager, PlanMeta
 
@@ -179,7 +179,9 @@ def test_cleanup_old(tmp_path):
     m.create_plan("", "<!-- slug: new-plan -->\n# 新")
 
     # 把 old-plan 的 created_at 改到 40 天前
-    old_ts = (datetime.now() - timedelta(days=40)).isoformat(timespec="seconds")
+    old_ts = (datetime.now(timezone.utc) - timedelta(days=40)).isoformat(
+        timespec="seconds"
+    )
     meta = json.loads((tmp_path / ".meta.json").read_text(encoding="utf-8"))
     meta["old-plan"]["created_at"] = old_ts
     (tmp_path / ".meta.json").write_text(

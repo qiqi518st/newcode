@@ -6,8 +6,8 @@
 import pytest
 
 from mewcode.context.constants import RECENT_COUNT_FLOOR, RECENT_TOKEN_FLOOR
-from mewcode.context.recovery import RecoveryBuilder
 from mewcode.context.files import FileTracker
+from mewcode.context.recovery import RecoveryBuilder
 from mewcode.context.summarize import (
     SummarizeConfig,
     Summarizer,
@@ -17,7 +17,7 @@ from mewcode.context.summarize import (
 )
 from mewcode.context.tokens import estimate_messages
 from mewcode.llm import PromptTooLongError
-from mewcode.provider.base import Message, StreamEvent, TokenUsage, ToolDefinition
+from mewcode.provider.base import Message, StreamEvent
 
 
 class MockProvider:
@@ -93,13 +93,18 @@ async def test_merge_single_user_message():
     assert "正式摘要" in out.messages[0].content
     # 全程无连续 user
     for i in range(1, len(roles)):
-        assert not (roles[i] == "user" and roles[i - 1] == "user"), f"连续 user at {i}: {roles}"
+        assert not (roles[i] == "user" and roles[i - 1] == "user"), (
+            f"连续 user at {i}: {roles}"
+        )
 
 
 def test_role_join_placeholder():
     """AC8a：近期原文首条 user → 插 assistant 占位衔接。"""
     summary = Message(role="user", content="摘要")
-    recent = [Message(role="user", content="u1"), Message(role="assistant", content="a1")]
+    recent = [
+        Message(role="user", content="u1"),
+        Message(role="assistant", content="a1"),
+    ]
     joined = _join_after_summary(summary, recent)
     roles = [m.role for m in joined]
     assert roles == ["user", "assistant", "user", "assistant"], roles
@@ -155,6 +160,7 @@ def test_recent_tail_keeps_pair():
 async def test_ptl_retry_drops_groups():
     """F27：前 3 次每次丢 1 组、之后比例丢弃，防「不丢组直接撞墙」。"""
     ft = FileTracker()
+
     # 前 5 次都撞 PTL，第 6 次成功
     def script(i):
         if i < 5:
