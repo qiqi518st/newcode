@@ -49,6 +49,7 @@ class Agent:
         self._context_mgr = context_mgr
         self._file_tracker = file_tracker
         self._run_lock = asyncio.Lock()  # 会话级互斥（F34），管 run 与手动入口
+        self._context_events: list[tuple[str, object]] = []  # context 事件累积区
 
         # 权限系统
         self._permission = permission
@@ -115,7 +116,15 @@ class Agent:
 
                 # ch08：每轮组装前自动上下文管理（L1 全量 + L2 阈值检查）
                 if self._context_mgr is not None:
+                    self._context_events: list[tuple[str, object]] = []
                     await self._context_mgr.manage_context(tool_defs)
+                    # 透传 context 期间累积的压缩事件（CONTEXT_COMPACTING/COMPACT_FAILED）
+                    for kind, payload in self._context_events:
+                        if kind == "context_compacting":
+                            yield Event(EventType.CONTEXT_COMPACTING, payload)
+                        elif kind == "compact_failed":
+                            yield Event(EventType.COMPACT_FAILED, payload)
+                    self._context_events = []
 
                 # 轮次级补充消息：plan 模式按轮注入（第 0/5 轮完整，其余精简，瞬时不持久）
                 reminders = [plan_mode_reminder(turn)] if mode == "plan" else []

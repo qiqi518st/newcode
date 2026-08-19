@@ -15,6 +15,7 @@ from mewcode.agent import Agent
 from mewcode.agent.events import EventType
 from mewcode.config.loader import load as load_config
 from mewcode.config.loader import load_ccswitch
+from mewcode.context import ContextManager, FileTracker, SkillRegistry
 from mewcode.conversation.manager import ConversationManager
 from mewcode.mcp import MCPManager, load_mcp_servers
 from mewcode.permission.checker import PermissionChecker
@@ -122,6 +123,25 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
         registry.register(tool)
 
     is_interactive = not bool(args.command)
+
+    # ch08 上下文管理装配（FileTracker / SkillRegistry 骨架 / ContextManager）
+    file_tracker = FileTracker()
+    skill_registry = SkillRegistry()  # 骨架：当前无 Skill，注入分支空实现（F31）
+    active_provider_cfg = next(
+        (p for p in config.providers if p.name == config.provider), None
+    )
+    context_mgr = ContextManager(
+        provider,
+        conversation,
+        provider.model,
+        active_provider_cfg.protocol if active_provider_cfg else "anthropic",
+        file_tracker,
+        skill_registry=skill_registry,
+        emit_event=lambda kind, payload: agent_ref[0]._context_events.append((kind, payload)),
+        workspace=cwd,
+    )
+    # 延迟绑定 agent 引用（emit_event 闭包需访问 agent，但 agent 在下方构造）
+    agent_ref: list[Agent] = []
     agent = Agent(
         provider,
         conversation,
@@ -130,7 +150,10 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
         env_segment,
         permission=permission,
         is_interactive=is_interactive,
+        context_mgr=context_mgr,
+        file_tracker=file_tracker,
     )
+    agent_ref.append(agent)
     renderer = RichRenderer()
     plan_manager = PlanManager(os.path.join(cwd, "plans"))
 
