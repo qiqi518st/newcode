@@ -4,25 +4,32 @@
 """
 
 import re
-import time
 from pathlib import Path
 
 from mewcode.context.session import SessionPaths, new_session_context
 
 
 def test_session_id_format(tmp_path):
-    """防 bug：会话 id 不符合 <unix_ts>-<8 hex> 格式 → 路径混乱。
-
-    格式 ^\\d+-[0-9a-f]{8}$，且两次生成的 id 不同（随机性）。
-    """
+    """防 bug：ch09 会话 id 必须使用本地启动时间和四位十六进制后缀。"""
     sc = new_session_context(str(tmp_path))
-    assert re.match(r"^\d+-[0-9a-f]{8}$", sc.session_id), sc.session_id
-    ts_part = int(sc.session_id.split("-")[0])
-    # 时间戳应在合理范围（近 10 年内）
-    assert abs(ts_part - int(time.time())) < 60
+    assert re.match(r"^\d{8}-\d{6}-[0-9a-f]{4}$", sc.session_id), sc.session_id
+    date_part, time_part, _ = sc.session_id.split("-")
+    assert len(date_part) == 8 and len(time_part) == 6
 
     sc2 = new_session_context(str(tmp_path))
     assert sc.session_id != sc2.session_id, "会话 id 必须唯一"
+
+
+def test_session_id_collision_retries(tmp_path, monkeypatch):
+    """防 bug：同秒/固定随机后缀碰撞时不能复用已有会话目录。"""
+    import mewcode.context.session as session_module
+
+    ids = iter(["20260820-120000-abcd", "20260820-120000-ef01"])
+    monkeypatch.setattr(session_module, "_new_session_id", lambda: next(ids))
+    first = new_session_context(str(tmp_path))
+    second = new_session_context(str(tmp_path))
+    assert first.session_id == "20260820-120000-abcd"
+    assert second.session_id == "20260820-120000-ef01"
 
 
 def test_spill_dir_created(tmp_path):

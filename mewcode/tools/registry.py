@@ -65,10 +65,12 @@ class Registry:
         return INTERNAL_TO_FRIENDLY.get(internal, internal)
 
     def get_category(self, internal: str) -> ToolCategory:
-        """工具分类：read_only 优先→READONLY；write_file/edit_file→FILE_WRITE；其余→COMMAND"""
+        """工具分类：read_only 优先→READONLY；write_memory→MEMORY；write_file/edit_file→FILE_WRITE；其余→COMMAND"""
         tool = self.get(internal)
         if tool is not None and tool.read_only:
             return ToolCategory.READONLY
+        if internal == "write_memory":
+            return ToolCategory.MEMORY
         if internal in ("write_file", "edit_file"):
             return ToolCategory.FILE_WRITE
         return ToolCategory.COMMAND

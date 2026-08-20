@@ -42,7 +42,14 @@ from ..context.files import FileTracker, TrackedFile
 from ..context.manager import ContextManager
 from ..context.recovery import BOUNDARY_NOTICE, RecoveryBuilder, RecoveryBundle
 from ..context.replacement import ContentReplacementState
-from ..context.session import SessionContext, SessionPaths, new_session_context
+from ..context.session import (
+    SessionContext,
+    SessionPaths,
+    is_valid_session_id,
+    new_session_context,
+    open_session_context,
+    parse_session_time,
+)
 from ..context.skill import Skill, SkillRegistry
 from ..context.summarize import CompactOutcome, SummarizeConfig, Summarizer
 from ..context.tokens import (
@@ -97,7 +104,10 @@ __all__ = [
     "estimate_messages",
     "estimate_tokens",
     "get_context_window_for_model",
+    "is_valid_session_id",
     "message_chars",
     "new_session_context",
+    "open_session_context",
+    "parse_session_time",
     "usage_to_anchor",
 ]

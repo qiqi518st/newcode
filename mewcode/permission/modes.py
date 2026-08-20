@@ -39,6 +39,7 @@ class ToolCategory(Enum):
     READONLY = "readonly"  # Read / Glob / Grep，只读且永不触发 Ask
     FILE_WRITE = "file_write"  # Write / Edit
     COMMAND = "command"  # Bash
+    MEMORY = "memory"  # 记忆读写工具（write_memory），只写记忆命名空间，四档全 ALLOW
 
 
 # 权限模式矩阵：四档 × 三类 → ALLOW/ASK（绝不 Deny）
@@ -47,21 +48,25 @@ MODE_MATRIX: dict[PermissionMode, dict[ToolCategory, Decision]] = {
         ToolCategory.READONLY: Decision.ALLOW,
         ToolCategory.FILE_WRITE: Decision.ASK,
         ToolCategory.COMMAND: Decision.ASK,
+        ToolCategory.MEMORY: Decision.ALLOW,
     },
     PermissionMode.ACCEPT_EDITS: {
         ToolCategory.READONLY: Decision.ALLOW,
         ToolCategory.FILE_WRITE: Decision.ALLOW,
         ToolCategory.COMMAND: Decision.ASK,
+        ToolCategory.MEMORY: Decision.ALLOW,
     },
     PermissionMode.PLAN: {
         ToolCategory.READONLY: Decision.ALLOW,
         ToolCategory.FILE_WRITE: Decision.ASK,
         ToolCategory.COMMAND: Decision.ASK,
+        ToolCategory.MEMORY: Decision.ALLOW,
     },
     PermissionMode.BYPASS: {
         ToolCategory.READONLY: Decision.ALLOW,
         ToolCategory.FILE_WRITE: Decision.ALLOW,
         ToolCategory.COMMAND: Decision.ALLOW,
+        ToolCategory.MEMORY: Decision.ALLOW,
     },
 }
 

@@ -24,6 +24,7 @@ class SessionState(Enum):
     IDLE = "idle"  # 等待用户输入
     STREAMING = "streaming"  # 等待/接收模型流
     APPROVING = "approving"  # 等待用户确认权限
+    RESUMING = "resuming"
 
 
 class AppMode(Enum):
@@ -68,6 +69,9 @@ class REPL:
         renderer,  # RichRenderer
         plan_manager: PlanManager,
         default_mode: str = "normal",
+        session_runtime=None,
+        session_archive=None,
+        memory_manager=None,
     ) -> None:
         self.agent = agent
         self.renderer = renderer
@@ -79,6 +83,9 @@ class REPL:
         self._stream_task: asyncio.Task | None = None
         self._retry_count: int = 0
         self._console = Console()
+        self.session_runtime = session_runtime
+        self.session_archive = session_archive
+        self.memory_manager = memory_manager
 
         # 累计 token 用量
         self._session_in_tokens: int = 0
@@ -187,6 +194,16 @@ class REPL:
                     self._console.print("再见！")
                     break
 
+                if text == "/resume":
+                    await self._handle_resume()
+                    continue
+                if text.startswith("/session"):
+                    await self._handle_session_command(text)
+                    continue
+                if text.startswith("/memory"):
+                    await self._handle_memory_command(text)
+                    continue
+
                 # ch08：/compact 手动压缩命令（不写 conversation，直接调 run_force_compact）
                 if text in ("/compact", "/compact "):
                     await self._handle_compact()
@@ -198,6 +215,9 @@ class REPL:
             pass
 
     async def _process_input(self, text: str) -> None:
+        if text == "/resume":
+            await self._handle_resume()
+            return
         """提交用户输入，根据命令切换模式，启动 Agent"""
         if text.startswith("/") and not self._is_known_command(text):
             self._console.print(
@@ -320,6 +340,9 @@ class REPL:
         command = text.split(maxsplit=1)[0]
         return command in {
             "/compact",
+            "/resume",
+            "/session",
+            "/memory",
             "/delete-plan",
             "/do",
             "/exit",
@@ -328,6 +351,137 @@ class REPL:
             "/plan",
             "/quit",
         }
+
+    async def _handle_resume(self) -> None:
+        if self.state in (SessionState.STREAMING, SessionState.APPROVING):
+            self._console.print("请等待当前任务完成", style="yellow")
+            return
+        if self.session_archive is None or self.session_runtime is None:
+            self._console.print("当前未启用会话恢复", style="yellow")
+            return
+        sessions = self.session_archive.list()
+        if not sessions:
+            self._console.print("没有可恢复的会话", style="yellow")
+            return
+        self.state = SessionState.RESUMING
+        try:
+            options = [
+                (
+                    s.session_id,
+                    f"{s.title or '(无标题)'}  {s.session_id}  {s.model or ''}",
+                )
+                for s in sessions
+            ]
+            selected = await self._ask_choice("选择会话：\n", options)
+            if selected:
+                await self.session_runtime.resume(selected)
+                self._console.print(f"已恢复会话 {selected}", style="green")
+        finally:
+            self.state = SessionState.IDLE
+
+    async def _handle_session_command(self, text: str) -> None:
+        if self.session_archive is None:
+            self._console.print("当前未启用会话管理", style="yellow")
+            return
+        parts = text.split()
+        sub = parts[1] if len(parts) > 1 else "list"
+        if sub == "list":
+            for s in self.session_archive.list():
+                self._console.print(f"{s.session_id} {s.title[:50]}")
+        elif sub == "path":
+            sid = (
+                parts[2]
+                if len(parts) > 2
+                else (
+                    self.session_runtime.context.session_id
+                    if self.session_runtime and self.session_runtime.context
+                    else None
+                )
+            )
+            if sid:
+                rows = [s for s in self.session_archive.list() if s.session_id == sid]
+                if rows:
+                    self._console.print(str(rows[0].path))
+        elif sub == "new" and self.session_runtime:
+            self.session_runtime.create_new()
+            self._console.print("已创建新会话")
+        elif sub == "resume" and len(parts) > 2 and self.session_runtime:
+            await self.session_runtime.resume(parts[2])
+        elif sub == "clean":
+            removed = self.session_archive.clean_expired(
+                active_session_id=getattr(
+                    getattr(self.session_runtime, "context", None), "session_id", None
+                )
+            )
+            self._console.print(f"已清理 {len(removed)} 个会话")
+
+    async def _handle_memory_command(self, text: str) -> None:
+        """/memory list/show/edit/path/clear：查看、编辑、定位、清空记忆（spec F13）。
+
+        删除及清空必须二次确认（AC25）；show/edit/path 需要精确文件名。
+        """
+        if self.memory_manager is None:
+            self._console.print("当前未启用记忆系统", style="yellow")
+            return
+        parts = text.split()
+        sub = parts[1] if len(parts) > 1 else "list"
+        if sub == "list":
+            notes = self.memory_manager.list_notes()
+            if not notes:
+                self._console.print("（暂无记忆）", style="dim")
+                return
+            for n in notes:
+                # scope 用括号而非方括号，避免被 Rich 解析为 markup 标签
+                self._console.print(
+                    f"({n.scope}) {n.filename} — {n.title} ({n.type})"
+                )
+        elif sub == "show" and len(parts) > 2:
+            content = self.memory_manager.show(parts[2])
+            if content is None:
+                self._console.print(f"未找到记忆: {parts[2]}", style="yellow")
+                return
+            self._console.print(f"── {parts[2]} ──", style="bold")
+            self._console.print(content)
+        elif sub == "edit" and len(parts) > 2:
+            content = " ".join(parts[3:]) if len(parts) > 3 else ""
+            if not content:
+                self._console.print("用法: /memory edit <file.md> <新内容>", style="yellow")
+                return
+            try:
+                note = self.memory_manager.edit(parts[2], content)
+            except ValueError:
+                self._console.print(f"未找到记忆: {parts[2]}", style="yellow")
+                return
+            self._console.print(f"已更新 {note.filename}", style="green")
+        elif sub == "path":
+            for n in self.memory_manager.list_notes():
+                if len(parts) > 2 and n.filename != parts[2]:
+                    continue
+                dir_path = (
+                    self.memory_manager.project_store.directory
+                    if n.scope == "project"
+                    else self.memory_manager.user_store.directory
+                )
+                self._console.print(str(dir_path / n.filename))
+        elif sub == "clear":
+            confirm = await self._ask_choice(
+                "确认清空全部记忆？此操作不可恢复\n",
+                [
+                    ("yes", "yes — 确认清空"),
+                    ("no", "no — 取消"),
+                ],
+                default_index=1,  # 默认取消，防误触
+            )
+            if confirm != "yes":
+                self._console.print("已取消", style="dim")
+                return
+            removed = self.memory_manager.clear()
+            self._console.print(f"已清空 {removed} 条记忆", style="bold green")
+        else:
+            self._console.print(
+                "用法: /memory list | show <file> | edit <file> <内容> | path [file] | clear",
+                style="yellow",
+            )
 
     async def _run_stream(self, user_input: str, mode: str, plan_content: str) -> None:
         """启动并等待 Agent 流式执行"""

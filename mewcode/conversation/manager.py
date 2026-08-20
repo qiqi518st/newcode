@@ -11,17 +11,38 @@ _TRIM_GROUP_CAP_MULTIPLIER = 2
 class ConversationManager:
     """对话上下文管理器，维护消息列表并实现滑动窗口"""
 
-    def __init__(self, max_turns: int) -> None:
+    def __init__(
+        self,
+        max_turns: int,
+        messages: list[Message] | None = None,
+        on_append=None,
+        on_replace=None,
+    ) -> None:
         self._max_turns = max_turns
-        self._messages: list[Message] = []
+        self._messages: list[Message] = list(messages or [])
+        self._on_append = on_append
+        self._on_replace = on_replace
+
+    def _notify_append(self, message: Message) -> None:
+        if self._on_append is not None:
+            try:
+                self._on_append(message)
+            except Exception:
+                import logging
+
+                logging.getLogger(__name__).exception("conversation persistence failed")
+
+    def _append(self, message: Message) -> None:
+        self._messages.append(message)
+        self._notify_append(message)
 
     def add_user(self, content: str) -> None:
         """追加用户消息"""
-        self._messages.append(Message(role="user", content=content))
+        self._append(Message(role="user", content=content))
 
     def add_assistant(self, content: str) -> None:
         """追加助手消息，并触发滑动窗口裁剪"""
-        self._messages.append(Message(role="assistant", content=content))
+        self._append(Message(role="assistant", content=content))
         self._trim()
 
     def last_role(self) -> str | None:
@@ -30,7 +51,7 @@ class ConversationManager:
 
     def add_tool_call(self, tool_call: ToolCall) -> None:
         """追加 assistant 的工具调用回合（保存结构化声明）"""
-        self._messages.append(
+        self._append(
             Message(
                 role="assistant",
                 content="",
@@ -51,7 +72,7 @@ class ConversationManager:
         self, text: str, tool_calls: list[ToolCall]
     ) -> None:
         """追加 assistant 消息，同时含文本和多个工具调用声明"""
-        self._messages.append(
+        self._append(
             Message(
                 role="assistant",
                 content=text,
@@ -70,7 +91,7 @@ class ConversationManager:
         """按序追加 tool 结果消息"""
         for tc, tr in results:
             content = tr.output if tr.status == "ok" else tr.error
-            self._messages.append(
+            self._append(
                 Message(
                     role="tool",
                     content=content,
@@ -82,7 +103,7 @@ class ConversationManager:
 
     def add_cancelled_tool_result(self, tool_call: ToolCall) -> None:
         """为未完成的工具调用补「已取消」结果，确保配对完整"""
-        self._messages.append(
+        self._append(
             Message(
                 role="tool",
                 content="已取消",
@@ -100,7 +121,7 @@ class ConversationManager:
         API 会报 'tool_call_ids did not have response messages'。
         """
         content = result.output if result.status == "ok" else result.error
-        self._messages.append(
+        self._append(
             Message(
                 role="tool",
                 content=content,
@@ -125,6 +146,15 @@ class ConversationManager:
     def replace_history(self, new_messages: list[Message]) -> None:
         """整段替换历史（第二层摘要成功后的新消息列表，spec F15）。"""
         self._messages = list(new_messages)
+        if self._on_replace is not None:
+            try:
+                self._on_replace(list(self._messages))
+            except Exception:
+                import logging
+
+                logging.getLogger(__name__).exception(
+                    "conversation replacement persistence failed"
+                )
 
     def _trim(self) -> None:
         """超出 max_turns 时，从头部按「user 分界的组」整组丢弃（不拆 tool_use/tool_result 对）。

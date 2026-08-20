@@ -36,6 +36,7 @@ class Agent:
         is_interactive: bool = True,
         context_mgr: object | None = None,  # ch08: ContextManager | None
         file_tracker: object | None = None,  # ch08: FileTracker | None
+        memory_manager: object | None = None,
     ) -> None:
         self.provider = provider
         self.conv = conversation
@@ -49,6 +50,9 @@ class Agent:
         # ch08 上下文管理（可选；无时行为与 ch07 一致，N8 向后兼容）
         self._context_mgr = context_mgr
         self._file_tracker = file_tracker
+        self._memory_manager = memory_manager
+        self._natural_rounds = 0
+        self._memory_task: asyncio.Task | None = None
         self._run_lock = asyncio.Lock()  # 会话级互斥（F34），管 run 与手动入口
         self._context_events: list[tuple[str, object]] = []  # context 事件累积区
 
@@ -233,6 +237,8 @@ class Agent:
                 if not _tool_calls:
                     if _buffer:
                         self.conv.add_assistant(_buffer)
+                    self._natural_rounds += 1
+                    self._schedule_memory_update(user_input)
                     yield Event(EventType.DONE, StopReason.NATURAL)
                     return
 
@@ -428,6 +434,36 @@ class Agent:
             yield Event(EventType.DONE, StopReason.MAX_TURNS)
         finally:
             self._run_lock.release()
+
+    def _schedule_memory_update(self, user_input: str) -> None:
+        manager = self._memory_manager
+        if manager is None:
+            return
+        explicit = any(
+            word in user_input.lower()
+            for word in ("记住", "记忆", "别忘", "remember", "memo")
+        )
+        if not explicit and self._natural_rounds % 5:
+            return
+        if self._memory_task is not None and not self._memory_task.done():
+            return
+        try:
+            messages = self.conv.get_context()
+            session_id = getattr(manager, "session_id", "")
+            self._memory_task = asyncio.create_task(
+                self._run_memory_update(manager, messages, session_id)
+            )
+        except (RuntimeError, TypeError, AttributeError):
+            self._memory_task = None
+
+    async def _run_memory_update(self, manager, messages, session_id: str) -> None:
+        try:
+            try:
+                await manager.update_async(messages, session_id=session_id)
+            except TypeError:
+                await manager.update_async(messages)
+        except Exception:  # noqa: BLE001 - memory is best effort
+            return
 
     async def run_force_compact(
         self, tool_defs: list[ToolDefinition]

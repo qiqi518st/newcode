@@ -58,6 +58,9 @@ def categorize(internal: str, read_only: bool) -> ToolCategory:
     """工具分类：read_only 属性优先于名字判定"""
     if read_only:
         return ToolCategory.READONLY
+    if internal == "write_memory":
+        # 记忆写入只写记忆命名空间（内部经 MemoryManager 校验），四档全 ALLOW
+        return ToolCategory.MEMORY
     if internal in ("write_file", "edit_file"):
         return ToolCategory.FILE_WRITE
     # 其余（含 Bash、未知工具）→ COMMAND（最严）

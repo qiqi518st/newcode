@@ -9,6 +9,7 @@ import argparse
 import asyncio
 import os
 import sys
+from pathlib import Path
 
 from mewcode import __version__
 from mewcode.agent import Agent
@@ -16,8 +17,11 @@ from mewcode.agent.events import EventType
 from mewcode.config.loader import load as load_config
 from mewcode.config.loader import load_ccswitch
 from mewcode.context import ContextManager, FileTracker, SkillRegistry
+from mewcode.context.session import new_session_context
 from mewcode.conversation.manager import ConversationManager
+from mewcode.instructions import InstructionLoader
 from mewcode.mcp import MCPManager, load_mcp_servers
+from mewcode.memory import MemoryManager
 from mewcode.permission.checker import PermissionChecker
 from mewcode.permission.modes import PermissionMode
 from mewcode.plans import PlanManager
@@ -26,7 +30,11 @@ from mewcode.prompt.env import collect_env, format_env
 from mewcode.prompt.resources import render_banner
 from mewcode.prompt.sections import fixed_sections, optional_sections
 from mewcode.provider.base import new_provider
+from mewcode.session.archive import clean_expired
+from mewcode.session.writer import SessionWriter
 from mewcode.tools import Registry
+from mewcode.tools.memory_read import ReadMemoryTool
+from mewcode.tools.memory_write import WriteMemoryTool
 from mewcode.tui.app import REPL
 from mewcode.tui.renderer import RichRenderer
 
@@ -92,12 +100,42 @@ def main() -> None:
 
 async def _amain(args: argparse.Namespace, config, provider) -> None:
     """主流程：MCP 初始化 -> Agent 装配 -> TUI/oneshot -> finally 关 MCP。"""
-    conversation = ConversationManager(config.max_turns)
+    cwd = os.getcwd()
+    session_context = new_session_context(cwd)
+    session_writer = SessionWriter(session_context.session_dir, model=provider.model)
+    cleanup_task = asyncio.create_task(
+        asyncio.to_thread(
+            clean_expired,
+            cwd,
+            config.cleanup_period_days,
+            active_session_id=session_context.session_id,
+        )
+    )
+    conversation = ConversationManager(
+        config.max_turns,
+        on_append=session_writer.append_message,
+        on_replace=lambda messages: (
+            session_writer.write_compact_marker(),
+            session_writer.append_all(messages),
+        ),
+    )
     registry = Registry.default()
 
     # ch05：模块化系统提示 + 环境信息（会话内各构建/采集一次，稳定前缀跨轮不变）
-    cwd = os.getcwd()
+    instructions = InstructionLoader(cwd, Path.home()).load()
+    memory = MemoryManager(
+        Path(cwd) / ".mewcode" / "memory",
+        Path.home() / ".mewcode" / "memory",
+        provider=provider,
+        model=provider.model,
+    )
+    # 记忆读写工具：跨项目/用户两级读写记忆（spec F13 闭环），注册进主注册表。
+    # read_memory 只读；write_memory 只写记忆命名空间（MEMORY 类权限，四档免确认）
+    registry.register(ReadMemoryTool(memory))
+    registry.register(WriteMemoryTool(memory))
     builder = PromptBuilder(fixed_sections() + optional_sections(config.system_prompt))
+    builder.set_custom_instructions(instructions.text)
+    builder.set_long_term_memory(memory.load_indexes())
     stable_prompt = builder.build()
     env_segment = format_env(
         collect_env(cwd, __version__, provider.name, provider.model)
@@ -154,6 +192,7 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
         is_interactive=is_interactive,
         context_mgr=context_mgr,
         file_tracker=file_tracker,
+        memory_manager=memory,
     )
     agent_ref.append(agent)
     renderer = RichRenderer()
@@ -177,9 +216,13 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
                 renderer,
                 plan_manager=plan_manager,
                 default_mode=config.default_mode,
+                memory_manager=memory,
             )
             await repl.run()
     finally:
+        if not cleanup_task.done():
+            cleanup_task.cancel()
+        session_writer.close()
         # 统一关闭 MCP 连接（stdio 子进程终止 / HTTP 会话释放；5s 兜底）
         await mcp_mgr.close()
 

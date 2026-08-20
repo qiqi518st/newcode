@@ -2,9 +2,11 @@
 
 import itertools
 import logging
+import re
 import secrets
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -14,30 +16,95 @@ logger = logging.getLogger(__name__)
 class SessionContext:
     """会话生命周期信息（进程启动时一次性生成）。"""
 
-    session_id: str  # <unix_ts>-<short_random>，进程内唯一
-    spill_dir: str  # 落盘目录 .mewcode/sessions/<sid>/tool-results/
+    session_id: str
+    spill_dir: str
+    session_dir: str | None = None
+    conversation_path: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.session_dir is None:
+            self.session_dir = str(Path(self.spill_dir).parent)
+        if self.conversation_path is None:
+            self.conversation_path = str(Path(self.session_dir) / "conversation.jsonl")
 
 
-def _new_session_id() -> str:
-    """生成 <unix_ts>-<short_random>；secrets 失败时降级 random + warning。"""
+_SESSION_RE = re.compile(r"^(\d{8})-(\d{6})-([0-9a-fA-F]{4})$")
+_PROCESS_START = time.time()
+_LOCAL_TZ = datetime.now().astimezone().tzinfo or timezone.utc
+
+
+def _new_session_id(start_time: float | None = None) -> str:
+    """Generate the ch09 session id, using one process-start timestamp."""
     try:
-        rand = secrets.token_hex(4)
+        rand = secrets.token_hex(2)
     except NotImplementedError:  # 极端环境无 os.urandom
         import random
 
         logger.warning("secrets.token_hex 不可用，降级 random 生成会话 id")
         rand = random.Random(time.time()).randbytes(4).hex()
-    return f"{int(time.time())}-{rand}"
+    stamp = datetime.fromtimestamp(
+        _PROCESS_START if start_time is None else start_time, _LOCAL_TZ
+    )
+    return f"{stamp:%Y%m%d-%H%M%S}-{rand[:4]}"
+
+
+def parse_session_time(session_id: str) -> datetime | None:
+    match = _SESSION_RE.fullmatch(session_id)
+    if not match:
+        return None
+    try:
+        return datetime.strptime(
+            f"{match.group(1)}-{match.group(2)}", "%Y%m%d-%H%M%S"
+        ).replace(tzinfo=_LOCAL_TZ)
+    except ValueError:
+        return None
+
+
+def is_valid_session_id(session_id: str) -> bool:
+    return parse_session_time(session_id) is not None
 
 
 def new_session_context(workspace: str) -> SessionContext:
     """构造会话上下文并创建落盘目录（已存在不报错，spec F33）。"""
-    session_id = _new_session_id()
-    spill_dir = str(
-        Path(workspace) / ".mewcode" / "sessions" / session_id / "tool-results"
+    sessions_root = Path(workspace) / ".mewcode" / "sessions"
+    # Random suffix collisions are unlikely, but the directory is the authoritative
+    # uniqueness check and also handles deterministic test doubles.
+    for _ in range(32):
+        session_id = _new_session_id()
+        session_dir = sessions_root / session_id
+        try:
+            session_dir.mkdir(parents=True, exist_ok=False)
+            break
+        except FileExistsError:
+            continue
+    else:
+        raise RuntimeError("unable to allocate a unique session id")
+    spill_dir = session_dir / "tool-results"
+    spill_dir.mkdir(exist_ok=True)
+    conversation_path = session_dir / "conversation.jsonl"
+    conversation_path.touch(exist_ok=True)
+    return SessionContext(
+        session_id, str(spill_dir), str(session_dir), str(conversation_path)
     )
-    Path(spill_dir).mkdir(parents=True, exist_ok=True)
-    return SessionContext(session_id=session_id, spill_dir=spill_dir)
+
+
+def open_session_context(workspace: str, session_id: str) -> SessionContext:
+    if not is_valid_session_id(session_id) or Path(session_id).name != session_id:
+        raise ValueError("invalid session id")
+    root = (Path(workspace) / ".mewcode" / "sessions").resolve()
+    session_dir = (root / session_id).resolve()
+    if not session_dir.is_relative_to(root):
+        raise ValueError("session path escapes workspace")
+    if not session_dir.is_dir():
+        raise FileNotFoundError(session_dir)
+    spill = session_dir / "tool-results"
+    spill.mkdir(exist_ok=True)
+    return SessionContext(
+        session_id,
+        str(spill),
+        str(session_dir),
+        str(session_dir / "conversation.jsonl"),
+    )
 
 
 class SessionPaths:
