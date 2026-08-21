@@ -107,8 +107,14 @@ def test_write_rejects_invalid_type(tmp_path):
 def test_write_rejects_missing_fields(tmp_path):
     """防 bug：缺 title/content 应报错。"""
     tool, _ = _tool(tmp_path)
-    assert asyncio.run(tool.execute({"type": "user_preference", "title": "t"})).status == "error"
-    assert asyncio.run(tool.execute({"type": "user_preference", "content": "c"})).status == "error"
+    assert (
+        asyncio.run(tool.execute({"type": "user_preference", "title": "t"})).status
+        == "error"
+    )
+    assert (
+        asyncio.run(tool.execute({"type": "user_preference", "content": "c"})).status
+        == "error"
+    )
     assert asyncio.run(tool.execute({})).status == "error"
 
 

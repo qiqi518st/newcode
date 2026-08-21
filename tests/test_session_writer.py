@@ -32,7 +32,9 @@ def test_entry_from_message_roundtrip():
     msg = Message(
         role="assistant",
         content="",
-        tool_calls=[{"id": "call_1", "name": "read_file", "arguments": {"path": "a.py"}}],
+        tool_calls=[
+            {"id": "call_1", "name": "read_file", "arguments": {"path": "a.py"}}
+        ],
     )
     entry = entry_from_message(msg)
     assert entry.role == "assistant"
@@ -106,7 +108,9 @@ def test_append_all_and_compact_order(session):
     writer = SessionWriter(session.session_dir)
     writer.append_message(Message(role="user", content="u1"))
     writer.write_compact_marker()
-    writer.append_all([Message(role="user", content="s1"), Message(role="user", content="s2")])
+    writer.append_all(
+        [Message(role="user", content="s1"), Message(role="user", content="s2")]
+    )
     writer.close()
     lines = _read_lines(Path(session.conversation_path))
     assert lines[1]["type"] == "compact"

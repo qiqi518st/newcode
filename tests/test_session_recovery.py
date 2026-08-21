@@ -103,7 +103,9 @@ def test_tool_pairing_complete(session):
         session,
         [
             _msg("user", "u1"),
-            _msg("assistant", "", tool_calls=[{"id": "c1", "name": "t", "arguments": {}}]),
+            _msg(
+                "assistant", "", tool_calls=[{"id": "c1", "name": "t", "arguments": {}}]
+            ),
             _msg("tool", "result", tool_call_id="c1", tool_use_id="c1", name="t"),
             _msg("assistant", "done"),
         ],
@@ -118,7 +120,11 @@ def test_unpaired_tool_call_truncated(session):
         session,
         [
             _msg("user", "u1"),
-            _msg("assistant", "will be cut", tool_calls=[{"id": "c1", "name": "t", "arguments": {}}]),
+            _msg(
+                "assistant",
+                "will be cut",
+                tool_calls=[{"id": "c1", "name": "t", "arguments": {}}],
+            ),
         ],
     )
     result = recover_session(session.session_dir, now=1000)
@@ -273,6 +279,7 @@ async def test_recover_async_compressor_once(session):
 @pytest.mark.anyio
 async def test_recover_async_compressor_failure_falls_back(session):
     """防 bug：压缩失败时记录诊断并整组降级，不崩溃（AC15/N11）。"""
+
     async def compressor(messages):
         raise RuntimeError("network down")
 
@@ -292,6 +299,7 @@ async def test_recover_async_compressor_failure_falls_back(session):
 @pytest.mark.anyio
 async def test_recover_async_compressed_still_over_drops(session):
     """防 bug：压缩后仍超限时继续整组降级。"""
+
     async def compressor(messages):
         # 假装压缩后只剩 4 条，但仍超窗口
         return messages[:4]

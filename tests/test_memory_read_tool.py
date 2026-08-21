@@ -42,7 +42,9 @@ def test_read_project_note(tmp_path):
         slug="python-level",
         content="用户 python 水平：中级，熟悉 pandas/numpy，不熟悉 asyncio。",
     )
-    result = asyncio.run(tool.execute({"filename": "project_knowledge_python-level.md"}))
+    result = asyncio.run(
+        tool.execute({"filename": "project_knowledge_python-level.md"})
+    )
     assert result.status == "ok"
     assert "python 水平" in result.output
 

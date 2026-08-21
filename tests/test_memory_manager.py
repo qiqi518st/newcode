@@ -145,9 +145,7 @@ def test_delete_removes_file_and_index(store):
             content="x",
         )
     )
-    store.apply(
-        _op(action="delete", level="user", filename=note.filename)
-    )
+    store.apply(_op(action="delete", level="user", filename=note.filename))
     assert not (store.directory / note.filename).exists()
     assert "user_preference_d.md" not in store.load_index()
 
@@ -265,10 +263,24 @@ def test_clear_removes_notes(store):
 def test_list_notes_sorted(store):
     """防 bug：list_notes 按 updated 倒序且跳过 MEMORY.md。"""
     a = store.apply(
-        _op(action="create", level="user", type="user_preference", title="a", slug="a", content="x")
+        _op(
+            action="create",
+            level="user",
+            type="user_preference",
+            title="a",
+            slug="a",
+            content="x",
+        )
     )
     store.apply(
-        _op(action="create", level="user", type="user_preference", title="b", slug="b", content="x")
+        _op(
+            action="create",
+            level="user",
+            type="user_preference",
+            title="b",
+            slug="b",
+            content="x",
+        )
     )
     # 更新 a 使其 updated 最新
     store.apply(_op(action="update", level="user", filename=a.filename, content="y"))
@@ -307,10 +319,24 @@ def test_load_indexes_project_first(tmp_path):
     proj = tmp_path / "proj-memory"
     user = tmp_path / "user-memory"
     MemoryStore(proj).apply(
-        _op(action="create", level="project", type="project_knowledge", title="P", slug="p", content="pc")
+        _op(
+            action="create",
+            level="project",
+            type="project_knowledge",
+            title="P",
+            slug="p",
+            content="pc",
+        )
     )
     MemoryStore(user).apply(
-        _op(action="create", level="user", type="user_preference", title="U", slug="u", content="uc")
+        _op(
+            action="create",
+            level="user",
+            type="user_preference",
+            title="U",
+            slug="u",
+            content="uc",
+        )
     )
     manager = MemoryManager(proj, user)
     text = manager.load_indexes()
@@ -369,6 +395,7 @@ async def test_update_async_not_array(tmp_path):
 @pytest.mark.anyio
 async def test_update_async_provider_error(tmp_path):
     """防 bug：provider 抛异常时记忆更新失败但主流程不受影响。"""
+
     class Boom:
         model = "mock"
 
@@ -409,7 +436,14 @@ async def test_update_async_delete(tmp_path):
     """防 bug：delete 操作从对应作用域删除文件。"""
     store = MemoryStore(tmp_path / "user-memory")
     note = store.apply(
-        _op(action="create", level="user", type="user_preference", title="D", slug="d", content="x")
+        _op(
+            action="create",
+            level="user",
+            type="user_preference",
+            title="D",
+            slug="d",
+            content="x",
+        )
     )
     payload = json.dumps(
         [{"action": "delete", "level": "user", "filename": note.filename}]
@@ -450,7 +484,14 @@ def test_manager_without_provider_loads_indexes(tmp_path):
     """防 bug：provider 未选定时仍可加载索引（启动阶段）。"""
     proj = tmp_path / "p"
     MemoryStore(proj).apply(
-        _op(action="create", level="project", type="project_knowledge", title="P", slug="p", content="c")
+        _op(
+            action="create",
+            level="project",
+            type="project_knowledge",
+            title="P",
+            slug="p",
+            content="c",
+        )
     )
     manager = MemoryManager(proj, tmp_path / "u")
     assert "P" in manager.load_indexes()

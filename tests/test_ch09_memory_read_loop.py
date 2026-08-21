@@ -40,9 +40,7 @@ class _MemProvider:
         self.payloads.append(payload)
         if len(self.payloads) == 1:
             yield StreamEvent(
-                tool_call=ToolCall(
-                    tool_name=self._tool_name, arguments=self._arguments
-                )
+                tool_call=ToolCall(tool_name=self._tool_name, arguments=self._arguments)
             )
             yield StreamEvent(done=True, usage=TokenUsage(20, 10))
         else:

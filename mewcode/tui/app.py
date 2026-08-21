@@ -1,6 +1,7 @@
 """TUI REPL 循环：状态机、prompt_toolkit 输入、Agent Event 消费、计时、ESC 中断、重试、Plan Mode、权限系统"""
 
 import asyncio
+import logging
 import os
 import time
 from enum import Enum
@@ -22,6 +23,8 @@ from ..permission.modes import PermissionMode
 from ..plans.manager import PlanManager, PlanMeta
 from ..slash import CommandKind, CommandRegistry, parse_command
 from ..slash.context import CommandContext
+
+logger = logging.getLogger(__name__)
 
 
 class SessionState(Enum):
@@ -171,6 +174,52 @@ class RichUIController:
 
     def get_cwd(self) -> str:
         return os.getcwd()
+
+    # ── Skill（ch11）───────────────────────────────────────
+    def list_catalog_skills(self) -> list:
+        """/skill list 数据源：从 command_ctx.catalog 取全部 Skill 摘要（未接线返回空）。"""
+        ctx = getattr(self._repl, "command_ctx", None)
+        catalog = getattr(ctx, "catalog", None) if ctx else None
+        if catalog is None:
+            return []
+        try:
+            from ..slash.ui import SkillSummary
+
+            return [
+                SkillSummary(
+                    name=s.name,
+                    description=s.meta.description,
+                    source=s.source.value,
+                )
+                for s in catalog.list()
+            ]
+        except Exception:  # noqa: BLE001 - 展示层失败降级为空列表
+            return []
+
+    def list_active_skills(self) -> list:
+        """当前激活 Skill 名（无 store 返回空）。"""
+        store = getattr(self._repl.agent, "_active_skills", None)
+        return store.names() if store is not None else []
+
+    def clear_active_skills(self) -> None:
+        """/clear 后清空激活 Skill（F5.5/F8.2）。"""
+        try:
+            self._repl.agent.clear_active_skills()
+        except Exception:  # 清空失败不阻断 /clear（仅记录）
+            logger.exception("clear_active_skills failed")
+
+    def append_assistant_message(self, text: str) -> None:
+        """fork 结果写回主对话：加入会话历史（后续轮可见）+ 打印（F3.1/N13）。"""
+        try:
+            self._repl.agent.conv.add_assistant(text)
+        except Exception:  # 历史写入失败仅打印（仅记录）
+            logger.exception("append_assistant_message history write failed")
+        self._repl._console.print(escape(text))
+
+    def add_token_usage(self, in_t: int, out_t: int) -> None:
+        """fork token 写回主统计（N13：主对话可见独立执行开销）。"""
+        self._repl._session_in_tokens += in_t
+        self._repl._session_out_tokens += out_t
 
     # ── 生命周期 ───────────────────────────────────────────
     def request_exit(self) -> None:

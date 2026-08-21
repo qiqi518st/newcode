@@ -168,9 +168,7 @@ def test_total_size_limit(workspace, home):
     _write(workspace / "MEWCODE.md", "R" * 500)
     _write(workspace / ".mewcode" / "MEWCODE.md", "C" * 500)
     _write(home / ".mewcode" / "MEWCODE.md", "U" * 500)
-    loader = InstructionLoader(
-        workspace, user_home=home, max_total_size=1000
-    )
+    loader = InstructionLoader(workspace, user_home=home, max_total_size=1000)
     doc = loader.load()
     # 至少记录总大小超限诊断，且内容不超过上限
     assert any("size limit" in d.reason for d in doc.diagnostics)

@@ -35,8 +35,16 @@ def test_list_sessions_sorted_by_modified(tmp_path):
     """防 bug：列表按最后有效消息时间倒序，字段完整。"""
     older_id = _new_session_id()
     newer_id = _new_session_id()
-    _make_session(tmp_path, older_id, [{"role": "user", "content": "old title", "ts": 1000, "model": "m1"}])
-    _make_session(tmp_path, newer_id, [{"role": "user", "content": "new title", "ts": 2000, "model": "m2"}])
+    _make_session(
+        tmp_path,
+        older_id,
+        [{"role": "user", "content": "old title", "ts": 1000, "model": "m1"}],
+    )
+    _make_session(
+        tmp_path,
+        newer_id,
+        [{"role": "user", "content": "new title", "ts": 2000, "model": "m2"}],
+    )
     rows = list_sessions(tmp_path)
     assert [s.session_id for s in rows] == [newer_id, older_id]
     first = rows[0]
@@ -69,7 +77,9 @@ def test_bad_lines_recorded_diagnostic(tmp_path):
 
 def test_old_format_not_listed(tmp_path):
     """防 bug：旧格式目录不出现在列表中（只读保留）。"""
-    _make_session(tmp_path, "1620000000-a1b2c3", [{"role": "user", "content": "legacy", "ts": 1}])
+    _make_session(
+        tmp_path, "1620000000-a1b2c3", [{"role": "user", "content": "legacy", "ts": 1}]
+    )
     assert list_sessions(tmp_path) == []
 
 
@@ -112,7 +122,9 @@ def test_cleanup_keeps_active_session(tmp_path):
 
 def test_cleanup_keeps_old_format_and_invalid(tmp_path):
     """防 bug：旧格式和无法解析目录保留，不误删。"""
-    old = _make_session(tmp_path, "1620000000-a1b2c3", [{"role": "user", "content": "legacy", "ts": 1}])
+    old = _make_session(
+        tmp_path, "1620000000-a1b2c3", [{"role": "user", "content": "legacy", "ts": 1}]
+    )
     now = time.time() + 40 * 86400
     assert clean_expired(tmp_path, days=30, now=now) == []
     assert old.exists()
@@ -145,7 +157,9 @@ def test_modified_at_falls_back_to_mtime(tmp_path):
     (d / "conversation.jsonl").write_text("", encoding="utf-8")
     rows = list_sessions(tmp_path)
     assert rows[0].message_count == 0
-    assert rows[0].modified_at == pytest.approx(os.path.getmtime(d / "conversation.jsonl"), abs=2)
+    assert rows[0].modified_at == pytest.approx(
+        os.path.getmtime(d / "conversation.jsonl"), abs=2
+    )
 
 
 def test_no_sessions_dir_returns_empty(tmp_path):
