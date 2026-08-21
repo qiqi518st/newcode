@@ -15,11 +15,19 @@ description: "Push MewCode project to GitHub with checks, .gitignore, commit, ta
    - `git config user.email`
 3. **当前目录是否是 git 仓库**：`git rev-parse --git-dir`
 4. **GitHub 远程是否已配置**：`git remote -v`
+5. **提交邮箱合法性检查**：本项目的提交人**硬编码**为 `qiqi518st <qiqi518st@gmail.com>`（见步骤 4），不受本地 git 配置影响。但本地配置仍应正确，以便 `git log` 等工具显示一致。校验本地配置：
+
+```bash
+git config user.email
+```
+
+   - 期望是 `qiqi518st@gmail.com`（GitHub 已验证邮箱，Primary + Verified）或账号专属匿名邮箱 `177993992+qiqi518st@users.noreply.github.com`
+   - 如果本地邮箱是别的（如 `qiqi@users.noreply.github.com`），提交人将无法关联到 GitHub 账号，提示用户修正
 
 如果用户名或邮箱未配置，提示用户先执行：
 ```bash
-git config --global user.name "你的用户名"
-git config --global user.email "你的邮箱"
+git config --global user.name "qiqi518st"
+git config --global user.email "qiqi518st@gmail.com"
 ```
 
 ## 执行步骤
@@ -104,8 +112,10 @@ git reset HEAD <文件>
 ```bash
 git add -A
 git status   # 让用户确认暂存内容
-git commit -m "<提交信息>"
+git commit --author="qiqi518st <qiqi518st@gmail.com>" -m "<提交信息>"
 ```
+
+> ⚠️ **提交人硬编码**：`--author` 固定为 `qiqi518st <qiqi518st@gmail.com>`，这是 GitHub 已验证邮箱（Primary + Verified），确保提交能正确关联到账号 `qiqi518st`。**不要省略 `--author`**，即使本地 `git config` 有误也能保证提交人正确。
 
 默认提交信息格式：`chXX: 简短描述`，其中 XX 是当前章节号（从版本号或用户输入推断）。
 如果用户提供了自定义提交信息，优先使用用户的。
@@ -154,6 +164,7 @@ git push origin <tag-name>
 3. **先 pull 再 push**。避免覆盖远程的更新。
 4. **提交信息要描述清楚当前做了什么**。例如 `ch03: 实现工具系统（6 个核心工具 + Agent 单轮闭环）`。
 5. **tag 命名**：版本号用 `v0.X.0`，章节标记用 `chXX`。
+6. **提交人必须硬编码为 `qiqi518st <qiqi518st@gmail.com>`**（步骤 4 的 `--author`），不可省略或改用本地配置，否则提交可能无法关联到 GitHub 账号。
 
 ## 快捷调用
 
