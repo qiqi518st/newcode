@@ -50,7 +50,6 @@ from ..context.session import (
     open_session_context,
     parse_session_time,
 )
-from ..context.skill import Skill, SkillRegistry
 from ..context.summarize import CompactOutcome, SummarizeConfig, Summarizer
 from ..context.tokens import (
     estimate_messages,
@@ -96,8 +95,6 @@ __all__ = [
     "RecoveryBundle",
     "SessionContext",
     "SessionPaths",
-    "Skill",
-    "SkillRegistry",
     "SummarizeConfig",
     "Summarizer",
     "TrackedFile",

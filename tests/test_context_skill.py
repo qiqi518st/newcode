@@ -1,40 +1,70 @@
-"""Skill / SkillRegistry 骨架单测（ch08 T33，spec F31，AC26）。
+"""ActiveSkills 激活态单测（ch11 T16 迁移：原 ch08 SkillRegistry 骨架被 skills/active.py 取代）。
 
-防 bug：注册/查询/列举、total_tokens 空内容返回 0、缺失查询返回 None。
+防 bug：激活/失活/clear 状态管理、重复激活覆盖原位置、total_tokens 估算、
+enforce_budget 按激活顺序淘汰最旧（F8.1）、get 缺失返回 None（容器语义）。
 """
 
-from mewcode.context.skill import Skill, SkillRegistry
+from mewcode.skills.active import ActiveSkills
 
 
-def test_register_get_list():
-    """AC26：register 后可 get/list。"""
-    reg = SkillRegistry()
-    s1 = Skill(name="code-review", description="代码审查")
-    s2 = Skill(name="deploy", description="部署")
-    reg.register(s1)
-    reg.register(s2)
-    assert reg.get("code-review") is s1
-    assert reg.get("deploy") is s2
-    names = sorted(s.name for s in reg.list())
-    assert names == ["code-review", "deploy"]
+def test_activate_deactivate_clear():
+    """防 bug：激活后可列举、失活移除、clear 清空。"""
+    store = ActiveSkills()
+    store.activate("code-review", "body A")
+    store.activate("deploy", "body B")
+    assert store.names() == ["code-review", "deploy"]
+    store.deactivate("code-review")
+    assert store.names() == ["deploy"]
+    store.clear()
+    assert store.names() == []
 
 
-def test_total_tokens_zero():
-    """AC26：内容加载未实现，total_tokens 始终返回 0。"""
-    reg = SkillRegistry()
-    reg.register(Skill(name="x", description="d"))
-    reg.register(Skill(name="y", description="d"))
-    # total_tokens 接受任意 estimator（当前骨架忽略，返回 0）
-    assert reg.total_tokens(lambda msgs: 999) == 0
+def test_repeat_activate_overwrites_in_place():
+    """防 bug：重复激活同名 Skill 覆盖原位置 body，不改变激活顺序。"""
+    store = ActiveSkills()
+    store.activate("a", "body1")
+    store.activate("b", "body2")
+    store.activate("a", "body1-new")
+    names = store.names()
+    assert names == ["a", "b"]
+    assert store.snapshot()[0].body == "body1-new"
 
 
-def test_get_missing_returns_none():
-    """防 bug：get 未注册的 skill 应返回 None 而非抛 KeyError。"""
-    reg = SkillRegistry()
-    assert reg.get("nonexistent") is None
+def test_total_tokens_with_estimator():
+    """防 bug：total_tokens 接受估算器并累加各 body（对齐 ch08 接口，N10）。"""
+    store = ActiveSkills()
+    store.activate("a", "xx")
+    store.activate("b", "yyy")
+    assert store.total_tokens(lambda text: len(text)) == 5
 
 
-def test_skill_content_empty_by_default():
-    """AC26：Skill.content 默认空（内容加载 TODO，F31）。"""
-    s = Skill(name="x", description="d")
-    assert s.content == ""
+def test_enforce_budget_evicts_oldest():
+    """防 bug：超预算时按激活顺序淘汰最旧（F8.1），幸存列表有序。"""
+    store = ActiveSkills()
+    store.activate("oldest", "x" * 500)  # ~125 tokens
+    store.activate("middle", "y" * 500)
+    store.activate("newest", "z" * 500)
+    # 总 ~375 tokens，预算 300 → 踢掉 oldest，留 middle+newest
+    survivors = store.enforce_budget(300)
+    names = [e.name for e in survivors]
+    assert names == ["middle", "newest"], names
+    assert store.names() == ["middle", "newest"]
+
+
+def test_enforce_budget_within_budget_no_eviction():
+    """防 bug：总 token 在预算内时不做任何淘汰。"""
+    store = ActiveSkills()
+    store.activate("a", "small")
+    store.activate("b", "tiny")
+    survivors = store.enforce_budget(10_000)
+    assert [e.name for e in survivors] == ["a", "b"]
+    assert store.names() == ["a", "b"]
+
+
+def test_snapshot_is_copy():
+    """防 bug：snapshot 返回拷贝，外部改动不影响内部状态。"""
+    store = ActiveSkills()
+    store.activate("a", "body")
+    snap = store.snapshot()
+    snap[0].body = "mutated"
+    assert store.snapshot()[0].body == "body"

@@ -407,5 +407,7 @@ class Summarizer:
             f"{bundle.tools_declaration_text}\n\n"
             f"{bundle.boundary_notice_text}"
         )
+        if bundle.skill_activation_text:
+            recovery_text = f"{recovery_text}\n\n{bundle.skill_activation_text}"
         combined = summary_text + "\n\n" + recovery_text
         return _join_after_summary(Message(role="user", content=combined), recent_tail)

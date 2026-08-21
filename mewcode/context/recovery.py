@@ -1,7 +1,9 @@
-"""恢复段三块（spec F16/F17/F18/F31）：文件快照 + 工具列表 + 边界提示。
+"""恢复段四块（spec F16/F17/F18/F31）：文件快照 + 工具列表 + 边界提示 + 激活 Skill。
 
-三块都是 str，由 Summarizer 拼进「摘要 + 恢复」单条 user 消息的 content。
+四块都是 str，由 Summarizer 拼进「摘要 + 恢复」单条 user 消息的 content。
 工具列表直接引用传入的 tool_defs（F17：id(defs) 与 stream 一致，不重算不选子集）。
+激活 Skill 块：ch11 压缩预算淘汰（F8.1）——enforce_budget(4k) 踢掉最旧超预算项，
+幸存激活 Skill 完整 SOP 追加进恢复段（N2 压缩兼容）。
 """
 
 import json
@@ -14,8 +16,9 @@ from ..context.constants import (
     PER_FILE_TOKEN_BUDGET,
 )
 from ..context.files import FileTracker, TrackedFile
-from ..context.skill import SkillRegistry
 from ..provider.base import ToolDefinition
+from ..skills.active import ActiveSkills
+from ..skills.constants import ACTIVE_SKILL_TOKEN_BUDGET
 
 BOUNDARY_NOTICE = (
     "[boundary notice]\n"
@@ -31,7 +34,7 @@ _MAX_CHARS_PER_FILE = int(PER_FILE_TOKEN_BUDGET * ESTIMATE_CHARS_PER_TOKEN)
 
 @dataclass
 class RecoveryBundle:
-    """摘要后恢复段三块（每块是一段 str，不各自成 Message）。
+    """摘要后恢复段四块（每块是一段 str，不各自成 Message）。
 
     合并成一条 user 消息输出，避免摘要(user)+恢复(user) 连续 user 触发
     Anthropic roles-must-alternate 400（spec F15 合并决策）。
@@ -40,36 +43,38 @@ class RecoveryBundle:
     file_snapshots_text: str  # 最近文件快照（≤5 个，每个 ≤5000 token）
     tools_declaration_text: str  # 工具列表声明（与 stream 同一份 ToolDefinition 引用）
     boundary_notice_text: str  # 边界提示固定文案
+    skill_activation_text: str = ""  # 幸存激活 Skill 的 SOP（F8.1 预算淘汰后）
 
 
 class RecoveryBuilder:
-    """恢复段三块构造器（工具列表与 stream 同引用，spec F17）。"""
+    """恢复段四块构造器（工具列表与 stream 同引用，spec F17）。"""
 
-    def __init__(self, skill_registry: SkillRegistry | None = None) -> None:
-        self._skill_registry = skill_registry
+    def __init__(self, active_skills: ActiveSkills | None = None) -> None:
+        self._active_skills = active_skills
 
     async def build(
         self,
         file_tracker: FileTracker,
         tool_defs: list[ToolDefinition],
-        skill_registry: SkillRegistry | None = None,
+        active_skills: ActiveSkills | None = None,
     ) -> RecoveryBundle:
-        """构造恢复段三块。
+        """构造恢复段四块。
 
-        skill_registry 参数未传时回退到构造时持有的 registry（兼容两种装配方式）。
+        active_skills 参数未传时回退到构造时持有的 store（兼容两种装配方式）。
         """
-        registry = (
-            skill_registry if skill_registry is not None else self._skill_registry
-        )
+        store = active_skills if active_skills is not None else self._active_skills
         recent = await file_tracker.recent(MAX_RECENT_FILES)
-        if registry is not None and registry.list():
-            # TODO(ch08): Skill 内容加载待后续章节实现——当前 Skill.content 始终为空，
-            # 注入分支为空实现。后续按 SKILL_RECOVERY_BUDGET 预算向恢复段追加稳定提示段。
-            pass
+        if store is not None and store.names():
+            # F8.1：压缩预算淘汰——踢掉最旧超预算项，幸存 SOP 注入恢复段（N2 压缩兼容）
+            survivors = store.enforce_budget(ACTIVE_SKILL_TOKEN_BUDGET)
+            skill_text = _format_active_skills(survivors)
+        else:
+            skill_text = ""
         return RecoveryBundle(
             file_snapshots_text=_format_snapshots(recent),
             tools_declaration_text=_format_tools(tool_defs),
             boundary_notice_text=BOUNDARY_NOTICE,
+            skill_activation_text=skill_text,
         )
 
 
@@ -102,3 +107,14 @@ def _format_tools(tool_defs: list[ToolDefinition]) -> str:
             schema = json.dumps(d.parameters, separators=(",", ":"), ensure_ascii=False)
             lines.append(f"    {schema}")
     return "\n".join(lines)
+
+
+def _format_active_skills(survivors) -> str:
+    """幸存激活 Skill 的恢复文本（F8.1：预算淘汰后注入，压缩后不丢激活指令）。"""
+    if not survivors:
+        return "[active skills]\n(no active skills)"
+    blocks = ["[active skills]"]
+    for e in survivors:
+        blocks.append(f"## Active Skill: {e.name}")
+        blocks.append(e.body)
+    return "\n\n".join(blocks)

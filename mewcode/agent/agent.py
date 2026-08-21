@@ -13,7 +13,15 @@ from ..permission.types import Decision
 from ..prompt.assembler import PayloadAssembler
 from ..prompt.reminders import plan_mode_reminder
 from ..prompt.resources import EXECUTE_DIRECTIVE
+from ..prompt.skills_block import (
+    render_active_skills_block,
+    render_skills_catalog,
+)
 from ..provider.base import Provider, ToolCall, ToolDefinition, ToolResult
+from ..skills.adapter import (
+    active_to_prompt_entries,
+    catalog_to_prompt_items,
+)
 from ..tools.registry import Registry
 from .events import Event, EventType, StopReason, TokenUsage, TurnEnd
 from .scheduler import ScheduledResult, ToolScheduler
@@ -37,6 +45,7 @@ class Agent:
         context_mgr: object | None = None,  # ch08: ContextManager | None
         file_tracker: object | None = None,  # ch08: FileTracker | None
         memory_manager: object | None = None,
+        active_skills: object | None = None,  # ch11: ActiveSkills | None
     ) -> None:
         self.provider = provider
         self.conv = conversation
@@ -51,6 +60,10 @@ class Agent:
         self._context_mgr = context_mgr
         self._file_tracker = file_tracker
         self._memory_manager = memory_manager
+
+        # ch11 Skill 状态（可选；None 时行为与 ch10 一致，N10 向后兼容）
+        self._active_skills = active_skills
+        self._catalog: object | None = None  # with_catalog 注入（阶段一摘要素材）
         self._natural_rounds = 0
         self._memory_task: asyncio.Task | None = None
         self._run_lock = asyncio.Lock()  # 会话级互斥（F34），管 run 与手动入口
@@ -65,6 +78,37 @@ class Agent:
     @property
     def permission(self) -> PermissionChecker | None:
         return self._permission
+
+    # ── ch11 Skill 集成（F4.1/F5.2/F5.5）──────────────────
+    def with_catalog(self, catalog: object | None) -> None:
+        """注入 Skill catalog（阶段一摘要素材）；None 时跳过 env 组装（N10 向后兼容）。"""
+        self._catalog = catalog
+
+    def activate_skill(self, name: str, body: str) -> None:
+        """激活一个 Skill 到会话（转发 ActiveSkills.activate，F4.2.1）。"""
+        if self._active_skills is not None:
+            self._active_skills.activate(name, body)
+
+    def clear_active_skills(self) -> None:
+        """清空激活 Skill（/clear 与 /session_new 调用，F5.5/F8.2）。"""
+        if self._active_skills is not None:
+            self._active_skills.clear()
+
+    def _compose_env_segment(self) -> str:
+        """每轮组装 env：基础环境 + Available Skills 摘要段（F4.1）+ 激活 Skill 段（F5.2）。
+
+        catalog/active_skills 任一缺失时对应段省略（N10 向后兼容，无 Skill 时行为与 ch10 一致）。
+        """
+        parts = [self._env_segment] if self._env_segment else []
+        if self._catalog is not None:
+            block = render_skills_catalog(catalog_to_prompt_items(self._catalog))
+            if block:
+                parts.append(block)
+        if self._active_skills is not None:
+            block = render_active_skills_block(active_to_prompt_entries(self._active_skills))
+            if block:
+                parts.append(block)
+        return "\n\n".join(parts)
 
     def cancel(self) -> None:
         """设置取消信号，TUI 在 ESC/Ctrl+C 时调用"""
@@ -130,10 +174,10 @@ class Agent:
                 # 轮次级补充消息：plan 模式按轮注入（第 0/5 轮完整，其余精简，瞬时不持久）
                 reminders = [plan_mode_reminder(turn)] if mode == "plan" else []
 
-                # 组装管线：稳定提示(段1) + 环境(段2) + 历史 + reminders + tools → PromptPayload
+                # 组装管线：稳定提示(段1) + 环境(段2, 含 Skill 摘要/激活段) + 历史 + reminders + tools
                 payload = self._assembler.assemble(
                     self._stable_prompt,
-                    self._env_segment,
+                    self._compose_env_segment(),
                     self.conv.get_context(),
                     reminders,
                     tool_defs if tool_defs else None,
@@ -180,7 +224,7 @@ class Agent:
                             # 用新历史重组 payload 重试本轮（不进下一 turn）
                             payload = self._assembler.assemble(
                                 self._stable_prompt,
-                                self._env_segment,
+                                self._compose_env_segment(),
                                 self.conv.get_context(),
                                 reminders,
                                 tool_defs if tool_defs else None,

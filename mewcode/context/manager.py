@@ -22,7 +22,6 @@ from ..context.offload import offload_and_snip
 from ..context.recovery import RecoveryBuilder
 from ..context.replacement import ContentReplacementState
 from ..context.session import SessionPaths, new_session_context
-from ..context.skill import SkillRegistry
 from ..context.summarize import CompactOutcome, SummarizeConfig, Summarizer
 from ..context.tokens import estimate_tokens, usage_to_anchor
 from ..context.window import get_context_window_for_model
@@ -53,7 +52,7 @@ class ContextManager:
         model: str,
         protocol: str,
         file_tracker: FileTracker,
-        skill_registry: SkillRegistry | None = None,
+        active_skills: object | None = None,  # ch11: ActiveSkills | None（压缩预算淘汰）
         emit_event: Callable[[str, object], None] | None = None,
         workspace: str | None = None,
     ) -> None:
@@ -66,7 +65,7 @@ class ContextManager:
         self._auto_gate = AutoCompactGate()
         self._workspace = os.path.abspath(workspace or os.getcwd())
         self._session = SessionPaths(new_session_context(self._workspace))
-        self._recovery_builder = RecoveryBuilder(skill_registry)
+        self._recovery_builder = RecoveryBuilder(active_skills)
         self._summarizer = Summarizer(
             provider,
             self._recovery_builder,
