@@ -2,6 +2,9 @@
 
 每个命令模块导出 build() -> list[CommandDef]；handler 在调用时经 CommandContext
 取用资源（ctx.ui / ctx.plan_manager / ...），build 无需依赖参数。
+
+ch11：/review 硬编码命令移除（F6.4），由 review Skill（fork）自动注册接管；
+/skill 管理命令加入；skill_register 提供 Skill 动态 /名字 注册（装配在 main.py）。
 """
 
 from __future__ import annotations
@@ -15,8 +18,8 @@ from . import (
     memory,
     permission,
     plan,
-    review,
     session,
+    skill,
     status,
 )
 from . import help as help_cmd
@@ -32,7 +35,7 @@ COMMAND_MODULES = [
     do,
     clear,
     compact,
-    review,
+    skill,
     legacy,
 ]
 

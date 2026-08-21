@@ -152,7 +152,7 @@ def test_help_lists_all_builtins():
         "do",
         "clear",
         "compact",
-        "review",
+        "skill",
         "exit",
     ]:
         assert f"/{name}" in text
@@ -168,7 +168,7 @@ def test_args_on_noarg_command_is_miss():
 
 def test_busy_gates_ui_and_prompt_commands():
     repl = _make_repl(state=SessionState.STREAMING)
-    for cmd in ("/clear", "/compact", "/review", "/plan", "/resume"):
+    for cmd in ("/clear", "/compact", "/do", "/plan", "/resume"):
         r = asyncio.run(repl.dispatch_slash(cmd))
         assert r is True
         assert "请等待当前任务完成" in repl._console.export_text()

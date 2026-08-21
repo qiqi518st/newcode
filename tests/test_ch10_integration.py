@@ -151,21 +151,23 @@ class _StreamAgent:
         pass
 
 
-def test_review_triggers_stream_and_returns_to_idle(tmp_path):
-    """防 AC9/N3：/review 注入消息触发流式回合，结束后回到 IDLE（不会卡在 STREAMING）。"""
+def test_skill_command_usage_hint(tmp_path):
+    """ch11（原 AC9/N3 迁移，F6.4）：/review 已由 review Skill 接管。
+
+    内置 /skill 本地命令无参显示用法提示，不触发 Agent（本地命令分流正确）。
+    """
     runtime = SessionRuntime(str(tmp_path), max_turns=10, model="m")
     conv = runtime.create_new()
-    agent = _StreamAgent()
+    agent = _NoRunAgent()
     agent.conv = conv
     repl = _make_repl(agent, runtime)
     repl.command_ctx.agent = agent
 
-    ok = asyncio.run(repl.dispatch_slash("/review"))
+    ok = asyncio.run(repl.dispatch_slash("/skill"))
     assert ok is True
-    assert repl.state == SessionState.IDLE
-    # 注入消息走真实持久化：会话存档含 user 角色、含审查关键字（F3.4/N3）
-    saved = (runtime.context.session_dir and conv.get_messages_ref()) or []
-    assert any(m.role == "user" and "审查" in (m.content or "") for m in saved)
+    assert "/skill <list|info|reload|load|on|off|unload>" in repl._console.export_text(
+        clear=False
+    )
 
 
 def test_busy_clear_rejected():

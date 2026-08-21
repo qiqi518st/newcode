@@ -17,7 +17,6 @@ from mewcode.plans.manager import PlanManager
 from mewcode.slash import CommandContext, CommandRegistry, NopUI, RecordingUI
 from mewcode.slash.commands import register_all
 from mewcode.slash.commands.memory import _slugify
-from mewcode.slash.commands.review import REVIEW_DIRECTIVE
 
 
 def _registered() -> CommandRegistry:
@@ -93,7 +92,7 @@ def test_register_builtins_all_registered():
         "do",
         "clear",
         "compact",
-        "review",
+        "skill",
         "exit",
         "delete-plan",
     ]:
@@ -420,14 +419,18 @@ def test_compact_request():
     assert ("request_compact",) in ui.calls
 
 
-# ── /review（F8.13）────────────────────────────────────────
+# ── /review 迁移（ch11 F6.4）───────────────────────────────
 
 
-def test_review_sends_directive():
-    ui = RecordingUI()
-    asyncio.run(_run(_registered(), "review", _ctx(ui)))
-    assert ("send_user_message", REVIEW_DIRECTIVE) in ui.calls
-    assert "审查" in REVIEW_DIRECTIVE
+def test_review_removed_from_builtin_commands():
+    """ch11 F6.4：/review 从硬编码内置命令移除，由 review Skill（fork）自动注册接管。
+
+    防 bug：旧的 send_user_message 注入式 /review 已被 Skill 框架取代，
+    内置命令不再包含 review，新增 /skill 管理命令。
+    """
+    reg = _registered()
+    assert reg.get("review") is None
+    assert reg.get("skill") is not None
 
 
 # ── /exit / /delete-plan（F8.1/F8.23）──────────────────────

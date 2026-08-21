@@ -2,13 +2,26 @@
 
 方法集最小化（F6.2）：只暴露命令实际需要的抽象操作，不把 TUI 内部属性外泄。
 命令实现一律经此接口操作界面，不 import prompt_toolkit / rich（F6.3）。
+
+ch11 新增 Skill 相关方法（F5.5/F7/N13）：Skill 列表查询、激活态查询、清空激活、
+fork 结果回流（append_assistant_message）、fork token 写回主统计（add_token_usage）。
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 from ..permission.modes import PermissionMode
+
+
+@dataclass(frozen=True)
+class SkillSummary:
+    """/skill list 用瘦展示类型（UI 协议层不依赖 skills 包，F6.3）。"""
+
+    name: str
+    description: str
+    source: str  # project | user | builtin
 
 
 @runtime_checkable
@@ -54,6 +67,23 @@ class UIController(Protocol):
     def get_model_name(self) -> str: ...
 
     def get_cwd(self) -> str: ...
+
+    # ── Skill（ch11）────────────────────────────────────────
+    def list_catalog_skills(
+        self,
+    ) -> list[SkillSummary]: ...  # 全部 Skill 摘要（/skill list）
+
+    def list_active_skills(self) -> list[str]: ...  # 当前激活 Skill 名
+
+    def clear_active_skills(self) -> None: ...  # 清空激活（/clear 调，F5.5）
+
+    def append_assistant_message(
+        self, text: str
+    ) -> None: ...  # fork 结果写回主对话（F3.1/N13）
+
+    def add_token_usage(
+        self, in_t: int, out_t: int
+    ) -> None: ...  # fork token 写回主统计（N13）
 
     # ── 生命周期 ───────────────────────────────────────────
     def request_exit(self) -> None: ...  # 退出（先取消主 cancel scope，N12）
@@ -132,6 +162,21 @@ class NopUI:
     def get_cwd(self) -> str:
         return ""
 
+    def list_catalog_skills(self) -> list[SkillSummary]:
+        return []
+
+    def list_active_skills(self) -> list[str]:
+        return []
+
+    def clear_active_skills(self) -> None:
+        return None
+
+    def append_assistant_message(self, text: str) -> None:
+        return None
+
+    def add_token_usage(self, in_t: int, out_t: int) -> None:
+        return None
+
     def request_exit(self) -> None:
         return None
 
@@ -187,6 +232,24 @@ class RecordingUI(NopUI):
         self._app_mode: str = "normal"
         self._tokens: tuple[int, int] = (0, 0)
         self._memory_files: list[str] = []
+        # ch11 Skill 相关可观测状态
+        self._catalog_skills: list[SkillSummary] = []
+        self._active_skill_names: list[str] = []
+        self._in_extra: int = 0
+        self._out_extra: int = 0
+
+    def set_catalog_skills(self, skills: list[SkillSummary]) -> None:
+        """测试注入：list_catalog_skills 返回的 Skill 摘要列表。"""
+        self._catalog_skills = list(skills)
+
+    def set_active_skills(self, names: list[str]) -> None:
+        """测试注入：list_active_skills 返回的激活名列表。"""
+        self._active_skill_names = list(names)
+
+    @property
+    def extra_tokens(self) -> tuple[int, int]:
+        """add_token_usage 累计的额外 token（(in, out)，供测试断言 fork 写回）。"""
+        return (self._in_extra, self._out_extra)
 
     def _record(self, name: str, *args: object) -> None:
         self.calls.append((name,) + tuple(str(a) for a in args))
@@ -237,6 +300,25 @@ class RecordingUI(NopUI):
 
     def get_cwd(self) -> str:
         return ""
+
+    def list_catalog_skills(self) -> list[SkillSummary]:
+        return list(self._catalog_skills)
+
+    def list_active_skills(self) -> list[str]:
+        return list(self._active_skill_names)
+
+    def clear_active_skills(self) -> None:
+        self._active_skill_names = []
+        self._record("clear_active_skills")
+
+    def append_assistant_message(self, text: str) -> None:
+        self._record("append_assistant_message", text)
+        self.messages.append(text)
+
+    def add_token_usage(self, in_t: int, out_t: int) -> None:
+        self._in_extra += in_t
+        self._out_extra += out_t
+        self._record("add_token_usage", in_t, out_t)
 
     def request_exit(self) -> None:
         self._record("request_exit")

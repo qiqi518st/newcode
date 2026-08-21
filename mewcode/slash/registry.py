@@ -69,6 +69,38 @@ class CommandRegistry:
         with self._lock:
             return self._commands.get(name.lower())
 
+    def unregister(self, name: str) -> bool:
+        """按名字或别名移除一条命令（含别名键，ch11 /skill unload 与 reload 用）。
+
+        返回是否实际移除了命令（该命令的所有键全部删除）。
+        """
+        with self._lock:
+            cmd = self._commands.get(name.lower())
+            if cmd is None:
+                return False
+            keys = (cmd.name,) + tuple(cmd.aliases)
+            for key in keys:
+                self._commands.pop(key.lower(), None)
+            return True
+
+    def remove_by(self, predicate) -> int:
+        """按谓词批量移除命令（供 remove_skill_commands 同步 /名字 注册，ch11）。
+
+        predicate 接收 CommandDef，返回 True 表示移除；返回移除条数。
+        """
+        with self._lock:
+            victims = [
+                c for c in dict.fromkeys(self._commands.values()) if predicate(c)
+            ]
+            count = 0
+            for cmd in victims:
+                keys = (cmd.name,) + tuple(cmd.aliases)
+                removed = any(
+                    self._commands.pop(key.lower(), None) is not None for key in keys
+                )
+                count += 1 if removed else 0
+            return count
+
     def list(self, include_hidden: bool = False) -> list[CommandDef]:
         """按 name 字典序返回命令列表；默认排除 hidden。
 

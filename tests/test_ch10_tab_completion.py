@@ -41,6 +41,7 @@ def test_completer_prefix_filters_names():
         "session_list",
         "session_new",
         "session_resume",
+        "skill",
         "status",
     ]
     # 只匹配 name，不匹配 description/别名
@@ -52,7 +53,10 @@ def test_completer_excludes_hidden():
     repl = _repl_with(_registry())
     names = [c.text for c in _completions(repl, "/r")]
     assert "resume" not in names  # /resume 隐藏
-    assert "review" in names
+    # ch11：/review 已由 review Skill 接管（F6.4），内置补全不再含 review；/skill 可见
+    assert "review" not in names
+    skill_names = [c.text for c in _completions(repl, "/s")]
+    assert "skill" in skill_names
 
 
 def test_completer_ignores_non_slash():

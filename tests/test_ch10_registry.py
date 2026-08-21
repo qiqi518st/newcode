@@ -105,3 +105,34 @@ def test_register_empty_name_raises():
     reg = CommandRegistry()
     with pytest.raises(ValueError):
         reg.register(_cmd(""))
+
+
+# ── unregister / remove_by（ch11 T17，/skill reload/unload 用）──────────
+
+
+def test_unregister_removes_name_and_aliases():
+    """防 bug：unregister 按名移除时连别名键一起删（reload 后不残留影子命令）。"""
+    reg = CommandRegistry()
+    reg.register(_cmd("exit", aliases=("quit",)))
+    assert reg.unregister("quit") is True
+    assert reg.get("exit") is None
+    assert reg.get("quit") is None
+
+
+def test_unregister_missing_returns_false():
+    """防 bug：unregister 未注册命令返回 False 不抛错。"""
+    reg = CommandRegistry()
+    assert reg.unregister("nonexistent") is False
+
+
+def test_remove_by_predicate():
+    """防 bug：remove_by 按谓词批量移除（remove_skill_commands 清 [skill] 命令）。"""
+    reg = CommandRegistry()
+    reg.register(_cmd("commit", description="提交 [skill]"))
+    reg.register(_cmd("review", description="审查 [skill]"))
+    reg.register(_cmd("help", description="帮助"))
+    removed = reg.remove_by(lambda c: c.description.endswith("[skill]"))
+    assert removed == 2
+    assert reg.get("commit") is None
+    assert reg.get("review") is None
+    assert reg.get("help") is not None
