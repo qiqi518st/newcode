@@ -2,7 +2,7 @@
 
 from ..permission.modes import ToolCategory
 from ..provider.base import ToolDefinition, ToolResult
-from .base import Tool
+from .base import Tool, is_system_tool
 
 # 友好名 → 内部名映射
 FRIENDLY_NAME_MAP: dict[str, str] = {
@@ -57,6 +57,56 @@ class Registry:
             )
             for t in self._tools.values()
             if t.read_only
+        ]
+
+    def names(self) -> list[str]:
+        """全部已注册工具名（供 fail-fast 校验 / fork 收窄遍历）。"""
+        return list(self._tools.keys())
+
+    def system_definitions(self) -> list[ToolDefinition]:
+        """仅系统工具的 API 定义列表（ch11：load_skill 恒可见，F3.5）。"""
+        return self._definitions_for(
+            [t for t in self._tools.values() if is_system_tool(t)]
+        )
+
+    def definitions_filtered(self, allowed: list[str]) -> list[ToolDefinition]:
+        """按白名单收窄的工具定义列表（F3.7，仅 fork 模式子 Agent 用）。
+
+        - 系统工具豁免透传（F3.5），恒包含。
+        - allowed 为空 = 不限制 → 返回全量（与未激活行为一致）。
+        - 其余仅包含白名单内的工具。
+        """
+        if not allowed:
+            return self.to_definitions()
+        visible = [
+            t for t in self._tools.values() if is_system_tool(t) or t.name in allowed
+        ]
+        return self._definitions_for(visible)
+
+    def filtered(self, allowed: list[str]) -> "Registry":
+        """构造临时收窄视图（N8：共享底层 Tool 实例，动态生效不要求重启 Agent）。
+
+        仅 fork 模式子 Agent 使用：新 Registry 只含系统工具 + 白名单内工具，
+        子 Agent 用它对模型暴露收窄工具集、对调度器仍可执行真实工具。
+        """
+        sub = Registry()
+        if not allowed:
+            for t in self._tools.values():
+                sub.register(t)
+            return sub
+        for t in self._tools.values():
+            if is_system_tool(t) or t.name in allowed:
+                sub.register(t)
+        return sub
+
+    def _definitions_for(self, tools: list[Tool]) -> list[ToolDefinition]:
+        return [
+            ToolDefinition(
+                name=t.name,
+                description=t.description,
+                parameters=t.parameters,
+            )
+            for t in tools
         ]
 
     def is_read_only(self, name: str) -> bool:
