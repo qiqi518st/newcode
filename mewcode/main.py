@@ -7,16 +7,20 @@ ch07：改为单一事件循环 _amain -- MCP 连接、TUI/oneshot、退出收�
 
 import argparse
 import asyncio
+import logging
 import os
 import sys
+from dataclasses import replace
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from mewcode import __version__
 from mewcode.agent import Agent
 from mewcode.agent.events import EventType
 from mewcode.config.loader import load as load_config
 from mewcode.config.loader import load_ccswitch
-from mewcode.context import ContextManager, FileTracker, SkillRegistry
+from mewcode.context import ContextManager, FileTracker
 from mewcode.instructions import InstructionLoader
 from mewcode.mcp import MCPManager, load_mcp_servers
 from mewcode.memory import MemoryManager
@@ -30,9 +34,12 @@ from mewcode.prompt.sections import fixed_sections, optional_sections
 from mewcode.provider.base import new_provider
 from mewcode.session.archive import SessionArchive, clean_expired
 from mewcode.session.runtime import SessionRuntime
+from mewcode.skills import ActiveSkills, Catalog, Executor
 from mewcode.slash import CommandContext, CommandRegistry
 from mewcode.slash.commands import register_all
+from mewcode.slash.commands.skill_register import register_skills_as_commands
 from mewcode.tools import Registry
+from mewcode.tools.load_skill import LoadSkillTool
 from mewcode.tools.memory_read import ReadMemoryTool
 from mewcode.tools.memory_write import WriteMemoryTool
 from mewcode.tui.app import REPL
@@ -158,9 +165,21 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
 
     is_interactive = not bool(args.command)
 
-    # ch08 上下文管理装配（FileTracker / SkillRegistry 骨架 / ContextManager）
+    # ── ch11 Skill 装配（T21）：先 LoadSkillTool 进 registry，再构造 Agent ──
+    active_skills = ActiveSkills()
+    catalog = Catalog.load(Path(cwd))
+    bad_skills = catalog.validate_tools(registry)
+    for bad in bad_skills:
+        # B 决策：启动时白名单引用不存在工具 → warning + 从 catalog 移除（不阻断其它）
+        logger.warning(
+            "skill %s references nonexistent allowedTools, removed from catalog",
+            bad,
+        )
+        catalog.remove(bad)
+    registry.register(LoadSkillTool(catalog, active_skills, registry))
+
+    # ch08 上下文管理装配（FileTracker / ActiveSkills / ContextManager）
     file_tracker = FileTracker()
-    skill_registry = SkillRegistry()  # 骨架：当前无 Skill，注入分支空实现（F31）
     active_provider_cfg = next(
         (p for p in config.providers if p.name == config.provider), None
     )
@@ -170,7 +189,7 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
         provider.model,
         active_provider_cfg.protocol if active_provider_cfg else "anthropic",
         file_tracker,
-        skill_registry=skill_registry,
+        active_skills=active_skills,
         emit_event=lambda kind, payload: agent_ref[0]._context_events.append(
             (kind, payload)
         ),
@@ -189,8 +208,11 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
         context_mgr=context_mgr,
         file_tracker=file_tracker,
         memory_manager=memory,
+        active_skills=active_skills,
     )
     agent_ref.append(agent)
+    # 阶段一摘要注入：with_catalog 后 env 每轮含 Available Skills 段（F4.1）
+    agent.with_catalog(catalog)
     renderer = RichRenderer()
     plan_manager = PlanManager(os.path.join(cwd, "plans"))
 
@@ -223,6 +245,23 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
             except RuntimeError as exc:
                 print(f"启动失败: 命令名/别名冲突 {exc}", file=sys.stderr)
                 sys.exit(1)
+            # ch11：Skill 执行器 + 动态 /名字 注册（内置命令先注册，冲突时 Skill 跳过，F2.5）
+            executor = Executor(
+                catalog,
+                active_skills,
+                registry,
+                provider,
+                engine=None,
+                version=__version__,
+                make_provider=(
+                    lambda model: (
+                        new_provider(replace(active_provider_cfg, model=model))
+                        if active_provider_cfg
+                        else None
+                    )
+                ),
+            )
+            register_skills_as_commands(cmd_registry, catalog, executor)
             cmd_ctx = CommandContext(
                 registry=cmd_registry,
                 ui=repl.ui,
@@ -235,6 +274,9 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
                 permission=permission,
                 version=__version__,
                 cwd=cwd,
+                catalog=catalog,
+                active_skills=active_skills,
+                executor=executor,
             )
             repl.command_registry = cmd_registry
             repl.command_ctx = cmd_ctx

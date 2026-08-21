@@ -279,8 +279,9 @@ class Catalog:
             logger.warning("cannot persist disabled state: %s", exc)
 
 
-def _expand_user(path: Path) -> Path:
-    return path.expanduser()
+def _expand_user(path) -> Path:
+    """展开 ~（接受 str 或 Path；USER_SKILLS_DIR 常量是 str）。"""
+    return Path(path).expanduser()
 
 
 def _expand_project(path: Path) -> Path:

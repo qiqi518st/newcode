@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import threading
+from dataclasses import replace
 
 from ..skills.constants import ACTIVE_SKILL_TOKEN_BUDGET
 from ..skills.types import ActiveEntry
@@ -18,7 +19,8 @@ class ActiveSkills:
     """激活 Skill 状态容器（会话级，线程安全）。"""
 
     def __init__(self) -> None:
-        self._lock = threading.Lock()
+        # RLock：enforce_budget 持锁调 total_tokens（同线程重入），普通 Lock 会死锁
+        self._lock = threading.RLock()
         self._entries: list[ActiveEntry] = []  # 保持激活顺序
         self._index: dict[str, int] = {}  # 名字 → _entries 位置（重复激活覆盖原位置）
 
@@ -53,9 +55,9 @@ class ActiveSkills:
             self._index = {}
 
     def snapshot(self) -> list[ActiveEntry]:
-        """返回激活条目拷贝（env 装配用，防外部改动）。"""
+        """返回激活条目深拷贝（env 装配用，防外部改动污染内部状态）。"""
         with self._lock:
-            return list(self._entries)
+            return [replace(e) for e in self._entries]
 
     def names(self) -> list[str]:
         """当前激活 Skill 名（按激活顺序）。"""

@@ -38,3 +38,7 @@ class CommandContext:
     permission: PermissionChecker | None = None
     version: str = ""
     cwd: str = "."
+    # ch11 Skill 依赖（main.py 装配注入；未接线保持 None，handler 做空值防御）
+    catalog: object | None = None  # skills.Catalog
+    active_skills: object | None = None  # skills.ActiveSkills
+    executor: object | None = None  # skills.Executor
