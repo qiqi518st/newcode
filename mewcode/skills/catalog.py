@@ -180,13 +180,29 @@ class Catalog:
                 return cached
 
     def list(self) -> list[Skill]:
-        """列举全部 Skill（排除 disabled，F2.6/F7.1）。"""
+        """列举全部 Skill（排除 disabled，F2.6/F7.1）。
+
+        供命令注册与阶段一摘要用（只含可用项）。
+        """
         with self._lock:
             return [
                 self._by_name[n]
                 for n in self._order
                 if n in self._by_name and not self._is_disabled_locked(n)
             ]
+
+    def list_all(self) -> list[Skill]:
+        """列举全部 Skill（含 disabled，/skill list 管理视图用）。
+
+        让用户能看到「存在但被禁用」的 Skill（ch11 变更记录：list 显示禁用状态）。
+        """
+        with self._lock:
+            return [self._by_name[n] for n in self._order if n in self._by_name]
+
+    def invalidate(self, name: str) -> None:
+        """清除单个 Skill 的内存缓存（unload 时调用，下次 get() 从磁盘重读）。"""
+        with self._lock:
+            self._cache.pop(name, None)
 
     def names(self) -> list[str]:
         """全部可用（非 disabled）Skill 名，按加载顺序。"""

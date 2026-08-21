@@ -165,7 +165,7 @@ def test_skill_command_usage_hint(tmp_path):
 
     ok = asyncio.run(repl.dispatch_slash("/skill"))
     assert ok is True
-    assert "/skill <list|info|reload|load|on|off|unload>" in repl._console.export_text(
+    assert "/skill <list|info|reload|load|unload>" in repl._console.export_text(
         clear=False
     )
 
