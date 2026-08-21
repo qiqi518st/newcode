@@ -1,0 +1,44 @@
+"""内置命令装配（T6）：register_all(registry) 一次性注册全部命令。
+
+每个命令模块导出 build() -> list[CommandDef]；handler 在调用时经 CommandContext
+取用资源（ctx.ui / ctx.plan_manager / ...），build 无需依赖参数。
+"""
+
+from __future__ import annotations
+
+from ..registry import CommandRegistry
+from . import (
+    clear,
+    compact,
+    do,
+    legacy,
+    memory,
+    permission,
+    plan,
+    review,
+    session,
+    status,
+)
+from . import help as help_cmd
+
+# 遍历顺序即注册顺序（无依赖；list() 会按 name 字典序输出）
+COMMAND_MODULES = [
+    help_cmd,
+    status,
+    memory,
+    permission,
+    session,
+    plan,
+    do,
+    clear,
+    compact,
+    review,
+    legacy,
+]
+
+
+def register_all(registry: CommandRegistry) -> None:
+    """遍历各模块 build() 收集 CommandDef 并注册；冲突抛 RuntimeError（N4/F1.3）。"""
+    for module in COMMAND_MODULES:
+        for cmd in module.build():
+            registry.register(cmd)

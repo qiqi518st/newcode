@@ -225,6 +225,21 @@ class ContextManager:
         self._usage_anchor = 0
         self._anchor_msg_len = 0
 
+    def reset_for_new_session(self, conversation: object | None = None) -> None:
+        """（ch10 T0b）/clear 用：原子重置本管理器到新会话初态。
+
+        重建 ContentReplacementState 账本与 AutoCompactGate 计数、归零外部锚点
+        （单事件循环无并发顾虑，比给两个类各加 reset 方法省事）；若传入新
+        ConversationManager（/clear 重建会话后），同时把 _conv 指向它，避免
+        后续上下文压缩仍操作旧会话导致不一致。
+        """
+        self._state = ContentReplacementState()
+        self._auto_gate = AutoCompactGate()
+        self._usage_anchor = 0
+        self._anchor_msg_len = 0
+        if conversation is not None:
+            self._conv = conversation
+
     def _emit(self, kind: str, payload: object) -> None:
         """emit_event 透传（None 时静默；回调异常不打断压缩流程）。"""
         if self._emit_event is None:

@@ -1,10 +1,12 @@
 """TUI REPL 循环：状态机、prompt_toolkit 输入、Agent Event 消费、计时、ESC 中断、重试、Plan Mode、权限系统"""
 
 import asyncio
+import os
 import time
 from enum import Enum
 
 from prompt_toolkit import PromptSession
+from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.styles import Style
@@ -18,6 +20,8 @@ from ..agent.events import EventType, StopReason
 from ..permission.hitl import HITLRequest, HITLResponse
 from ..permission.modes import PermissionMode
 from ..plans.manager import PlanManager, PlanMeta
+from ..slash import CommandKind, CommandRegistry, parse_command
+from ..slash.context import CommandContext
 
 
 class SessionState(Enum):
@@ -42,8 +46,8 @@ _PROMPT_STYLE = Style.from_dict(
 _CONTEXT_STYLE = "bold white"
 
 
-def _create_key_bindings(on_shift_tab=None) -> KeyBindings:
-    """创建 key bindings：Alt+Enter 插入换行，Shift+Tab 切换权限模式"""
+def _create_key_bindings(on_shift_tab=None, on_tab=None) -> KeyBindings:
+    """创建 key bindings：Alt+Enter 插入换行，Shift+Tab 切换权限模式，Tab 命令补全"""
     kb = KeyBindings()
 
     @kb.add("escape", "enter")
@@ -57,7 +61,212 @@ def _create_key_bindings(on_shift_tab=None) -> KeyBindings:
         if on_shift_tab is not None:
             on_shift_tab()
 
+    @kb.add("tab")
+    def _(event):
+        """Tab 命令补全：单匹配直接补全，多匹配弹列表（F9.6）"""
+        if on_tab is not None:
+            on_tab(event.current_buffer)
+
     return kb
+
+
+class SlashCompleter(Completer):
+    """注册表派生补全（F9）：/ 前缀匹配 name、排除 hidden、显示 name+description。
+
+    只参与命令名前缀匹配（F9.2）；hidden 命令不参与（F9.5，由 registry.complete 保证）。
+    """
+
+    def __init__(self, repl: "REPL") -> None:
+        self._repl = repl
+
+    def get_completions(self, document, complete_event):
+        text = document.text_before_cursor
+        if not text.startswith("/"):
+            return
+        registry = self._repl.command_registry
+        if registry is None:
+            return
+        for cmd in registry.complete(text):
+            yield Completion(
+                cmd.name,
+                start_position=-len(text),
+                display=f"/{cmd.name}  {cmd.description}",
+            )
+
+
+class RichUIController:
+    """实现 UIController（F6），包住 REPL 的 console / 模式 / token / 流式 / 退出 / 会话操作。
+
+    命令 handler 经此接口操作界面，不直接触碰 REPL 内部（F6.2/F6.3）。
+    show_message 一律 escape——命令输出视为纯文本，防止用户/计划内容里的 [] 被 Rich 当 markup 解析。
+    """
+
+    def __init__(self, repl: "REPL") -> None:
+        self._repl = repl
+
+    # ── 输出 ──────────────────────────────────────────────
+    def show_message(self, text: str, style: str = "") -> None:
+        self._repl._console.print(escape(text), style=style or None)
+
+    # ── 用户消息注入（KindPrompt，F3.4）────────────────────
+    async def send_user_message(self, text: str) -> None:
+        repl = self._repl
+        await repl._run_stream(text, "normal", "")
+
+    # ── 按指定模式触发一轮 Agent（KindUI，/do /plan <task>）──
+    async def run_agent(
+        self,
+        user_input: str,
+        mode: str = "normal",
+        plan_content: str = "",
+        execute_slug: str = "",
+    ) -> None:
+        repl = self._repl
+        if execute_slug:
+            repl._executing_slug = execute_slug
+        await repl._run_stream(user_input, mode, plan_content)
+        if mode == "plan":
+            await repl._confirm_pending_plan()
+        repl.state = SessionState.IDLE
+
+    # ── 权限模式 ───────────────────────────────────────────
+    def get_permission_mode(self) -> str:
+        return self._repl._permission_mode_label
+
+    def set_permission_mode(self, mode: str) -> None:
+        parsed = PermissionMode.parse(str(mode))
+        if parsed is None:
+            raise ValueError(f"未知权限模式: {mode}")
+        repl = self._repl
+        repl._permission_mode = parsed
+        if repl.agent.permission is not None:
+            repl.agent.permission.set_mode(parsed)
+
+    # ── App 模式（plan / normal）────────────────────────────
+    def get_app_mode(self) -> str:
+        return self._repl.mode.value
+
+    def set_app_mode(self, mode: str) -> None:
+        repl = self._repl
+        if mode not in ("plan", "normal"):
+            raise ValueError(f"未知 App 模式: {mode}")
+        repl.mode = AppMode.PLAN if mode == "plan" else AppMode.NORMAL
+
+    # ── 查询 ───────────────────────────────────────────────
+    def query_token_usage(self) -> tuple[int, int]:
+        return self._repl._session_in_tokens, self._repl._session_out_tokens
+
+    def query_tool_count(self) -> int:
+        return self._repl.agent.registry.count()
+
+    def query_memory_files(self) -> list[str]:
+        mm = self._repl.memory_manager
+        if mm is None:
+            return []
+        return [n.filename for n in mm.list_notes()]
+
+    def get_model_name(self) -> str:
+        return getattr(self._repl.agent.provider, "model", "") or ""
+
+    def get_cwd(self) -> str:
+        return os.getcwd()
+
+    # ── 生命周期 ───────────────────────────────────────────
+    def request_exit(self) -> None:
+        repl = self._repl
+        repl._exit_requested = True
+        repl.agent.cancel()  # 通知后台任务收 CancelledError（N12 最接近的等价实现）
+
+    async def request_session_list(self) -> None:
+        """/resume：打开历史会话列表，选中后恢复（沿用 ch09 约束）。"""
+        repl = self._repl
+        runtime, archive = repl.session_runtime, repl.session_archive
+        if runtime is None or archive is None:
+            self.show_message("当前未启用会话恢复", style="yellow")
+            return
+        sessions = archive.list()
+        if not sessions:
+            self.show_message("没有可恢复的会话", style="yellow")
+            return
+        repl.state = SessionState.RESUMING
+        try:
+            options = [
+                (
+                    s.session_id,
+                    f"{s.title or '(无标题)'}  {s.session_id}  {s.model or ''}",
+                )
+                for s in sessions
+            ]
+            selected = await repl._ask_choice("选择会话：\n", options)
+            if selected:
+                await self.resume_session(selected)
+                self.show_message(f"已恢复会话 {selected}", style="green")
+        finally:
+            repl.state = SessionState.IDLE
+
+    async def resume_session(self, session_id: str) -> None:
+        """/session_resume：恢复指定会话并把 agent/context 指向恢复后的会话。"""
+        repl = self._repl
+        runtime = repl.session_runtime
+        if runtime is None:
+            self.show_message("当前未启用会话恢复", style="yellow")
+            return
+        conv = await runtime.resume(session_id)
+        self._repoint(conv)
+
+    async def new_session(self) -> None:
+        """/session_new：新建会话并把 agent/context 指向新会话。"""
+        repl = self._repl
+        runtime = repl.session_runtime
+        if runtime is None:
+            self.show_message("当前未启用会话管理", style="yellow")
+            return
+        conv = runtime.create_new()
+        self._repoint(conv)
+
+    def _repoint(self, conv: object) -> None:
+        """把 agent 与 context_mgr 指向新的 ConversationManager（旧引用留档不污染）。"""
+        repl = self._repl
+        repl.agent.conv = conv
+        cm = getattr(repl.agent, "_context_mgr", None)
+        if cm is not None:
+            cm._conv = conv
+
+    async def request_compact(self) -> None:
+        """/compact：手动压缩（走 _handle_compact 的事件流与熔断菜单）。"""
+        await self._repl._handle_compact()
+
+    async def request_clear_session(self) -> None:
+        """/clear：按 plan.md「/clear 原子重置顺序」执行。"""
+        repl = self._repl
+        runtime = repl.session_runtime
+        if runtime is None:
+            self.show_message("当前未启用会话持久化，无法 /clear", style="yellow")
+            return
+        conv = runtime.create_new()  # close 旧 writer → 新会话上下文 → 新 writer → 重建 Conversation
+        repl.agent.conv = conv
+        cm = getattr(repl.agent, "_context_mgr", None)
+        if cm is not None:
+            cm.reset_for_new_session(conv)  # 清 L1 替换账本 + 自动闸 + 锚点 + 指向新会话（T0b）
+        repl._session_in_tokens = 0
+        repl._session_out_tokens = 0
+        repl._current_turn = 0
+        repl._executing_slug = ""
+        repl.mode = AppMode.NORMAL
+
+    # ── 交互选择 ───────────────────────────────────────────
+    async def choose(
+        self,
+        question: str,
+        options: list[tuple[str, str]],
+        default_index: int = 0,
+    ) -> str | None:
+        return await self._repl._ask_choice(question, options, default_index)
+
+    async def choose_multi(
+        self, question: str, options: list[tuple[str, str]]
+    ) -> list[str] | None:
+        return await self._repl._ask_multi_choice(question, options)
 
 
 class REPL:
@@ -72,6 +281,8 @@ class REPL:
         session_runtime=None,
         session_archive=None,
         memory_manager=None,
+        command_registry: CommandRegistry | None = None,
+        command_ctx: CommandContext | None = None,
     ) -> None:
         self.agent = agent
         self.renderer = renderer
@@ -86,6 +297,12 @@ class REPL:
         self.session_runtime = session_runtime
         self.session_archive = session_archive
         self.memory_manager = memory_manager
+
+        # ch10：命令系统
+        self.command_registry = command_registry
+        self.command_ctx = command_ctx
+        self.ui = RichUIController(self)  # UIController 实现（CommandContext.ui 注入用）
+        self._exit_requested = False
 
         # 累计 token 用量
         self._session_in_tokens: int = 0
@@ -109,8 +326,13 @@ class REPL:
         self._approve_cursor: int = 0
 
         self._session = PromptSession(
-            key_bindings=_create_key_bindings(self._cycle_permission_mode),
+            key_bindings=_create_key_bindings(
+                self._cycle_permission_mode,
+                self._handle_tab,
+            ),
             style=_PROMPT_STYLE,
+            completer=SlashCompleter(self),
+            complete_while_typing=True,
         )
         # 交互选择（_ask_choice / _ask_multi_choice）使用独立 session
         self._choice_session = PromptSession(
@@ -157,15 +379,24 @@ class REPL:
 
     @property
     def _toolbar(self) -> str:
-        """底部状态栏：左侧权限模式，右侧 token 用量"""
+        """底部状态栏：左侧权限模式，右侧 token 用量；中部高频命令提示从注册表派生（F11.2/N5）。"""
         pm = self._permission_mode_label
         tokens = f"Σ in:{self._session_in_tokens} out:{self._session_out_tokens}"
-        return f"{pm} | Shift+Tab 切换模式 | Alt+Enter 换行，Enter 发送 | /plan /do /compact /delete-plan /normal /exit | {tokens}"
+        reg = self.command_registry
+        if reg is not None:
+            names = [f"/{c.name}" for c in reg.list()[:6]]
+            hint = " ".join(names) + " | /help 查看全部"
+        else:
+            hint = "/help"
+        return f"{pm} | Shift+Tab 切换模式 | Alt+Enter 换行，Enter 发送 | {hint} | {tokens}"
 
     async def run(self) -> None:
-        """主循环"""
+        """主循环：回车输入 → dispatch_slash 分流（True=命令处理完）→ 否则走 AgentLoop。"""
         try:
             while True:
+                if self._exit_requested:
+                    self._console.print("再见！")
+                    break
                 try:
                     user_input = await self._session.prompt_async(
                         "❯ ",
@@ -190,298 +421,125 @@ class REPL:
                 if not text:
                     continue
 
-                if text in ("/exit", "/quit"):
-                    self._console.print("再见！")
-                    break
-
-                if text == "/resume":
-                    await self._handle_resume()
-                    continue
-                if text.startswith("/session"):
-                    await self._handle_session_command(text)
-                    continue
-                if text.startswith("/memory"):
-                    await self._handle_memory_command(text)
-                    continue
-
-                # ch08：/compact 手动压缩命令（不写 conversation，直接调 run_force_compact）
-                if text in ("/compact", "/compact "):
-                    await self._handle_compact()
+                # ch10：命令分流——/exit 经 dispatch 置 _exit_requested，返 True
+                if await self.dispatch_slash(text):
+                    if self._exit_requested:
+                        self._console.print("再见！")
+                        break
                     continue
 
                 await self._process_input(text)
+                if self._exit_requested:
+                    self._console.print("再见！")
+                    break
 
         finally:
             pass
 
     async def _process_input(self, text: str) -> None:
-        if text == "/resume":
-            await self._handle_resume()
-            return
-        """提交用户输入，根据命令切换模式，启动 Agent"""
-        if text.startswith("/") and not self._is_known_command(text):
-            self._console.print(
-                "未知命令。可用命令：/plan /do /compact /normal /exit",
-                style="yellow",
-            )
-            return
-
-        # 重置执行标记（/do 或确认弹窗时重新设置）
+        """提交普通用户输入（所有 "/" 前缀输入已被 dispatch_slash 拦截），启动 Agent。"""
+        # 重置执行标记（/do 或确认弹窗时通过 run_agent(execute_slug) 重新设置）
         self._executing_slug = ""
-
-        # 无状态命令：/delete-plan 直接交互，不进流式
-        if text == "/delete-plan":
-            await self._delete_plan_interactive()
-            return
-
-        # 退出计划模式
-        if text in ("/normal", "/exit-plan"):
-            self.mode = AppMode.NORMAL
-            self._console.print("已退出计划模式，回到普通模式。", style="bold cyan")
-            return
-
-        # 识别斜杠命令
-        if text in ("/plan", "/plan "):
-            # 无参数：进入计划模式但不启动 Agent，等用户描述任务
-            self.mode = AppMode.PLAN
-            # plan 模式使用 plan 权限矩阵
-            self._permission_mode = PermissionMode.PLAN
-            if self.agent.permission is not None:
-                self.agent.permission.set_mode(PermissionMode.PLAN)
-            self._console.print(
-                "已进入计划模式。请直接描述你的任务，例如：创建一个 hello.txt 文件。",
-                style="bold cyan",
-            )
-            return
-        elif text.startswith("/plan "):
-            self.mode = AppMode.PLAN
-            self._permission_mode = PermissionMode.PLAN
-            if self.agent.permission is not None:
-                self.agent.permission.set_mode(PermissionMode.PLAN)
-            user_input = text.removeprefix("/plan").strip()
-            agent_mode = "plan"
-            plan_content = ""
-        elif text.startswith("/do"):
-            # /do 不改变当前模式：plan 会话中执行后仍停留在 plan 模式
-            slug_arg = text.removeprefix("/do").strip()
-            if slug_arg:
-                # /do <slug>：直接执行指定 plan
-                plan_meta = self.plan_manager.get_plan(slug_arg)
-                if plan_meta is None:
-                    self._console.print(f"未找到计划: {slug_arg}", style="bold red")
-                    return
-                plan_content = self.plan_manager.read_plan_content(slug_arg)
-                if not plan_content:
-                    self._console.print(f"计划文件为空: {slug_arg}", style="bold red")
-                    return
-                await self._run_plan_execution(plan_meta, plan_content)
-                return
-            else:
-                # /do（无参）：内联列出所有 plan 供选择
-                result = await self._select_plan_interactive()
-                if result is None:
-                    return
-                plan_meta, plan_content = result
-                await self._run_plan_execution(plan_meta, plan_content)
-                return
+        if self.mode == AppMode.PLAN:
+            # 计划模式中，普通输入视为计划任务
+            user_input, agent_mode, plan_content = text, "plan", ""
         else:
-            if self.mode == AppMode.PLAN:
-                # 计划模式中，普通输入视为计划任务
-                user_input = text
-                agent_mode = "plan"
-                plan_content = ""
-            else:
-                self.mode = AppMode.NORMAL
-                user_input = text
-                agent_mode = "normal"
-                plan_content = ""
+            self.mode = AppMode.NORMAL
+            user_input, agent_mode, plan_content = text, "normal", ""
 
         await self._run_stream(user_input, agent_mode, plan_content)
-
-        # Plan 完成后确认（带 plan 文件信息，方向键选择）
-        if self._pending_plan:
-            plan_buffer = self._pending_plan
-            slug = self._pending_slug
-            self._pending_plan = ""
-            self._pending_slug = ""
-            self.state = SessionState.IDLE
-
-            # 查 plan 元数据组装信息
-            meta = self.plan_manager.get_plan(slug)
-            if meta:
-                status = "已执行" if meta.executed else "未执行"
-                info = (
-                    f"计划已保存: plans/{meta.file}\n"
-                    f"创建时间: {meta.created_at}\n"
-                    f"状态: {status}\n"
-                )
-            else:
-                info = f"计划已保存: plans/{slug}.md"
-
-            confirm = await self._ask_choice(
-                info,
-                [
-                    (f"/do {slug}", f"/do {slug} — 执行此计划"),
-                    ("not now", "not now — 暂不执行，保留计划"),
-                ],
-                default_index=1,  # 默认选 not now，防误触
-            )
-
-            if confirm and confirm != "not now" and meta is not None:
-                # 用户选择执行：打印信息后执行（与 /do 路径一致）
-                await self._run_plan_execution(meta, plan_buffer)
-
+        await self._confirm_pending_plan()
         # 不重置模式：plan 会话中执行/不执行后仍停留在 plan 模式
         self.state = SessionState.IDLE
 
-    @staticmethod
-    def _is_known_command(text: str) -> bool:
-        """Return whether a slash command belongs to the REPL command surface."""
-        command = text.split(maxsplit=1)[0]
-        return command in {
-            "/compact",
-            "/resume",
-            "/session",
-            "/memory",
-            "/delete-plan",
-            "/do",
-            "/exit",
-            "/exit-plan",
-            "/normal",
-            "/plan",
-            "/quit",
-        }
+    async def dispatch_slash(self, text: str) -> bool:
+        """命令分流器：命中并处理完成返回 True；非命令返回 False（走 AgentLoop）。
 
-    async def _handle_resume(self) -> None:
-        if self.state in (SessionState.STREAMING, SessionState.APPROVING):
-            self._console.print("请等待当前任务完成", style="yellow")
-            return
-        if self.session_archive is None or self.session_runtime is None:
-            self._console.print("当前未启用会话恢复", style="yellow")
-            return
-        sessions = self.session_archive.list()
-        if not sessions:
-            self._console.print("没有可恢复的会话", style="yellow")
-            return
-        self.state = SessionState.RESUMING
-        try:
-            options = [
-                (
-                    s.session_id,
-                    f"{s.title or '(无标题)'}  {s.session_id}  {s.model or ''}",
-                )
-                for s in sessions
-            ]
-            selected = await self._ask_choice("选择会话：\n", options)
-            if selected:
-                await self.session_runtime.resume(selected)
-                self._console.print(f"已恢复会话 {selected}", style="green")
-        finally:
-            self.state = SessionState.IDLE
-
-    async def _handle_session_command(self, text: str) -> None:
-        if self.session_archive is None:
-            self._console.print("当前未启用会话管理", style="yellow")
-            return
-        parts = text.split()
-        sub = parts[1] if len(parts) > 1 else "list"
-        if sub == "list":
-            for s in self.session_archive.list():
-                self._console.print(f"{s.session_id} {s.title[:50]}")
-        elif sub == "path":
-            sid = (
-                parts[2]
-                if len(parts) > 2
-                else (
-                    self.session_runtime.context.session_id
-                    if self.session_runtime and self.session_runtime.context
-                    else None
-                )
-            )
-            if sid:
-                rows = [s for s in self.session_archive.list() if s.session_id == sid]
-                if rows:
-                    self._console.print(str(rows[0].path))
-        elif sub == "new" and self.session_runtime:
-            self.session_runtime.create_new()
-            self._console.print("已创建新会话")
-        elif sub == "resume" and len(parts) > 2 and self.session_runtime:
-            await self.session_runtime.resume(parts[2])
-        elif sub == "clean":
-            removed = self.session_archive.clean_expired(
-                active_session_id=getattr(
-                    getattr(self.session_runtime, "context", None), "session_id", None
-                )
-            )
-            self._console.print(f"已清理 {len(removed)} 个会话")
-
-    async def _handle_memory_command(self, text: str) -> None:
-        """/memory list/show/edit/path/clear：查看、编辑、定位、清空记忆（spec F13）。
-
-        删除及清空必须二次确认（AC25）；show/edit/path 需要精确文件名。
+        ch10 F2/AC2："/" 前缀输入一律在此处理；未命中/退化形态输出引导 /help（不拼 "/+name"，
+        避免 `"未知命令: /, ..."` 悬空斜杠）；命令异常上屏不崩 REPL（F6 兜底）。
         """
-        if self.memory_manager is None:
-            self._console.print("当前未启用记忆系统", style="yellow")
+        parsed = parse_command(text)
+        if parsed is None:
+            return False  # 空输入 / 非斜杠
+        name, args = parsed
+        cmd = self.command_registry.get(name) if name else None
+        if cmd is None:
+            self._console.print("未知命令。可用命令: 输入 /help 查看。", style="yellow")
+            return True
+        if args.strip() and not cmd.usage:
+            # 未声明参数的命令携带参数 → 按未命中处理（F7.2）
+            self._console.print("未知命令。可用命令: 输入 /help 查看。", style="yellow")
+            return True
+        # 状态机门：KindUI/KindPrompt 仅 idle（N3a/F4.1）
+        if cmd.kind in (CommandKind.UI, CommandKind.PROMPT) and self.state != SessionState.IDLE:
+            self._console.print("请等待当前任务完成", style="yellow")
+            return True
+        if self.command_ctx is None:
+            self._console.print("命令系统未初始化", style="red")
+            return True
+        try:
+            await cmd.handler(self.command_ctx, args)
+        except Exception as exc:  # noqa: BLE001 —— 命令实现出错对用户可见，不崩 REPL
+            self._console.print(f"命令执行失败: {exc}", style="red")
+        return True
+
+    def _handle_tab(self, buffer) -> None:
+        """Tab 命令补全（F9.6）：单匹配直接补全；多匹配用 complete_next 弹列表。"""
+        if self.state != SessionState.IDLE:
             return
-        parts = text.split()
-        sub = parts[1] if len(parts) > 1 else "list"
-        if sub == "list":
-            notes = self.memory_manager.list_notes()
-            if not notes:
-                self._console.print("（暂无记忆）", style="dim")
-                return
-            for n in notes:
-                # scope 用括号而非方括号，避免被 Rich 解析为 markup 标签
-                self._console.print(
-                    f"({n.scope}) {n.filename} — {n.title} ({n.type})"
-                )
-        elif sub == "show" and len(parts) > 2:
-            content = self.memory_manager.show(parts[2])
-            if content is None:
-                self._console.print(f"未找到记忆: {parts[2]}", style="yellow")
-                return
-            self._console.print(f"── {parts[2]} ──", style="bold")
-            self._console.print(content)
-        elif sub == "edit" and len(parts) > 2:
-            content = " ".join(parts[3:]) if len(parts) > 3 else ""
-            if not content:
-                self._console.print("用法: /memory edit <file.md> <新内容>", style="yellow")
-                return
-            try:
-                note = self.memory_manager.edit(parts[2], content)
-            except ValueError:
-                self._console.print(f"未找到记忆: {parts[2]}", style="yellow")
-                return
-            self._console.print(f"已更新 {note.filename}", style="green")
-        elif sub == "path":
-            for n in self.memory_manager.list_notes():
-                if len(parts) > 2 and n.filename != parts[2]:
-                    continue
-                dir_path = (
-                    self.memory_manager.project_store.directory
-                    if n.scope == "project"
-                    else self.memory_manager.user_store.directory
-                )
-                self._console.print(str(dir_path / n.filename))
-        elif sub == "clear":
-            confirm = await self._ask_choice(
-                "确认清空全部记忆？此操作不可恢复\n",
-                [
-                    ("yes", "yes — 确认清空"),
-                    ("no", "no — 取消"),
-                ],
-                default_index=1,  # 默认取消，防误触
-            )
-            if confirm != "yes":
-                self._console.print("已取消", style="dim")
-                return
-            removed = self.memory_manager.clear()
-            self._console.print(f"已清空 {removed} 条记忆", style="bold green")
+        text = buffer.text
+        if not text.startswith("/"):
+            return
+        reg = self.command_registry
+        if reg is None:
+            return
+        matches = reg.complete(text)
+        if not matches:
+            return
+        if len(matches) == 1:
+            cmd = matches[0]
+            buffer.text = "/" + cmd.name + " "
+            buffer.cursor_position = len(buffer.text)
+            if cmd.arg_prompt:
+                self._console.print(f"  用法: {cmd.usage or cmd.arg_prompt}", style="dim")
         else:
-            self._console.print(
-                "用法: /memory list | show <file> | edit <file> <内容> | path [file] | clear",
-                style="yellow",
+            # 多匹配：打开补全菜单（complete_while_typing 下已实时显示候选）
+            buffer.complete_next()
+
+    async def _confirm_pending_plan(self) -> None:
+        """Plan 完成后确认（带 plan 文件信息，方向键选择）——从 _process_input 抽出，/plan 路径复用。"""
+        if not self._pending_plan:
+            return
+        plan_buffer = self._pending_plan
+        slug = self._pending_slug
+        self._pending_plan = ""
+        self._pending_slug = ""
+        self.state = SessionState.IDLE
+
+        # 查 plan 元数据组装信息
+        meta = self.plan_manager.get_plan(slug)
+        if meta:
+            status = "已执行" if meta.executed else "未执行"
+            info = (
+                f"计划已保存: plans/{meta.file}\n"
+                f"创建时间: {meta.created_at}\n"
+                f"状态: {status}\n"
             )
+        else:
+            info = f"计划已保存: plans/{slug}.md"
+
+        confirm = await self._ask_choice(
+            info,
+            [
+                (f"/do {slug}", f"/do {slug} — 执行此计划"),
+                ("not now", "not now — 暂不执行，保留计划"),
+            ],
+            default_index=1,  # 默认选 not now，防误触
+        )
+
+        if confirm and confirm != "not now" and meta is not None:
+            # 用户选择执行：打印信息后执行（与 /do 路径一致）
+            await self._run_plan_execution(meta, plan_buffer)
 
     async def _run_stream(self, user_input: str, mode: str, plan_content: str) -> None:
         """启动并等待 Agent 流式执行"""
@@ -967,75 +1025,6 @@ class REPL:
         self._console.print(f"  创建时间: {escape(meta.created_at)}", style="dim")
         self._console.print(f"  状态: {status}", style="dim")
         self._console.print()
-
-    async def _select_plan_interactive(self) -> tuple[PlanMeta, str] | None:
-        """/do 无参时列出所有 plan，用内联方向键选择"""
-        plans = self.plan_manager.list_plans()
-        if not plans:
-            self._console.print("没有已保存的计划。", style="yellow")
-            return None
-
-        options: list[tuple[str, str]] = []
-        for i, p in enumerate(plans, 1):
-            status = "[已执行]" if p.executed else "[待执行]"
-            label = f"{i}. {p.slug} — {p.task[:30]} {status} ({p.created_at[:10]})"
-            options.append((p.slug, label))
-
-        slug = await self._ask_choice(
-            "选择要执行的计划：\n",
-            options,
-            default_index=0,
-        )
-        if slug is None:
-            self._console.print("已取消", style="dim")
-            return None
-
-        meta = self.plan_manager.get_plan(slug)
-        if meta is None:
-            self._console.print(f"未找到计划: {slug}", style="bold red")
-            return None
-        plan_content = self.plan_manager.read_plan_content(slug)
-        if not plan_content:
-            self._console.print(f"计划文件为空: {slug}", style="bold red")
-            return None
-        return meta, plan_content
-
-    async def _delete_plan_interactive(self) -> None:
-        """/delete-plan：内联多选删除 plan 文件"""
-        plans = self.plan_manager.list_plans()
-        if not plans:
-            self._console.print("没有可删除的计划。", style="yellow")
-            return
-
-        options: list[tuple[str, str]] = []
-        for p in plans:
-            status = "[已执行]" if p.executed else "[待执行]"
-            label = f"{p.slug} — {p.task[:30]} {status} ({p.created_at[:10]})"
-            options.append((p.slug, label))
-
-        result = await self._ask_multi_choice("选择要删除的计划：\n", options)
-
-        if result is None:
-            self._console.print("已取消", style="dim")
-            return
-        if not result:
-            self._console.print("未选中任何计划", style="yellow")
-            return
-
-        confirm = await self._ask_choice(
-            f"确认删除 {len(result)} 个计划？\n",
-            [
-                ("yes", "yes — 确认删除"),
-                ("no", "no — 取消"),
-            ],
-            default_index=1,
-        )
-        if confirm != "yes":
-            self._console.print("已取消", style="dim")
-            return
-
-        self.plan_manager.delete_plans(result)
-        self._console.print(f"已删除 {len(result)} 个计划", style="bold green")
 
     def _show_retry(self, attempt: int) -> None:
         self._console.print(f"重试 {attempt}/3…", style="bold yellow")

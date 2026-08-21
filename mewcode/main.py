@@ -17,8 +17,6 @@ from mewcode.agent.events import EventType
 from mewcode.config.loader import load as load_config
 from mewcode.config.loader import load_ccswitch
 from mewcode.context import ContextManager, FileTracker, SkillRegistry
-from mewcode.context.session import new_session_context
-from mewcode.conversation.manager import ConversationManager
 from mewcode.instructions import InstructionLoader
 from mewcode.mcp import MCPManager, load_mcp_servers
 from mewcode.memory import MemoryManager
@@ -30,8 +28,10 @@ from mewcode.prompt.env import collect_env, format_env
 from mewcode.prompt.resources import render_banner
 from mewcode.prompt.sections import fixed_sections, optional_sections
 from mewcode.provider.base import new_provider
-from mewcode.session.archive import clean_expired
-from mewcode.session.writer import SessionWriter
+from mewcode.session.archive import SessionArchive, clean_expired
+from mewcode.session.runtime import SessionRuntime
+from mewcode.slash import CommandContext, CommandRegistry
+from mewcode.slash.commands import register_all
 from mewcode.tools import Registry
 from mewcode.tools.memory_read import ReadMemoryTool
 from mewcode.tools.memory_write import WriteMemoryTool
@@ -101,23 +101,17 @@ def main() -> None:
 async def _amain(args: argparse.Namespace, config, provider) -> None:
     """主流程：MCP 初始化 -> Agent 装配 -> TUI/oneshot -> finally 关 MCP。"""
     cwd = os.getcwd()
-    session_context = new_session_context(cwd)
-    session_writer = SessionWriter(session_context.session_dir, model=provider.model)
+    # ch10：SessionRuntime 统一持有会话生命周期（create_new = 新会话上下文 + writer + Conversation）
+    session_runtime = SessionRuntime(cwd, max_turns=config.max_turns, model=provider.model)
+    session_archive = SessionArchive(cwd)
+    conversation = session_runtime.create_new()
     cleanup_task = asyncio.create_task(
         asyncio.to_thread(
             clean_expired,
             cwd,
             config.cleanup_period_days,
-            active_session_id=session_context.session_id,
+            active_session_id=session_runtime.session_id,
         )
-    )
-    conversation = ConversationManager(
-        config.max_turns,
-        on_append=session_writer.append_message,
-        on_replace=lambda messages: (
-            session_writer.write_compact_marker(),
-            session_writer.append_all(messages),
-        ),
     )
     registry = Registry.default()
 
@@ -216,13 +210,37 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
                 renderer,
                 plan_manager=plan_manager,
                 default_mode=config.default_mode,
+                session_runtime=session_runtime,
+                session_archive=session_archive,
                 memory_manager=memory,
             )
+            # ch10：命令注册 + CommandContext 组装。register_all 冲突 → 打印冲突名并退出（F1.3/N4）
+            cmd_registry = CommandRegistry()
+            try:
+                register_all(cmd_registry)
+            except RuntimeError as exc:
+                print(f"启动失败: 命令名/别名冲突 {exc}", file=sys.stderr)
+                sys.exit(1)
+            cmd_ctx = CommandContext(
+                registry=cmd_registry,
+                ui=repl.ui,
+                agent=agent,
+                conversation=conversation,
+                plan_manager=plan_manager,
+                session_runtime=session_runtime,
+                session_archive=session_archive,
+                memory_manager=memory,
+                permission=permission,
+                version=__version__,
+                cwd=cwd,
+            )
+            repl.command_registry = cmd_registry
+            repl.command_ctx = cmd_ctx
             await repl.run()
     finally:
         if not cleanup_task.done():
             cleanup_task.cancel()
-        session_writer.close()
+        session_runtime.close()
         # 统一关闭 MCP 连接（stdio 子进程终止 / HTTP 会话释放；5s 兜底）
         await mcp_mgr.close()
 

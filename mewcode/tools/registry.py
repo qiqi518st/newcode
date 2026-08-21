@@ -28,6 +28,10 @@ class Registry:
         """注册一个工具"""
         self._tools[tool.name] = tool
 
+    def count(self) -> int:
+        """已注册工具数量（O(1)，基于内部 dict 长度）。"""
+        return len(self._tools)
+
     def get(self, name: str) -> Tool | None:
         """按名称查找工具"""
         return self._tools.get(name)

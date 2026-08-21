@@ -20,7 +20,9 @@ from .engine import RuleEngine
 from .modes import PermissionMode, ToolCategory, resolve_mode
 from .rules import (
     RULE_FILE_LOCAL,
+    Rule,
     RuleLayers,
+    RuleSet,
     load_rules,
     load_settings,
 )
@@ -137,10 +139,79 @@ class PermissionChecker:
         self._layers = layers
         self._engine = RuleEngine(layers)
 
+    # ── ch10：/permission_* 命令支撑（T0a）────────────────────────
+
+    def _local_rules_path(self) -> str:
+        """本地规则文件路径（项目根下 .mewcode/permissions.local.yaml）。"""
+        return os.path.join(self._root, RULE_FILE_LOCAL)
+
+    def count_rules(self) -> int:
+        """统计三层规则文件（local/project/user）当前生效的规则总数。"""
+        total = 0
+        for layer in (self._layers.local, self._layers.project, self._layers.user):
+            total += len(layer.allow) + len(layer.deny)
+        return total
+
+    def add_rule(self, pattern: str, effect: str = "allow") -> None:
+        """写入一条本地规则（镜像 persist_local_allow 的写回路径），并同步内存层立即生效。
+
+        pattern 为用户提供的规则字面量（如 "Bash(git *)" 或 "Read"），不做转义—
+        与 persist_local_allow 不同，这里输入已是规则格式。effect 限 "allow"/"deny"。
+        """
+        action = "allow" if str(effect) == "allow" else "deny"
+        local_path = self._local_rules_path()
+        settings = load_settings(local_path)
+        if not isinstance(settings, dict):
+            settings = {}
+        permissions = settings.get("permissions", {})
+        if not isinstance(permissions, dict):
+            permissions = {}
+        rules = permissions.get(action, [])
+        if not isinstance(rules, list):
+            rules = []
+        if str(pattern) not in rules:
+            rules.append(str(pattern))
+            permissions[action] = rules
+            settings["permissions"] = permissions
+            os.makedirs(os.path.dirname(local_path), exist_ok=True)
+            with open(local_path, "w", encoding="utf-8") as f:
+                yaml.safe_dump(settings, f, allow_unicode=True, default_flow_style=False)
+        # 内存同步：让新规则对后续 check() 立即生效
+        rule = Rule.parse(str(pattern), action, local_path)
+        if rule is not None:
+            if action == "allow":
+                target = self._layers.local.allow
+            else:
+                target = self._layers.local.deny
+            if rule not in target:
+                target.append(rule)
+
+    def reset_rules(self) -> int:
+        """清空本地规则（仅清 allow/deny，保留 defaultMode 等其它配置），返回删除条数。"""
+        local_path = self._local_rules_path()
+        if not os.path.exists(local_path):
+            return 0
+        settings = load_settings(local_path)
+        removed = 0
+        if isinstance(settings, dict):
+            permissions = settings.get("permissions", {})
+            if isinstance(permissions, dict):
+                for key in ("allow", "deny"):
+                    lst = permissions.get(key)
+                    if isinstance(lst, list):
+                        removed += len(lst)
+                permissions["allow"] = []
+                permissions["deny"] = []
+                settings["permissions"] = permissions
+                with open(local_path, "w", encoding="utf-8") as f:
+                    yaml.safe_dump(settings, f, allow_unicode=True, default_flow_style=False)
+        # 内存同步清空本地层（复用同一 RuleLayers 对象，RuleEngine 立即看到）
+        self._layers.local = RuleSet()
+        return removed
+
     @staticmethod
     def create(project_root: str) -> "PermissionChecker":
         """工厂方法：解析项目根、加载三层配置、确定启动模式。
-
         即使致命错也返回非 null 空规则安全引擎 + stderr 警告；
         配置格式错误只降级对应文件，不抛致命异常。
         """
