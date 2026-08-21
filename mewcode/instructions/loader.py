@@ -114,9 +114,7 @@ class InstructionLoader:
             diagnostics.append(
                 InstructionDiagnostic(str(path), f"include cycle: {path}")
             )
-            return f"<!-- @include 检测到环路，已跳过: {path} -->", [
-                str(canonical)
-            ]
+            return f"<!-- @include 检测到环路，已跳过: {path} -->", [str(canonical)]
         if not canonical.is_file():
             return "", []
         if depth > self.max_depth:

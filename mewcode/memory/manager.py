@@ -41,8 +41,7 @@ class MemoryManager:
             "索引行格式 `- [类型] 标题 (文件名) - 摘要`。"
             "若某条记忆与当前任务相关、需要完整内容，用 read_memory 工具按文件名读取对应文件。"
             "当用户要求记住某条信息时，用 write_memory 工具记录，"
-            "禁止用 write_file/Bash 手动创建或修改记忆文件。\n\n"
-            + joined
+            "禁止用 write_file/Bash 手动创建或修改记忆文件。\n\n" + joined
         )
 
     def indexes(self) -> tuple[str, str]:
@@ -61,7 +60,10 @@ class MemoryManager:
 
     def _find(self, filename: str) -> tuple | None:
         """按文件名定位笔记，返回 (scope, store, note) 或 None。"""
-        for scope, store in (("project", self.project_store), ("user", self.user_store)):
+        for scope, store in (
+            ("project", self.project_store),
+            ("user", self.user_store),
+        ):
             for note in store.list_notes():
                 if note.filename == filename:
                     return scope, store, note

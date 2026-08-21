@@ -100,21 +100,18 @@ def _drop_to_limit(
         return messages, False
     groups = MessageGroupDropper.group_by_user(messages)
     truncated = False
-    while len(groups) > 1 and estimate_messages(
-        [m for g in groups for m in g]
-    ) > limit:
+    while len(groups) > 1 and estimate_messages([m for g in groups for m in g]) > limit:
         groups = groups[1:]
         truncated = True
     return [m for g in groups for m in g], truncated
 
 
-def _maybe_time_reminder(
-    result: RecoveryResult, now: float | None
-) -> None:
-    if result.last_ts and (time.time() if now is None else now) - result.last_ts > 6 * 3600:
-        hours = int(
-            ((time.time() if now is None else now) - result.last_ts) // 3600
-        )
+def _maybe_time_reminder(result: RecoveryResult, now: float | None) -> None:
+    if (
+        result.last_ts
+        and (time.time() if now is None else now) - result.last_ts > 6 * 3600
+    ):
+        hours = int(((time.time() if now is None else now) - result.last_ts) // 3600)
         result.time_reminder = (
             f"[系统提示] 本会话已暂停 {hours} 小时。部分上下文可能已过时，"
             "如需最新信息请重新读取相关文件。"

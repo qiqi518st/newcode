@@ -105,7 +105,9 @@ class Agent:
             if block:
                 parts.append(block)
         if self._active_skills is not None:
-            block = render_active_skills_block(active_to_prompt_entries(self._active_skills))
+            block = render_active_skills_block(
+                active_to_prompt_entries(self._active_skills)
+            )
             if block:
                 parts.append(block)
         return "\n\n".join(parts)

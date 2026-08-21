@@ -52,7 +52,8 @@ class ContextManager:
         model: str,
         protocol: str,
         file_tracker: FileTracker,
-        active_skills: object | None = None,  # ch11: ActiveSkills | None（压缩预算淘汰）
+        active_skills: object
+        | None = None,  # ch11: ActiveSkills | None（压缩预算淘汰）
         emit_event: Callable[[str, object], None] | None = None,
         workspace: str | None = None,
     ) -> None:

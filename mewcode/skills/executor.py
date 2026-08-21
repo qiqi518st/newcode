@@ -62,7 +62,7 @@ class Executor:
             )
             return
         rendered = render_body(skill, args)
-        if skill.is_fork():
+        if skill.meta.is_fork():
             await self._execute_fork(ctx, ui, skill, rendered)
         else:
             await self._execute_inline(ctx, ui, skill, rendered)
