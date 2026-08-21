@@ -175,7 +175,9 @@ class PermissionChecker:
             settings["permissions"] = permissions
             os.makedirs(os.path.dirname(local_path), exist_ok=True)
             with open(local_path, "w", encoding="utf-8") as f:
-                yaml.safe_dump(settings, f, allow_unicode=True, default_flow_style=False)
+                yaml.safe_dump(
+                    settings, f, allow_unicode=True, default_flow_style=False
+                )
         # 内存同步：让新规则对后续 check() 立即生效
         rule = Rule.parse(str(pattern), action, local_path)
         if rule is not None:
@@ -204,7 +206,9 @@ class PermissionChecker:
                 permissions["deny"] = []
                 settings["permissions"] = permissions
                 with open(local_path, "w", encoding="utf-8") as f:
-                    yaml.safe_dump(settings, f, allow_unicode=True, default_flow_style=False)
+                    yaml.safe_dump(
+                        settings, f, allow_unicode=True, default_flow_style=False
+                    )
         # 内存同步清空本地层（复用同一 RuleLayers 对象，RuleEngine 立即看到）
         self._layers.local = RuleSet()
         return removed

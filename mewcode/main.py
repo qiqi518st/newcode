@@ -102,7 +102,9 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
     """主流程：MCP 初始化 -> Agent 装配 -> TUI/oneshot -> finally 关 MCP。"""
     cwd = os.getcwd()
     # ch10：SessionRuntime 统一持有会话生命周期（create_new = 新会话上下文 + writer + Conversation）
-    session_runtime = SessionRuntime(cwd, max_turns=config.max_turns, model=provider.model)
+    session_runtime = SessionRuntime(
+        cwd, max_turns=config.max_turns, model=provider.model
+    )
     session_archive = SessionArchive(cwd)
     conversation = session_runtime.create_new()
     cleanup_task = asyncio.create_task(

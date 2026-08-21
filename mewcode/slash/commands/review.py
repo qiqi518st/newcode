@@ -7,8 +7,7 @@ from ..registry import CommandDef, CommandKind
 
 # 固定"代码审查请求"文本（F8.13：含审查关键字，但一律不读 diff / 不收集外部上下文）
 REVIEW_DIRECTIVE = (
-    "请审查当前上下文中的代码变更/已读取的文件，"
-    "指出潜在 bug、可读性问题和可简化处。"
+    "请审查当前上下文中的代码变更/已读取的文件，指出潜在 bug、可读性问题和可简化处。"
 )
 
 

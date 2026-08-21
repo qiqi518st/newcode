@@ -27,7 +27,11 @@ class UIController(Protocol):
 
     # ── 按指定模式触发一轮 Agent（KindUI 用，如 /do、/plan <task>）──
     async def run_agent(
-        self, user_input: str, mode: str = "normal", plan_content: str = "", execute_slug: str = ""
+        self,
+        user_input: str,
+        mode: str = "normal",
+        plan_content: str = "",
+        execute_slug: str = "",
     ) -> None: ...
 
     # ── 权限模式 ───────────────────────────────────────────
@@ -54,15 +58,21 @@ class UIController(Protocol):
     # ── 生命周期 ───────────────────────────────────────────
     def request_exit(self) -> None: ...  # 退出（先取消主 cancel scope，N12）
 
-    async def request_session_list(self) -> None: ...  # 打开历史会话列表并恢复（/resume）
+    async def request_session_list(
+        self,
+    ) -> None: ...  # 打开历史会话列表并恢复（/resume）
 
-    async def resume_session(self, session_id: str) -> None: ...  # 按 id 恢复会话（/session_resume）
+    async def resume_session(
+        self, session_id: str
+    ) -> None: ...  # 按 id 恢复会话（/session_resume）
 
     async def new_session(self) -> None: ...  # 新建会话（/session_new）
 
     async def request_compact(self) -> None: ...  # 触发上下文压缩（/compact）
 
-    async def request_clear_session(self) -> None: ...  # 清空并新建会话（/clear，原子重置）
+    async def request_clear_session(
+        self,
+    ) -> None: ...  # 清空并新建会话（/clear，原子重置）
 
     # ── 交互选择（/do、/resume、/delete-plan 用）────────────
     async def choose(
@@ -87,7 +97,11 @@ class NopUI:
         return None
 
     async def run_agent(
-        self, user_input: str, mode: str = "normal", plan_content: str = "", execute_slug: str = ""
+        self,
+        user_input: str,
+        mode: str = "normal",
+        plan_content: str = "",
+        execute_slug: str = "",
     ) -> None:
         return None
 
@@ -185,7 +199,11 @@ class RecordingUI(NopUI):
         self._record("send_user_message", text)
 
     async def run_agent(
-        self, user_input: str, mode: str = "normal", plan_content: str = "", execute_slug: str = ""
+        self,
+        user_input: str,
+        mode: str = "normal",
+        plan_content: str = "",
+        execute_slug: str = "",
     ) -> None:
         self._record("run_agent", user_input, mode, plan_content, execute_slug)
 

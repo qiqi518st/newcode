@@ -85,7 +85,9 @@ async def handle_memory_clear(ctx: CommandContext, args: str) -> None:
         ctx.ui.show_message("用法: /memory_clear [user|project]", style="yellow")
         return
     removed = m.clear(scope)
-    ctx.ui.show_message(f"已清空 {removed} 条记忆" if removed else "（无记忆可清空）", style="green")
+    ctx.ui.show_message(
+        f"已清空 {removed} 条记忆" if removed else "（无记忆可清空）", style="green"
+    )
 
 
 def build() -> list[CommandDef]:

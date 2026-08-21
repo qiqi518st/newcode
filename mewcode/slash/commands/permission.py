@@ -5,7 +5,9 @@ from __future__ import annotations
 from ..context import CommandContext
 from ..registry import CommandDef, CommandKind
 
-_USAGE_ADD = "/permission_add <规则> <效果>"  # 规则形如 "Bash(git *)"，效果 ∈ allow/deny
+_USAGE_ADD = (
+    "/permission_add <规则> <效果>"  # 规则形如 "Bash(git *)"，效果 ∈ allow/deny
+)
 
 
 async def handle_permission(ctx: CommandContext, _args: str) -> None:
@@ -39,13 +41,16 @@ async def handle_permission_add(ctx: CommandContext, args: str) -> None:
     if checker is None:
         ctx.ui.show_message("权限检查器未接线", style="yellow")
         return
-    parts = args.split()
-    if len(parts) < 2:
+    # 规则串可能含空格（如 "Bash(git *)"）→ 用 rsplit 把最后一个 token 当作效果
+    parts = args.rsplit(None, 1)
+    if len(parts) != 2:
         ctx.ui.show_message(f"用法: {_USAGE_ADD}", style="yellow")
         return
     pattern, effect = parts[0], parts[1]
     if effect not in ("allow", "deny"):
-        ctx.ui.show_message(f"效果必须是 allow 或 deny（收到: {effect}）", style="yellow")
+        ctx.ui.show_message(
+            f"效果必须是 allow 或 deny（收到: {effect}）", style="yellow"
+        )
         return
     try:
         checker.add_rule(pattern, effect)

@@ -26,7 +26,7 @@ async def handle_delete_plan(ctx: CommandContext, _args: str) -> None:
     options = [
         (
             p.slug,
-            f"{p.slug} — {p.task[:30]} [{'已执行' if p.executed else '待执行'}] ({p.created_at[:10]})"
+            f"{p.slug} — {p.task[:30]} [{'已执行' if p.executed else '待执行'}] ({p.created_at[:10]})",
         )
         for p in plans
     ]

@@ -112,6 +112,7 @@ class RichUIController:
     async def send_user_message(self, text: str) -> None:
         repl = self._repl
         await repl._run_stream(text, "normal", "")
+        repl.state = SessionState.IDLE
 
     # ── 按指定模式触发一轮 Agent（KindUI，/do /plan <task>）──
     async def run_agent(
@@ -243,11 +244,15 @@ class RichUIController:
         if runtime is None:
             self.show_message("当前未启用会话持久化，无法 /clear", style="yellow")
             return
-        conv = runtime.create_new()  # close 旧 writer → 新会话上下文 → 新 writer → 重建 Conversation
+        conv = (
+            runtime.create_new()
+        )  # close 旧 writer → 新会话上下文 → 新 writer → 重建 Conversation
         repl.agent.conv = conv
         cm = getattr(repl.agent, "_context_mgr", None)
         if cm is not None:
-            cm.reset_for_new_session(conv)  # 清 L1 替换账本 + 自动闸 + 锚点 + 指向新会话（T0b）
+            cm.reset_for_new_session(
+                conv
+            )  # 清 L1 替换账本 + 自动闸 + 锚点 + 指向新会话（T0b）
         repl._session_in_tokens = 0
         repl._session_out_tokens = 0
         repl._current_turn = 0
@@ -301,7 +306,9 @@ class REPL:
         # ch10：命令系统
         self.command_registry = command_registry
         self.command_ctx = command_ctx
-        self.ui = RichUIController(self)  # UIController 实现（CommandContext.ui 注入用）
+        self.ui = RichUIController(
+            self
+        )  # UIController 实现（CommandContext.ui 注入用）
         self._exit_requested = False
 
         # 累计 token 用量
@@ -471,7 +478,10 @@ class REPL:
             self._console.print("未知命令。可用命令: 输入 /help 查看。", style="yellow")
             return True
         # 状态机门：KindUI/KindPrompt 仅 idle（N3a/F4.1）
-        if cmd.kind in (CommandKind.UI, CommandKind.PROMPT) and self.state != SessionState.IDLE:
+        if (
+            cmd.kind in (CommandKind.UI, CommandKind.PROMPT)
+            and self.state != SessionState.IDLE
+        ):
             self._console.print("请等待当前任务完成", style="yellow")
             return True
         if self.command_ctx is None:
@@ -501,7 +511,9 @@ class REPL:
             buffer.text = "/" + cmd.name + " "
             buffer.cursor_position = len(buffer.text)
             if cmd.arg_prompt:
-                self._console.print(f"  用法: {cmd.usage or cmd.arg_prompt}", style="dim")
+                self._console.print(
+                    f"  用法: {cmd.usage or cmd.arg_prompt}", style="dim"
+                )
         else:
             # 多匹配：打开补全菜单（complete_while_typing 下已实时显示候选）
             buffer.complete_next()
