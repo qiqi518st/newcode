@@ -8,9 +8,6 @@ MEMORY 权限类别四档免确认。
 """
 
 import asyncio
-from pathlib import Path
-
-import pytest
 
 from mewcode.memory.manager import MemoryManager
 from mewcode.permission.checker import PermissionChecker, categorize
@@ -129,7 +126,7 @@ def test_write_memory_category_allow_all_modes(tmp_path):
 
 def test_write_memory_not_readonly_and_executes_through_checker(tmp_path):
     """防 bug：write_memory 必须非只读，且经 PermissionChecker 流水线应 ALLOW。"""
-    tool, manager = _tool(tmp_path)
+    tool, _manager = _tool(tmp_path)
     assert tool.read_only is False
     from mewcode.provider.base import ToolCall
 

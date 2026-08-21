@@ -35,6 +35,10 @@ class CompactAgent:
 
 
 def make_repl(agent):
+    from mewcode.slash import CommandContext, CommandRegistry
+    from mewcode.slash.commands import register_all
+    from mewcode.tui.app import RichUIController
+
     repl = object.__new__(REPL)
     repl.agent = agent
     repl._console = Console(record=True, width=80)
@@ -52,6 +56,24 @@ def make_repl(agent):
     repl._session_out_tokens = 0
     repl._current_turn = 0
     repl._retry_count = 0
+    repl.session_runtime = None
+    repl.session_archive = None
+    repl.memory_manager = None
+    # 命令系统接线（dispatch_slash 用）
+    reg = CommandRegistry()
+    register_all(reg)
+    repl.command_registry = reg
+    repl.ui = RichUIController(repl)
+    repl.command_ctx = CommandContext(
+        registry=reg,
+        ui=repl.ui,
+        agent=agent,
+        conversation=None,
+        plan_manager=repl.plan_manager,
+        session_runtime=None,
+        session_archive=None,
+    )
+    repl._exit_requested = False
     return repl
 
 
@@ -77,14 +99,16 @@ def test_compact_shows_token_change():
 
 
 def test_unknown_command_is_friendly_and_does_not_call_agent():
+    """防 bug：未知命令经 dispatch_slash 引导 /help 且不触发 Agent（AC2）。"""
     agent = CompactAgent(CompactOutcome(True, 1, 1, 0, True, "", []))
     repl = make_repl(agent)
 
-    asyncio.run(repl._process_input("/unknown"))
+    ok = asyncio.run(repl.dispatch_slash("/unknown"))
 
-    output = repl._console.export_text()
+    assert ok is True
+    output = repl._console.export_text(clear=False)
     assert "未知命令" in output
-    assert "/compact" in output
+    assert "/help" in output  # 引导指向 /help（N5：不硬编码其它命令名）
     assert agent.run_calls == 0
 
 
@@ -142,9 +166,10 @@ def test_context_events_use_prominent_white_marker():
 
 
 def test_plan_and_normal_commands_still_migrate_modes():
+    """防 N8：/plan /normal 经命令系统仍正确迁移 AppMode。"""
     repl = make_repl(CompactAgent(CompactOutcome(True, 1, 1, 0, True, "", [])))
 
-    asyncio.run(repl._process_input("/plan"))
+    asyncio.run(repl.dispatch_slash("/plan"))
     assert repl.mode == AppMode.PLAN
-    asyncio.run(repl._process_input("/normal"))
+    asyncio.run(repl.dispatch_slash("/normal"))
     assert repl.mode == AppMode.NORMAL

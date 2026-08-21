@@ -31,6 +31,7 @@ def _raw_repl():
     repl._permission_mode = PermissionMode.DEFAULT
     repl.state = SessionState.IDLE
     repl.mode = None
+    repl.command_registry = None
     repl._approve_cursor = 0
     repl._pending_hitl = None
     repl._console = Console(record=True, width=60)

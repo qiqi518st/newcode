@@ -207,6 +207,7 @@ def test_ask_choice_arrow_navigation():
     async def run_choice(keys: str, default_index: int = 1):
         repl = object.__new__(REPL)
         repl.mode = None
+        repl.command_registry = None
         repl._session_in_tokens = 0
         repl._session_out_tokens = 0
         with create_pipe_input() as pipe:
@@ -252,6 +253,7 @@ def test_ask_multi_choice_space_toggle_navigation():
     async def run_multi(keys: str):
         repl = object.__new__(REPL)
         repl.mode = None
+        repl.command_registry = None
         repl._session_in_tokens = 0
         repl._session_out_tokens = 0
         with create_pipe_input() as pipe:
@@ -305,6 +307,7 @@ def test_choice_session_pollution_regression():
             )
             repl = REPL.__new__(REPL)
             repl.mode = None
+            repl.command_registry = None
             repl._session_in_tokens = 0
             repl._session_out_tokens = 0
             repl._choice_session = choice_session

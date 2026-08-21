@@ -1,7 +1,9 @@
-"""TUI /memory 命令测试（ch09 T16/T17，spec F13 / AC25-AC27）。
+"""TUI /memory 命令测试（ch09 T16/T17 迁移到 ch10 新命令面）。
 
-防 bug：/memory 未装配时崩溃、list/show/edit/path/clear 子命令路由错误、
-clear 未二次确认误删、show/edit 用错误文件名静默失败、记忆全空时 list 崩溃。
+ch10 变更：/memory show/edit/path 子命令按 spec 移除（F8.10 只读列文件名），
+清空改走 /memory_clear（F8.16，不要求二次确认）；详情走 /memory_list；新增 /memory_add。
+
+防 bug（保留原意图）：未装配时崩溃、记忆全空时崩溃、新增/清空路由错误。
 """
 
 import asyncio
@@ -12,7 +14,25 @@ from mewcode.memory.manager import MemoryManager
 from mewcode.memory.models import MemoryOperation
 from mewcode.permission.modes import PermissionMode
 from mewcode.plans import PlanManager
-from mewcode.tui.app import REPL, AppMode, SessionState
+from mewcode.slash import CommandContext, CommandRegistry
+from mewcode.slash.commands import register_all
+from mewcode.tui.app import REPL, AppMode, RichUIController, SessionState
+
+
+class _StubAgent:
+    def __init__(self):
+        self.conv = None
+        self._context_mgr = None
+        self.registry = type("R", (), {"count": lambda self: 3})()
+        self.permission = None
+        self.provider = None
+
+    def cancel(self):
+        pass
+
+    async def run(self, user_input, mode="normal", plan_content=""):
+        if False:
+            yield None
 
 
 def make_repl(tmp_path, *, with_memory=True):
@@ -34,6 +54,7 @@ def make_repl(tmp_path, *, with_memory=True):
     repl._retry_count = 0
     repl.session_runtime = None
     repl.session_archive = None
+    repl.agent = _StubAgent()
     if with_memory:
         repl.memory_manager = MemoryManager(
             str(tmp_path / ".mewcode" / "memory"),
@@ -41,10 +62,27 @@ def make_repl(tmp_path, *, with_memory=True):
         )
     else:
         repl.memory_manager = None
+    reg = CommandRegistry()
+    register_all(reg)
+    repl.command_registry = reg
+    repl.ui = RichUIController(repl)
+    repl.command_ctx = CommandContext(
+        registry=reg,
+        ui=repl.ui,
+        agent=repl.agent,
+        conversation=None,
+        plan_manager=repl.plan_manager,
+        session_runtime=None,
+        session_archive=None,
+        memory_manager=repl.memory_manager,
+    )
+    repl._exit_requested = False
     return repl
 
 
-def _seed_note(manager, *, scope="project", filename="pref_short.md", content="keep it short"):
+def _seed_note(
+    manager, *, scope="project", filename="pref_short.md", content="keep it short"
+):
     """直接写入一条记忆笔记（绕过 LLM 更新路径）。"""
     store = manager.project_store if scope == "project" else manager.user_store
     store.apply(
@@ -59,111 +97,64 @@ def _seed_note(manager, *, scope="project", filename="pref_short.md", content="k
 
 
 def test_memory_not_configured(tmp_path):
-    """防 bug：未装配 memory_manager 时提示未启用而非崩溃。"""
+    """防 bug：未装配 memory_manager 时提示而非崩溃。"""
     repl = make_repl(tmp_path, with_memory=False)
-    asyncio.run(repl._handle_memory_command("/memory list"))
-    assert "未启用记忆系统" in repl._console.export_text()
+    asyncio.run(repl.dispatch_slash("/memory_list"))
+    assert "未启用记忆系统" in repl._console.export_text(clear=False)
 
 
 def test_memory_list_empty(tmp_path):
-    """防 bug：无记忆时 list 打印提示不崩溃。"""
+    """防 bug：无记忆时 /memory 打印提示不崩溃。"""
     repl = make_repl(tmp_path)
-    asyncio.run(repl._handle_memory_command("/memory list"))
-    assert "暂无记忆" in repl._console.export_text()
+    asyncio.run(repl.dispatch_slash("/memory"))
+    assert "无已加载的记忆文件" in repl._console.export_text(clear=False)
 
 
-def test_memory_list_shows_notes(tmp_path):
-    """防 bug：list 按 scope 展示两条记忆。"""
+def test_memory_lists_filenames(tmp_path):
+    """防 bug：/memory 只列文件名清单（F8.10）。"""
+    repl = make_repl(tmp_path)
+    _seed_note(repl.memory_manager, filename="pref_short.md")
+    _seed_note(repl.memory_manager, scope="user", filename="pref_fast.md")
+    asyncio.run(repl.dispatch_slash("/memory"))
+    out = repl._console.export_text(clear=False)
+    assert "pref_short.md" in out
+    assert "pref_fast.md" in out
+
+
+def test_memory_list_shows_details(tmp_path):
+    """防 bug：/memory_list 按 scope 展示详情。"""
     repl = make_repl(tmp_path)
     _seed_note(repl.memory_manager)
     _seed_note(repl.memory_manager, scope="user", filename="pref_fast.md")
-    asyncio.run(repl._handle_memory_command("/memory list"))
-    out = repl._console.export_text()
+    asyncio.run(repl.dispatch_slash("/memory_list"))
+    out = repl._console.export_text(clear=False)
     assert "(project) pref_short.md" in out
     assert "(user) pref_fast.md" in out
 
 
-def test_memory_show_existing(tmp_path):
-    """防 bug：show 打印指定笔记全文。"""
+def test_memory_add_then_list(tmp_path):
+    """防 bug：/memory_add 后 /memory_list 可见（F8.15/AC16）。"""
     repl = make_repl(tmp_path)
-    _seed_note(repl.memory_manager, content="keep answers short")
-    asyncio.run(repl._handle_memory_command("/memory show pref_short.md"))
-    assert "keep answers short" in repl._console.export_text()
+    asyncio.run(repl.dispatch_slash("/memory_add user_preference 记住 tea"))
+    asyncio.run(repl.dispatch_slash("/memory_list"))
+    out = repl._console.export_text(clear=False)
+    assert "user_preference" in out
+    assert len(repl.memory_manager.list_notes()) == 1
 
 
-def test_memory_show_missing(tmp_path):
-    """防 bug：show 不存在的文件名提示未找到而非崩溃。"""
+def test_memory_add_bad_type(tmp_path):
+    """防 bug：/memory_add 未知类型提示而非崩溃。"""
     repl = make_repl(tmp_path)
-    asyncio.run(repl._handle_memory_command("/memory show nope.md"))
-    assert "未找到记忆" in repl._console.export_text()
+    asyncio.run(repl.dispatch_slash("/memory_add wat 内容"))
+    assert "未知记忆类型" in repl._console.export_text(clear=False)
 
 
-def test_memory_path(tmp_path):
-    """防 bug：path 打印指定笔记的绝对路径。"""
+def test_memory_clear_clears(tmp_path):
+    """防 bug：/memory_clear 清空全部记忆（F8.16/AC16）。"""
     repl = make_repl(tmp_path)
-    _seed_note(repl.memory_manager, scope="user", filename="pref_fast.md")
-    asyncio.run(repl._handle_memory_command("/memory path pref_fast.md"))
-    out = repl._console.export_text()
-    assert "pref_fast.md" in out
-    # 路径以正向斜杠打印（Windows 上 str(Path) 是反斜杠，不比字符串）
-    assert (
-        str(repl.memory_manager.user_store.directory).replace("\\", "/")
-        in out.replace("\\", "/")
-    )
-
-
-def test_memory_edit_updates(tmp_path):
-    """防 bug：edit 就地更新笔记内容且保留类型/scope。"""
-    repl = make_repl(tmp_path)
-    _seed_note(repl.memory_manager, content="old")
-    asyncio.run(
-        repl._handle_memory_command("/memory edit pref_short.md new content here")
-    )
-    note = repl.memory_manager.project_store.list_notes()[0]
-    assert note.content.strip() == "new content here"
-    assert note.type == "project_knowledge"
-
-
-def test_memory_edit_missing(tmp_path):
-    """防 bug：edit 不存在的文件名提示未找到而非崩溃。"""
-    repl = make_repl(tmp_path)
-    asyncio.run(repl._handle_memory_command("/memory edit nope.md x"))
-    assert "未找到记忆" in repl._console.export_text()
-
-
-def test_memory_clear_requires_confirm(tmp_path):
-    """防 bug：clear 未确认时不得删除任何记忆（AC25 防误删）。"""
-    repl = make_repl(tmp_path)
-
-    async def fake_ask_choice(question, options, default_index=0):
-        assert options[0][0] == "yes"  # 确认菜单存在
-        return "no"  # 用户取消
-
-    repl._ask_choice = fake_ask_choice
-    _seed_note(repl.memory_manager)
-    asyncio.run(repl._handle_memory_command("/memory clear"))
-    assert "已取消" in repl._console.export_text()
-    assert len(repl.memory_manager.list_notes()) == 1  # 未删
-
-
-def test_memory_clear_confirmed(tmp_path):
-    """防 bug：确认后清空全部记忆（project+user）。"""
-    repl = make_repl(tmp_path)
-
-    async def fake_ask_choice(question, options, default_index=0):
-        return "yes"
-
-    repl._ask_choice = fake_ask_choice
     _seed_note(repl.memory_manager)
     _seed_note(repl.memory_manager, scope="user", filename="pref_fast.md")
-    asyncio.run(repl._handle_memory_command("/memory clear"))
-    out = repl._console.export_text()
+    asyncio.run(repl.dispatch_slash("/memory_clear"))
+    out = repl._console.export_text(clear=False)
     assert "已清空 2 条记忆" in out
     assert repl.memory_manager.list_notes() == []
-
-
-def test_memory_bad_subcommand_usage(tmp_path):
-    """防 bug：未知子命令打印用法提示而非崩溃。"""
-    repl = make_repl(tmp_path)
-    asyncio.run(repl._handle_memory_command("/memory wat"))
-    assert "用法" in repl._console.export_text()
