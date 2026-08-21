@@ -8,8 +8,6 @@
 import asyncio
 from pathlib import Path
 
-import pytest
-
 from mewcode.memory.manager import MemoryManager
 from mewcode.memory.models import MemoryOperation
 from mewcode.tools.memory_read import ReadMemoryTool
