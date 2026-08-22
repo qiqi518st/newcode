@@ -19,6 +19,9 @@ venv/
 .mewcode/permissions.local.yaml
 .mewcode/permissions.yaml
 
+# MewCode Hook 本地配置（个人本地，不随仓库分发，ch12 F6.1）
+.mewcode/config.local.yaml
+
 # MewCode 上下文管理落盘目录（会话级，运行时数据，不入库）
 .mewcode/sessions/
 

@@ -21,6 +21,8 @@ from mewcode.agent.events import EventType
 from mewcode.config.loader import load as load_config
 from mewcode.config.loader import load_ccswitch
 from mewcode.context import ContextManager, FileTracker
+from mewcode.hooks import load as load_hooks
+from mewcode.hooks.types import Event as HookEvent
 from mewcode.instructions import InstructionLoader
 from mewcode.mcp import MCPManager, load_mcp_servers
 from mewcode.memory import MemoryManager
@@ -154,6 +156,14 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
         if cli_mode is not None:
             permission.set_mode(cli_mode)
 
+    # ── ch12 Hook 装配（T13）：三层配置加载 + context providers 注入 ──
+    hook_engine = load_hooks(project_root)
+    session_runtime.hook_engine = hook_engine
+    hook_engine.set_context_providers(
+        lambda: session_runtime.session_id or "",
+        lambda: permission.mode.value,
+    )
+
     # ── ch07：MCP 初始化（进 TUI 前同步完成，失败只告警不阻塞） ──
     mcp_mgr = MCPManager(load_mcp_servers(cwd), client_version=__version__)
     summary = await mcp_mgr.start_all()
@@ -209,6 +219,8 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
         file_tracker=file_tracker,
         memory_manager=memory,
         active_skills=active_skills,
+        hooks=hook_engine,
+        runtime=session_runtime,
     )
     agent_ref.append(agent)
     # 阶段一摘要注入：with_catalog 后 env 每轮含 Available Skills 段（F4.1）
@@ -220,6 +232,10 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
     cleaned = plan_manager.cleanup_old(config.cleanup_period_days)
     if cleaned > 0:
         print(f"已清理 {cleaned} 个过期计划（>{config.cleanup_period_days}天）")
+
+    # ch12：startup / session_start 事件（装配完成后、首条消息前，F8.1）
+    await hook_engine.dispatch(HookEvent.STARTUP, {"cwd": cwd})
+    await hook_engine.dispatch(HookEvent.SESSION_START, {"cwd": cwd})
 
     try:
         if args.command:
@@ -277,6 +293,7 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
                 catalog=catalog,
                 active_skills=active_skills,
                 executor=executor,
+                hooks=hook_engine,
             )
             repl.command_registry = cmd_registry
             repl.command_ctx = cmd_ctx
@@ -284,6 +301,10 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
     finally:
         if not cleanup_task.done():
             cleanup_task.cancel()
+        # ch12：session_end + shutdown + engine.close（F8.1/F9.5，后台任务尽力而为）
+        await hook_engine.dispatch(HookEvent.SESSION_END, {})
+        await hook_engine.dispatch(HookEvent.SHUTDOWN, {})
+        await hook_engine.close()
         session_runtime.close()
         # 统一关闭 MCP 连接（stdio 子进程终止 / HTTP 会话释放；5s 兜底）
         await mcp_mgr.close()
