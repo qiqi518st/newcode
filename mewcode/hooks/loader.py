@@ -159,7 +159,9 @@ def _parse_action(action_raw: Any, name: str, file: str) -> Action | None:
         if not isinstance(prompt, str) or not prompt:
             _err_hook(name, file, "agent 动作缺少必填字段 prompt")
             return None
-        return Action(type=atype, agent=AgentAction(agent_name=agent_name, prompt=prompt))
+        return Action(
+            type=atype, agent=AgentAction(agent_name=agent_name, prompt=prompt)
+        )
     return None  # 不可达
 
 

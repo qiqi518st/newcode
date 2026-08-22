@@ -55,7 +55,6 @@ class _FakeRuntime:
 
     async def reset_for_new_session(self):
         """ch12：request_clear_session / new_session / resume_session 调用的集中重置点。"""
-        pass
 
     def close(self):
         pass

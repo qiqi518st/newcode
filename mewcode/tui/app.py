@@ -524,9 +524,7 @@ class REPL:
         )
         if hook_result.blocked:
             self._console.print(
-                escape(
-                    f"[hook {hook_result.blocking_hook_name}] {hook_result.reason}"
-                ),
+                escape(f"[hook {hook_result.blocking_hook_name}] {hook_result.reason}"),
                 style="red",
             )
             return

@@ -27,7 +27,9 @@ class Engine:
         self._rules = rules
         self._sources = sources
         self._once_fired: set[str] = set()
-        self._dispatching: set[Event] = set()  # F9.2 防重入（同事件 dispatch 期间不重入自身）
+        self._dispatching: set[Event] = (
+            set()
+        )  # F9.2 防重入（同事件 dispatch 期间不重入自身）
         self._lock = asyncio.Lock()
         self._executor = Executor()
         self._tasks: set[asyncio.Task[None]] = set()
@@ -103,7 +105,9 @@ class Engine:
                 except asyncio.CancelledError:
                     raise  # F9.3：拦截同步等待中取消 → 传播退出
                 except Exception as e:  # noqa: BLE001 —— 引擎层兜底，绝不让 hook 破坏主流程
-                    print(f"[hook {hook.name}] {event.value} failed: {e}", file=sys.stderr)
+                    print(
+                        f"[hook {hook.name}] {event.value} failed: {e}", file=sys.stderr
+                    )
                     continue
 
                 if er.err is not None:
@@ -127,9 +131,7 @@ class Engine:
         finally:
             self._dispatching.discard(event)
 
-    async def _run_background(
-        self, hook: Hook, payload: Payload, event: Event
-    ) -> None:
+    async def _run_background(self, hook: Hook, payload: Payload, event: Event) -> None:
         """async hook 后台执行（F2.2/F9.1）：失败 stderr 不重试，尽力而为。"""
         try:
             await self._executor.run(hook, payload, blocking=False)

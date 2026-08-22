@@ -48,8 +48,10 @@ class Agent:
         file_tracker: object | None = None,  # ch08: FileTracker | None
         memory_manager: object | None = None,
         active_skills: object | None = None,  # ch11: ActiveSkills | None
-        hooks: Engine | None = None,  # ch12: hooks.Engine | None（None 时全部短路，N10）
-        runtime: object | None = None,  # ch12: SessionRuntime | None（取 pending_reminders）
+        hooks: Engine
+        | None = None,  # ch12: hooks.Engine | None（None 时全部短路，N10）
+        runtime: object
+        | None = None,  # ch12: SessionRuntime | None（取 pending_reminders）
     ) -> None:
         self.provider = provider
         self.conv = conversation
@@ -614,9 +616,9 @@ class Agent:
                                     },
                                 )
                                 # ch12 file_change：write/edit 成功后（F3.1）
-                                if (
-                                    sr.result.status == "ok"
-                                    and tc.tool_name in ("write_file", "edit_file")
+                                if sr.result.status == "ok" and tc.tool_name in (
+                                    "write_file",
+                                    "edit_file",
                                 ):
                                     path = tc.arguments.get("path")
                                     if isinstance(path, str) and path:

@@ -31,6 +31,7 @@ def render_template(text: str, payload: Payload) -> str:
 
     容错：字段不存在 → ""；裸 `{}` 或非法模板 → 返回原文；绝不抛给调用方。
     """
+
     def _replace(m: re.Match[str]) -> str:
         field = m.group(1)
         if not _VALID_FIELD_RE.match(field):
@@ -47,8 +48,13 @@ class Executor:
     """四类动作执行器：按 action.type 分发（F5.1）。"""
 
     def __init__(self) -> None:
-        # 复用连接池；单条请求的 timeout 由各 hook 的 timeout_s 覆盖
-        self._http_client = httpx.AsyncClient(timeout=30.0)
+        # http 连接池惰性创建：无 http 动作时开销近零（N10）；单条请求 timeout 由 hook 覆盖
+        self._http_client: httpx.AsyncClient | None = None
+
+    def _client(self) -> httpx.AsyncClient:
+        if self._http_client is None:
+            self._http_client = httpx.AsyncClient(timeout=30.0)
+        return self._http_client
 
     async def run(
         self, hook: Hook, payload: Payload, *, blocking: bool
@@ -93,7 +99,12 @@ class Executor:
             )
         except asyncio.TimeoutError:
             proc.kill()
-            await proc.communicate()
+            # 收尾不阻塞主流程：Windows 下 sh 被 kill 后其子进程残留可能让
+            # communicate 长时间挂住（如 `sleep 5`），加短上限（F9.4）。
+            try:
+                await asyncio.wait_for(proc.communicate(), timeout=1.0)
+            except (asyncio.TimeoutError, asyncio.CancelledError):
+                pass
             return ExecutionResult(
                 err=TimeoutError(f"command timed out after {timeout_s}s")
             )
@@ -131,7 +142,7 @@ class Executor:
                 body = render_template(ha.body, payload)
             else:
                 body = json.dumps(payload, sort_keys=True)
-            resp = await self._http_client.request(
+            resp = await self._client().request(
                 ha.method,
                 ha.url,
                 content=body,
@@ -165,4 +176,6 @@ class Executor:
 
     async def aclose(self) -> None:
         """关闭 http 连接池（Engine.close 收尾调用）。"""
-        await self._http_client.aclose()
+        if self._http_client is not None:
+            await self._http_client.aclose()
+            self._http_client = None

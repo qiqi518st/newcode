@@ -65,8 +65,7 @@ def eval_condition(cond: Condition | None, payload: Payload) -> bool:
     if cond is None:
         return True
     matched = [
-        evaluate(atom.matcher, get_by_path(payload, atom.field))
-        for atom in cond.atoms
+        evaluate(atom.matcher, get_by_path(payload, atom.field)) for atom in cond.atoms
     ]
     if cond.mode == CombineMode.ALL_OF:
         return all(matched)

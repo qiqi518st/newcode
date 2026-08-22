@@ -29,7 +29,9 @@ async def _handler(ctx: CommandContext, _args: str) -> None:
             if r.asyncio_mode:
                 flags.append("[async]")
             flag_part = (" " + " ".join(flags)) if flags else ""
-            lines.append(f"  {r.name}  {r.event.value}  {r.action.type.value}{flag_part}")
+            lines.append(
+                f"  {r.name}  {r.event.value}  {r.action.type.value}{flag_part}"
+            )
     lines.append(f"Loaded from: {', '.join(hooks.sources)}")
     ctx.ui.show_message("\n".join(lines))
 
