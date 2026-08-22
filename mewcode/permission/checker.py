@@ -179,7 +179,11 @@ class PermissionChecker:
                     settings, f, allow_unicode=True, default_flow_style=False
                 )
         # 内存同步：让新规则对后续 check() 立即生效
-        rule = Rule.parse(str(pattern), action, local_path)
+        # ch12（F1.4）：匹配描述编译失败（如 Bad Name(~[invalid)）抛 ValueError → 仅不生效
+        try:
+            rule = Rule.parse(str(pattern), action, local_path)
+        except ValueError:
+            rule = None
         if rule is not None:
             if action == "allow":
                 target = self._layers.local.allow

@@ -1,18 +1,38 @@
-"""规则解析、加载、三层合并、glob 匹配（L3）
+"""规则解析、加载、三层合并、匹配（L3）
 
 规则格式：工具名(模式) 如 Bash(git *) 表示所有 git 开头的命令
 工具名使用友好名：Bash / Read / Write / Edit / Glob / Grep
+
+ch12（F1）：Pattern 形态从单一字符串扩展为结构化 Matcher（exact/glob/regex/not），
+glob 求值逻辑移入 matcher.py 供权限规则与 Hook 条件共用；本模块 re-export match_pattern。
 """
 
 import fnmatch
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 import yaml
 
+from .matcher import Matcher, compile_matcher, evaluate, match_pattern
 from .types import Decision
+
+# 向后兼容 re-export：ch12 前 glob 求值在本模块，既有调用/测试用 R.match_pattern。
+# 列入 __all__ 使 ruff 将其视为公开 re-export（F401 不报）。
+__all__ = [
+    "RULE_FILE_LOCAL",
+    "RULE_FILE_PROJECT",
+    "RULE_FILE_USER",
+    "Rule",
+    "RuleLayers",
+    "RuleSet",
+    "build_rule_set",
+    "get_default_mode_from_rules",
+    "load_rules",
+    "load_settings",
+    "match_pattern",
+]
 
 # 规则文件路径常量
 RULE_FILE_USER = os.path.expanduser("~/.config/mewcode/permissions.yaml")
@@ -30,13 +50,30 @@ class Rule:
     """单条权限规则"""
 
     tool_name: str  # 友好名：Bash / Read / Write / Edit / Glob / Grep
-    pattern: str  # 匹配模式（"" 表示匹配该工具全部调用）
+    pattern: str  # 匹配模式原文（"" 表示匹配该工具全部调用）
     action: Literal["allow", "deny"]
     source: str  # 来源文件路径（用于调试和反馈）
+    # ch12（F1）：结构化匹配器（None = 匹配全部，等价 Bash(*)）；
+    # 从 pattern + tool_name 派生，不在构造参数中显式传入。
+    matcher: Matcher | None = field(init=False, default=None)
+
+    def __post_init__(self) -> None:
+        # pattern 空 → matcher=None（匹配全部）；否则按前缀语法编译。
+        # 非法前缀/正则会抛 ValueError，由调用方（Rule.parse 上游 build_rule_set）按 F1.4 处理。
+        if self.pattern == "":
+            self.matcher = None
+        else:
+            self.matcher = compile_matcher(
+                self.pattern, is_command=(self.tool_name == "Bash")
+            )
 
     @staticmethod
     def parse(raw: str, action: Literal["allow", "deny"], source: str) -> "Rule | None":
-        """解析 'Bash(git *)' 或 'Read'；非法返回 None"""
+        """解析 'Bash(git *)' 或 'Read'；格式非法返回 None，匹配器编译失败抛 ValueError。
+
+        两种失败区分：正则提取失败（如工具名含空格、缺右括号）→ None；
+        匹配描述编译失败（如 Bash(~[invalid) 未闭合正则）→ ValueError（F1.4 需要原因）。
+        """
         if not raw or not isinstance(raw, str):
             return None
         raw = raw.strip()
@@ -48,50 +85,10 @@ class Rule:
         return Rule(tool_name=tool_name, pattern=pattern, action=action, source=source)
 
     def match_target(self, target: str) -> bool:
-        """检查此规则是否匹配给定的目标参数"""
-        return match_pattern(self.pattern, target)
-
-
-def match_pattern(pattern: str, target: str) -> bool:
-    """glob 匹配：
-    - pattern == "" → 恒匹配
-    - 命令（Bash 类，不含 /）：* 匹配任意字符（含空格）
-    - 文件路径（含 /）：按 / 分段，* 匹配单段内任意字符，** 匹配任意多段
-    """
-    if pattern == "":
-        return True
-    # 含路径分隔符 → 按段匹配，保证 * 单层语义（spec F4），** 递归
-    if "/" in pattern or "**" in pattern:
-        return _match_recursive(pattern, target)
-    return fnmatch.fnmatch(target, pattern)
-
-
-def _match_recursive(pattern: str, target: str) -> bool:
-    """支持 ** 递归通配的匹配"""
-    # 将 pattern 按 / 分段
-    pat_parts = pattern.replace("\\", "/").split("/")
-    tgt_parts = target.replace("\\", "/").split("/")
-
-    return _match_parts(pat_parts, tgt_parts)
-
-
-def _match_parts(pat_parts: list[str], tgt_parts: list[str]) -> bool:
-    """递归匹配路径段"""
-    if not pat_parts:
-        return not tgt_parts
-    if pat_parts[0] == "**":
-        if len(pat_parts) == 1:
-            return True  # ** 匹配一切
-        # ** 匹配零段或多段
-        for i in range(len(tgt_parts) + 1):
-            if _match_parts(pat_parts[1:], tgt_parts[i:]):
-                return True
-        return False
-    if not tgt_parts:
-        return False
-    if fnmatch.fnmatch(tgt_parts[0], pat_parts[0]):
-        return _match_parts(pat_parts[1:], tgt_parts[1:])
-    return False
+        """检查此规则是否匹配给定的目标参数（matcher=None → 恒匹配）"""
+        if self.matcher is None:
+            return True
+        return evaluate(self.matcher, target)
 
 
 def _tool_name_matches(rule_name: str, friendly: str) -> bool:
@@ -169,16 +166,31 @@ def load_settings(filepath: str) -> dict:
 def build_rule_set(
     entries: list[str], action: Literal["allow", "deny"], source: str
 ) -> RuleSet:
-    """从 YAML 的 allow/deny 列表构建 RuleSet，跳过非法条目"""
+    """从 YAML 的 allow/deny 列表构建 RuleSet，跳过非法条目（F1.4）。
+
+    解析失败不再静默跳过：stderr 打印失败规则与原因，其余规则正常加载。
+    """
+    import sys
+
     rs = RuleSet()
     for entry in entries:
         if not isinstance(entry, str):
             continue
-        rule = Rule.parse(entry, action, source)
+        try:
+            rule = Rule.parse(entry, action, source)
+        except ValueError as e:
+            # ch12（F1.4）：匹配描述编译失败（如 Bash(~[invalid)）——带原因定位
+            print(
+                f'rule "{entry}" parse failed: {e}（跳过非法规则条目, {source}）',
+                file=sys.stderr,
+            )
+            continue
         if rule is None:
-            import sys
-
-            print(f"警告: 跳过非法规则条目 ({source}): {entry}", file=sys.stderr)
+            # 规则格式非法（工具名含非法字符、缺括号等）——保持原有提示文案
+            print(
+                f'rule "{entry}" parse failed: 规则格式非法（跳过非法规则条目, {source}）',
+                file=sys.stderr,
+            )
             continue
         if action == "allow":
             rs.allow.append(rule)
