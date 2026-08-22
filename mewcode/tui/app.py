@@ -18,6 +18,8 @@ from rich.markup import escape
 
 from ..agent import Agent
 from ..agent.events import EventType, StopReason
+from ..hooks.types import DispatchResult
+from ..hooks.types import Event as HookEvent
 from ..permission.hitl import HITLRequest, HITLResponse
 from ..permission.modes import PermissionMode
 from ..plans.manager import PlanManager, PlanMeta
@@ -106,6 +108,15 @@ class RichUIController:
 
     def __init__(self, repl: "REPL") -> None:
         self._repl = repl
+
+    # ── ch12 Hook 分派（TUI 层 5 事件）─────────────────────
+    async def _dispatch_hook(self, event: HookEvent, payload: dict) -> DispatchResult:
+        """分派 Hook 事件；未接线（command_ctx.hooks 为 None）时短路空结果（N10）。"""
+        ctx = getattr(self._repl, "command_ctx", None)
+        engine = getattr(ctx, "hooks", None) if ctx else None
+        if engine is None:
+            return DispatchResult()
+        return await engine.dispatch(event, payload)
 
     # ── 输出 ──────────────────────────────────────────────
     def show_message(self, text: str, style: str = "") -> None:
@@ -261,8 +272,12 @@ class RichUIController:
         if runtime is None:
             self.show_message("当前未启用会话恢复", style="yellow")
             return
+        # ch12：session_end（旧会话）→ resume → 集中重置 → session_resume（F8.1/F2.2）
+        await self._dispatch_hook(HookEvent.SESSION_END, {})
         conv = await runtime.resume(session_id)
         self._repoint(conv)
+        await runtime.reset_for_new_session()
+        await self._dispatch_hook(HookEvent.SESSION_RESUME, {})
 
     async def new_session(self) -> None:
         """/session_new：新建会话并把 agent/context 指向新会话。"""
@@ -271,8 +286,12 @@ class RichUIController:
         if runtime is None:
             self.show_message("当前未启用会话管理", style="yellow")
             return
+        # ch12：session_end（旧）→ create_new → 集中重置 → session_start（同 /clear）
+        await self._dispatch_hook(HookEvent.SESSION_END, {})
         conv = runtime.create_new()
         self._repoint(conv)
+        await runtime.reset_for_new_session()
+        await self._dispatch_hook(HookEvent.SESSION_START, {})
 
     def _repoint(self, conv: object) -> None:
         """把 agent 与 context_mgr 指向新的 ConversationManager（旧引用留档不污染）。"""
@@ -293,6 +312,8 @@ class RichUIController:
         if runtime is None:
             self.show_message("当前未启用会话持久化，无法 /clear", style="yellow")
             return
+        # ch12：session_end（旧会话）→ create_new → 集中重置 → session_start（F8.1/F2.2）
+        await self._dispatch_hook(HookEvent.SESSION_END, {})
         conv = (
             runtime.create_new()
         )  # close 旧 writer → 新会话上下文 → 新 writer → 重建 Conversation
@@ -302,6 +323,8 @@ class RichUIController:
             cm.reset_for_new_session(
                 conv
             )  # 清 L1 替换账本 + 自动闸 + 锚点 + 指向新会话（T0b）
+        await runtime.reset_for_new_session()
+        await self._dispatch_hook(HookEvent.SESSION_START, {})
         repl._session_in_tokens = 0
         repl._session_out_tokens = 0
         repl._current_turn = 0
@@ -494,6 +517,19 @@ class REPL:
 
     async def _process_input(self, text: str) -> None:
         """提交普通用户输入（所有 "/" 前缀输入已被 dispatch_slash 拦截），启动 Agent。"""
+        # ch12：user_prompt_submit 可拦截（F7.5）——在消息写历史/启动 Agent 之前；
+        # 拦截时输入框下方提示拒绝原因，消息不进入对话历史，焦点回输入框。
+        hook_result = await self.ui._dispatch_hook(
+            HookEvent.USER_PROMPT_SUBMIT, {"prompt": text}
+        )
+        if hook_result.blocked:
+            self._console.print(
+                escape(
+                    f"[hook {hook_result.blocking_hook_name}] {hook_result.reason}"
+                ),
+                style="red",
+            )
+            return
         # 重置执行标记（/do 或确认弹窗时通过 run_agent(execute_slug) 重新设置）
         self._executing_slug = ""
         if self.mode == AppMode.PLAN:
@@ -536,6 +572,10 @@ class REPL:
         if self.command_ctx is None:
             self._console.print("命令系统未初始化", style="red")
             return True
+        # ch12：command_execute 通知（F8.1，通知型不拦截）
+        await self.ui._dispatch_hook(
+            HookEvent.COMMAND_EXECUTE, {"command": name, "args": args}
+        )
         try:
             await cmd.handler(self.command_ctx, args)
         except Exception as exc:  # noqa: BLE001 —— 命令实现出错对用户可见，不崩 REPL
