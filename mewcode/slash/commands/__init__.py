@@ -14,6 +14,7 @@ from . import (
     clear,
     compact,
     do,
+    hooks,
     legacy,
     memory,
     permission,
@@ -36,6 +37,7 @@ COMMAND_MODULES = [
     clear,
     compact,
     skill,
+    hooks,
     legacy,
 ]
 

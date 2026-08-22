@@ -42,3 +42,5 @@ class CommandContext:
     catalog: object | None = None  # skills.Catalog
     active_skills: object | None = None  # skills.ActiveSkills
     executor: object | None = None  # skills.Executor
+    # ch12 Hook 引擎（main.py 装配注入；未接线保持 None，/hooks 显示「未启用」）
+    hooks: object | None = None  # hooks.Engine
