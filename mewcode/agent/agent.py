@@ -6,12 +6,14 @@ import uuid
 from collections.abc import AsyncIterator
 
 from ..conversation.manager import ConversationManager
+from ..hooks import DispatchResult, Engine
+from ..hooks.types import Event as HookEvent
 from ..llm import PromptTooLongError
 from ..permission.checker import PermissionChecker, extract_target, friendly_name
 from ..permission.hitl import HITLRequest, HITLResponse
 from ..permission.types import Decision
 from ..prompt.assembler import PayloadAssembler
-from ..prompt.reminders import plan_mode_reminder
+from ..prompt.reminders import hook_notification, plan_mode_reminder
 from ..prompt.resources import EXECUTE_DIRECTIVE
 from ..prompt.skills_block import (
     render_active_skills_block,
@@ -46,6 +48,8 @@ class Agent:
         file_tracker: object | None = None,  # ch08: FileTracker | None
         memory_manager: object | None = None,
         active_skills: object | None = None,  # ch11: ActiveSkills | None
+        hooks: Engine | None = None,  # ch12: hooks.Engine | None（None 时全部短路，N10）
+        runtime: object | None = None,  # ch12: SessionRuntime | None（取 pending_reminders）
     ) -> None:
         self.provider = provider
         self.conv = conversation
@@ -63,6 +67,9 @@ class Agent:
 
         # ch11 Skill 状态（可选；None 时行为与 ch10 一致，N10 向后兼容）
         self._active_skills = active_skills
+        # ch12 Hook 状态（可选；None 时所有 hook 调用短路，行为与 ch11 一致，N10）
+        self._hooks = hooks
+        self._runtime = runtime  # SessionRuntime：take_reminders / append_reminders
         self._catalog: object | None = None  # with_catalog 注入（阶段一摘要素材）
         self._natural_rounds = 0
         self._memory_task: asyncio.Task | None = None
@@ -112,6 +119,28 @@ class Agent:
                 parts.append(block)
         return "\n\n".join(parts)
 
+    # ── ch12 Hook 集成（F8.1/F8.3）──────────────────────────
+    async def _dispatch_hook(self, event: HookEvent, payload: dict) -> DispatchResult:
+        """分派 Hook 事件并收集 prompt 注入（F8.1）。
+
+        hooks=None → 空结果（N10 无侵入短路）；injected_prompts 经
+        runtime.append_reminders() 写入待注入队列（runtime=None 时丢弃）。
+        """
+        if self._hooks is None:
+            return DispatchResult()
+        result = await self._hooks.dispatch(event, payload)
+        if result.injected_prompts and self._runtime is not None:
+            self._runtime.append_reminders(result.injected_prompts)
+        return result
+
+    def _last_user_message(self) -> str:
+        """conversation 末尾的 user 消息（pre_send payload，F3.4）。"""
+        for m in reversed(self.conv.get_context()):
+            if getattr(m, "role", None) == "user":
+                content = getattr(m, "content", "")
+                return content if isinstance(content, str) else ""
+        return ""
+
     def cancel(self) -> None:
         """设置取消信号，TUI 在 ESC/Ctrl+C 时调用"""
         self._cancelled.set()
@@ -151,6 +180,9 @@ class Agent:
             # 选择工具集（plan 模式暴露全部工具，由 SystemPrompt 引导自觉只读）
             tool_defs = self.registry.to_definitions()
 
+            # ch12 ① turn_start（F8.1）：一轮对话开始（用户消息已入历史）
+            await self._dispatch_hook(HookEvent.TURN_START, {"prompt": user_input})
+
             # 未知工具连续计数
             _unknown_streak: int = 0
 
@@ -169,12 +201,33 @@ class Agent:
                 # ch08：每轮组装前自动上下文管理（L1 全量 + L2 阈值检查）
                 if self._context_mgr is not None:
                     self._context_events = []
+                    # ch12 ③ pre_compact / post_compact（trigger=auto）
+                    await self._dispatch_hook(
+                        HookEvent.PRE_COMPACT, {"trigger": "auto"}
+                    )
                     await self._context_mgr.manage_context(tool_defs)
+                    await self._dispatch_hook(
+                        HookEvent.POST_COMPACT, {"trigger": "auto"}
+                    )
                     for context_event in self._drain_context_events():
                         yield context_event
 
                 # 轮次级补充消息：plan 模式按轮注入（第 0/5 轮完整，其余精简，瞬时不持久）
                 reminders = [plan_mode_reminder(turn)] if mode == "plan" else []
+                # ch12 ⑤ hook prompt 注入：拼到 plan reminder 之后、本轮回消费即清空（F8.3/AC24）
+                if self._runtime is not None:
+                    hook_prompts = self._runtime.take_reminders()
+                    if hook_prompts:
+                        reminders.extend(hook_notification(p) for p in hook_prompts)
+                # ch12 ④ pre_send：消息发给 LLM 之前（payload 含对话末尾 user 消息）
+                if self._hooks is not None:
+                    await self._dispatch_hook(
+                        HookEvent.PRE_SEND,
+                        {
+                            "prompt": user_input,
+                            "last_user_message": self._last_user_message(),
+                        },
+                    )
 
                 # 组装管线：稳定提示(段1) + 环境(段2, 含 Skill 摘要/激活段) + 历史 + reminders + tools
                 payload = self._assembler.assemble(
@@ -219,7 +272,14 @@ class Agent:
                         and not _emergency_retried
                     ):
                         _emergency_retried = True
+                        # ch12 ③ 紧急压缩路径 pre/post_compact（trigger=emergency）
+                        await self._dispatch_hook(
+                            HookEvent.PRE_COMPACT, {"trigger": "emergency"}
+                        )
                         outcome = await self._context_mgr.force_compact(tool_defs)
+                        await self._dispatch_hook(
+                            HookEvent.POST_COMPACT, {"trigger": "emergency"}
+                        )
                         for context_event in self._drain_context_events():
                             yield context_event
                         if outcome.success:
@@ -255,10 +315,18 @@ class Agent:
                                     _stream_error = se.err
                                     break
                             if _stream_error is not None:
+                                # ch12 error 事件（STREAM_ERROR 路径，F3.1）
+                                await self._dispatch_hook(
+                                    HookEvent.ERROR, {"error": str(_stream_error)}
+                                )
                                 yield Event(EventType.ERROR, _stream_error)
                                 yield Event(EventType.DONE, StopReason.STREAM_ERROR)
                                 return
                         else:
+                            await self._dispatch_hook(
+                                HookEvent.ERROR,
+                                {"error": "紧急压缩失败，上下文不可恢复"},
+                            )
                             yield Event(
                                 EventType.ERROR,
                                 PromptTooLongError("紧急压缩失败，上下文不可恢复"),
@@ -266,9 +334,19 @@ class Agent:
                             yield Event(EventType.DONE, StopReason.STREAM_ERROR)
                             return
                     else:
+                        # ch12 error 事件（STREAM_ERROR 路径，F3.1）
+                        await self._dispatch_hook(
+                            HookEvent.ERROR, {"error": str(_stream_error)}
+                        )
                         yield Event(EventType.ERROR, _stream_error)
                         yield Event(EventType.DONE, StopReason.STREAM_ERROR)
                         return
+
+                # ch12 ⑦ post_receive：收到 LLM 响应之后（F3.1）
+                if self._hooks is not None:
+                    await self._dispatch_hook(
+                        HookEvent.POST_RECEIVE, {"message": _buffer}
+                    )
 
                 # Token 用量
                 if _token_usage:
@@ -285,6 +363,8 @@ class Agent:
                         self.conv.add_assistant(_buffer)
                     self._natural_rounds += 1
                     self._schedule_memory_update(user_input)
+                    # ch12 ⑪ turn_end（仅 NATURAL/MAX_TURNS，F3.1）
+                    await self._dispatch_hook(HookEvent.TURN_END, {"iter": turn + 1})
                     yield Event(EventType.DONE, StopReason.NATURAL)
                     return
 
@@ -347,6 +427,29 @@ class Agent:
                 permission_results: list[tuple[ToolCall, Decision, str]] = []
 
                 for tc in known_calls:
+                    # ch12 ⑧ pre_tool_use（Hook 拦截在权限检查之前，F7.6）
+                    hook_result = await self._dispatch_hook(
+                        HookEvent.PRE_TOOL_USE,
+                        {"tool_name": tc.tool_name, "tool_input": tc.arguments},
+                    )
+                    if hook_result.blocked:
+                        # F7.4：拦截 → 复用权限 Deny 路径（TOOL_CALL + TOOL_RESULT(error)），
+                        # 跳过权限引擎与真实工具执行
+                        tr = ToolResult(
+                            status="error",
+                            error=(
+                                f"[hook {hook_result.blocking_hook_name}] "
+                                f"{hook_result.reason}"
+                            ),
+                        )
+                        yield Event(EventType.TOOL_CALL, tc)
+                        yield Event(EventType.TOOL_RESULT, tr)
+                        self.conv.add_tool_result(tc, tr)
+                        permission_results.append(
+                            (tc, Decision.DENY, hook_result.reason)
+                        )
+                        continue
+
                     if self._permission is not None:
                         is_read_only = self.registry.is_read_only(tc.tool_name)
                         result = self._permission.check(
@@ -365,6 +468,16 @@ class Agent:
                         yield Event(EventType.TOOL_CALL, tc)
                         yield Event(EventType.TOOL_RESULT, tr)
                         self.conv.add_tool_result(tc, tr)
+                        # ch12 ⑨ 被权限 Deny 的也触发 post_tool_use（is_error=True，F3.1）
+                        await self._dispatch_hook(
+                            HookEvent.POST_TOOL_USE,
+                            {
+                                "tool_name": tc.tool_name,
+                                "tool_input": tc.arguments,
+                                "tool_result": result.reason,
+                                "is_error": True,
+                            },
+                        )
                         permission_results.append((tc, Decision.DENY, result.reason))
                     elif result.decision == Decision.ASK:
                         if not self._interactive:
@@ -373,6 +486,16 @@ class Agent:
                             yield Event(EventType.TOOL_CALL, tc)
                             yield Event(EventType.TOOL_RESULT, tr)
                             self.conv.add_tool_result(tc, tr)
+                            # ch12 ⑨ 非交互 ASK→DENY 同样触发 post_tool_use（is_error=True）
+                            await self._dispatch_hook(
+                                HookEvent.POST_TOOL_USE,
+                                {
+                                    "tool_name": tc.tool_name,
+                                    "tool_input": tc.arguments,
+                                    "tool_result": result.reason,
+                                    "is_error": True,
+                                },
+                            )
                             permission_results.append(
                                 (tc, Decision.DENY, result.reason)
                             )
@@ -389,6 +512,14 @@ class Agent:
                                 tool_name=fn,
                                 params_preview=params_preview,
                                 reason=result.reason,
+                            )
+                            # ch12 ⑨ permission_request：权限审批请求弹出时
+                            await self._dispatch_hook(
+                                HookEvent.PERMISSION_REQUEST,
+                                {
+                                    "tool_name": tc.tool_name,
+                                    "tool_input": tc.arguments,
+                                },
                             )
                             yield Event(EventType.HITL_REQUEST, request)
 
@@ -407,6 +538,16 @@ class Agent:
                                 yield Event(EventType.TOOL_CALL, tc)
                                 yield Event(EventType.TOOL_RESULT, tr)
                                 self.conv.add_tool_result(tc, tr)
+                                # ch12 ⑨ 用户拒绝也触发 post_tool_use（is_error=True）
+                                await self._dispatch_hook(
+                                    HookEvent.POST_TOOL_USE,
+                                    {
+                                        "tool_name": tc.tool_name,
+                                        "tool_input": tc.arguments,
+                                        "tool_result": tr.error,
+                                        "is_error": True,
+                                    },
+                                )
                                 permission_results.append(
                                     (tc, Decision.DENY, "用户拒绝")
                                 )
@@ -457,6 +598,31 @@ class Agent:
                                     )
                                 # 写入历史
                                 self.conv.add_tool_result(tc, sr.result)
+                                # ch12 ⑩ post_tool_use（工具拿到 result 之后，F3.1）
+                                result_text = (
+                                    sr.result.output
+                                    if sr.result.status == "ok"
+                                    else (sr.result.error or "")
+                                )
+                                await self._dispatch_hook(
+                                    HookEvent.POST_TOOL_USE,
+                                    {
+                                        "tool_name": tc.tool_name,
+                                        "tool_input": tc.arguments,
+                                        "tool_result": result_text[:1000],
+                                        "is_error": sr.result.status != "ok",
+                                    },
+                                )
+                                # ch12 file_change：write/edit 成功后（F3.1）
+                                if (
+                                    sr.result.status == "ok"
+                                    and tc.tool_name in ("write_file", "edit_file")
+                                ):
+                                    path = tc.arguments.get("path")
+                                    if isinstance(path, str) and path:
+                                        await self._dispatch_hook(
+                                            HookEvent.FILE_CHANGE, {"file_path": path}
+                                        )
                                 allowed_idx += 1
                             # denied 的已知工具已在上面处理
                         # unknown 已在上面处理
@@ -477,6 +643,8 @@ class Agent:
             # 达到迭代上限
             if _buffer:
                 self.conv.add_assistant(_buffer)
+            # ch12 ⑪ turn_end（MAX_TURNS 也触发，F3.1）
+            await self._dispatch_hook(HookEvent.TURN_END, {"iter": _MAX_AGENT_TURNS})
             yield Event(EventType.DONE, StopReason.MAX_TURNS)
         finally:
             self._run_lock.release()
@@ -520,7 +688,12 @@ class Agent:
                 from ..context.summarize import CompactOutcome
 
                 return CompactOutcome(True, 0, 0, 0, False, "no context", None)
-            return await self._context_mgr.compact_now(tool_defs)
+            # ch12 ③ 手动压缩路径 pre/post_compact（trigger=manual）
+            await self._dispatch_hook(HookEvent.PRE_COMPACT, {"trigger": "manual"})
+            try:
+                return await self._context_mgr.compact_now(tool_defs)
+            finally:
+                await self._dispatch_hook(HookEvent.POST_COMPACT, {"trigger": "manual"})
 
     def _drain_context_events(self):
         """Translate ContextManager callbacks into public Agent events."""

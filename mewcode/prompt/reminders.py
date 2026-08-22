@@ -3,6 +3,7 @@
 from ..provider.base import Message
 
 _SYSTEM_REMINDER_TAG = "system-reminder"
+_HOOK_NOTIFICATION_TAG = "hook-notification"
 
 
 def system_reminder(content: str) -> Message:
@@ -14,6 +15,18 @@ def system_reminder(content: str) -> Message:
     return Message(
         role="user",
         content=f"<{_SYSTEM_REMINDER_TAG}>{content}</{_SYSTEM_REMINDER_TAG}>",
+    )
+
+
+def hook_notification(content: str) -> Message:
+    """构造一条 role=user、以 <hook-notification> 标签包裹的补充消息（ch12 F8.3/AC24）。
+
+    Hook prompt 动作注入的 reminder 用独立标签，与 plan reminder 的
+    <system-reminder> 区分；同样不入持久历史、不参与压缩（由调用方保证）。
+    """
+    return Message(
+        role="user",
+        content=f"<{_HOOK_NOTIFICATION_TAG}>{content}</{_HOOK_NOTIFICATION_TAG}>",
     )
 
 
