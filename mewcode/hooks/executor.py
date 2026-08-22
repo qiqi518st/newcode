@@ -102,13 +102,18 @@ class Executor:
             proc.kill()
             raise
         rc = proc.returncode or 0
+        combined = (stderr or stdout).decode(errors="replace").rstrip("\n")
         if blocking and rc == 2:
-            reason = (stderr or stdout).decode(errors="replace").rstrip("\n")
-            return ExecutionResult(blocked=True, reason=reason)
+            # F5.4：exit 2 → 拦截命中，stderr/stdout 去尾换行为拒绝原因
+            return ExecutionResult(blocked=True, reason=combined)
         if rc == 0:
+            # 成功命令的输出转发到进程 stderr 供观察（spec「输出只记日志」；
+            # AC9 的 `echo first-turn >&2` 观察点依赖此行为）
+            if combined:
+                print(combined, file=sys.stderr)
             return ExecutionResult()
-        err_text = (stderr or b"").decode(errors="replace").rstrip()
-        return ExecutionResult(err=RuntimeError(f"exit {rc}: {err_text}"))
+        # 其它非零 → hook 失败但不拦截（F5.4），输出并入错误信息
+        return ExecutionResult(err=RuntimeError(f"exit {rc}: {combined}"))
 
     def _run_prompt(self, pa, payload: Payload) -> ExecutionResult:
         """prompt 动作（F5.6-F5.8）：文本进 injected_prompts，永不表达拦截。"""
