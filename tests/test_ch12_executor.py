@@ -13,9 +13,12 @@
 
 from __future__ import annotations
 
+import shutil
+
 import httpx
 import pytest
 
+from mewcode.hooks import executor as executor_mod
 from mewcode.hooks.executor import Executor
 from mewcode.hooks.types import (
     Action,
@@ -122,6 +125,30 @@ class TestShell:
             {"tool_name": "write_file"},
             blocking=False,
         )
+        assert r.err is None
+        await ex.aclose()
+
+    async def test_no_shell_found_is_err_not_block(self, monkeypatch):
+        """找不到 POSIX shell → hook 失败但不拦截（Windows 缺 Git 场景，F9.1）。
+
+        防的 bug：_find_posix_shell 返回 None 时若抛异常或误拦截，会让所有
+        command 动作的 hook 在无 shell 环境下失控（曾出现 create_subprocess_exec
+        硬编码 "sh" 在 Windows 上抛 WinError 2，护栏静默失效）。
+        """
+        monkeypatch.setattr(executor_mod, "_find_posix_shell", lambda: None)
+        ex = Executor()
+        r = await ex.run(_hook(command="exit 0"), {}, blocking=True)
+        assert not r.blocked and r.err is not None
+        await ex.aclose()
+
+    async def test_uses_detected_shell(self, monkeypatch):
+        """探测出的 shell 路径被实际使用（非硬编码 sh，AC5）。"""
+        real = shutil.which("sh")
+        if real is None:
+            pytest.skip("当前环境无 sh，跳过探测路径用例")
+        monkeypatch.setattr(executor_mod, "_find_posix_shell", lambda: real)
+        ex = Executor()
+        r = await ex.run(_hook(command="exit 0"), {}, blocking=False)
         assert r.err is None
         await ex.aclose()
 

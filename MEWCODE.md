@@ -2,10 +2,7 @@
 
 ## 技术栈
 
--Go
+-python
 
 ## 代码规范
 
--commitmessage⽤英⽂
-
--变量命名⽤snake_case

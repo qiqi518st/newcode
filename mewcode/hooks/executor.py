@@ -8,8 +8,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
+import shutil
 import sys
+from functools import lru_cache
 from typing import TYPE_CHECKING
 
 import httpx
@@ -42,6 +45,34 @@ def render_template(text: str, payload: Payload) -> str:
         return _TEMPLATE_FIELD_RE.sub(_replace, text)
     except ValueError:
         return text
+
+
+@lru_cache(maxsize=1)
+def _find_posix_shell() -> str | None:
+    """返回可用的 POSIX shell 路径；找不到返回 None（探测结果进程内缓存）。
+
+    command 动作必须走 POSIX 语法（F5.2：`>&2`/`exit 2` 在 cmd.exe 下语义全变，
+    故不用 create_subprocess_shell）。但 Windows 上 `sh` 不保证在 PATH
+    （create_subprocess_exec 找不到 → WinError 2），故逐级探测：
+    1) which(sh) —— Linux/macOS 恒有；Windows PATH 含 Git bin 时也有
+    2) which(bash) —— Git Bash 的 bash.exe
+    3) Windows 专属兜底：Git for Windows 常见安装路径
+    """
+    for name in ("sh", "bash"):
+        path = shutil.which(name)
+        if path:
+            return path
+    if os.name == "nt":
+        for path in (
+            r"C:\Program Files\Git\bin\sh.exe",
+            r"C:\Program Files\Git\bin\bash.exe",
+            r"C:\Program Files (x86)\Git\bin\sh.exe",
+            r"C:\Program Files (x86)\Git\bin\bash.exe",
+            r"C:\Program Files\Git\usr\bin\sh.exe",
+        ):
+            if os.path.exists(path):
+                return path
+    return None
 
 
 class Executor:
@@ -79,11 +110,21 @@ class Executor:
         拦截语义：blocking 且 exit 2 → blocked，stderr/stdout 去尾换行为 reason。
         """
         command = render_template(sa.command, payload)
+        shell = _find_posix_shell()
+        if shell is None:
+            # 无 POSIX shell（如 Windows 未装 Git）：按 hook 失败处理（F9.1），
+            # 维持 fail-open——不在此引入拦截语义。
+            return ExecutionResult(
+                err=FileNotFoundError(
+                    "no POSIX shell (sh/bash) found; hook command action cannot run"
+                )
+            )
         try:
-            # F5.2：sh -c 执行（用户常写 |>、> 等 POSIX shell 语法）。
+            # F5.2：POSIX shell -c 执行（用户常写 |>、> 等 POSIX 语法）。
             # 不用 create_subprocess_shell——Windows 下它走 cmd.exe 会破坏 POSIX 语法。
+            # shell 路径由 _find_posix_shell 探测（which → Git 常见安装路径兜底）。
             proc = await asyncio.create_subprocess_exec(
-                "sh",
+                shell,
                 "-c",
                 command,
                 stdin=asyncio.subprocess.PIPE,

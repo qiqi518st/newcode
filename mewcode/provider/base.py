@@ -1,5 +1,6 @@
 """LLM 协议无关类型：Provider Protocol、StreamEvent、Message、ToolCall、ToolDefinition、ToolResult、TokenUsage"""
 
+import re
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal, Protocol
@@ -95,6 +96,19 @@ class Provider(Protocol):
         调用方 cancel() 该 task 即终止。
         """
         ...
+
+
+_SUFFIX_STRIP_RE = re.compile(r"\[.*?\]")
+
+
+def api_model(model: str) -> str:
+    """API 请求用的模型名：剥掉 [..] 上下文后缀；无后缀原样返回。
+
+    例：deepseek-v4-flash[1M] → deepseek-v4-flash；deepseek-v4-flash → 原样。
+    provider.model 保留原值（含后缀），供状态栏与上下文窗口解析使用。
+    """
+    stripped = _SUFFIX_STRIP_RE.sub("", model).strip()
+    return stripped or model
 
 
 def new_provider(cfg: ProviderConfig) -> Provider:

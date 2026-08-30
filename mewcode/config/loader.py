@@ -137,12 +137,20 @@ def _validate(config: Config) -> None:
 
 
 def load_ccswitch() -> Config | None:
-    """检测 CC Switch 是否已配置 Claude Code。
+    """检测 CC Switch / Claude Code 共享配置。
 
-    CC Switch 将 API 密钥和端点写入 ~/.claude/settings.json 的 env 字段。
-    如果检测到有效配置，直接返回 Config 对象，无需用户手动创建 .mewcode.yaml。
+    Claude Code 的配置目录由 CLAUDE_CONFIG_DIR 指定（未设置时回退 ~/.claude），
+    其 settings.json 的 env 字段保存 API key 与端点。这里同时认
+    ANTHROPIC_API_KEY（x-api-key）和 ANTHROPIC_AUTH_TOKEN（Bearer），
+    与 Claude Code 实际使用的字段一致，避免手动复制 key 到 .mewcode.yaml。
+    检测到有效配置则直接返回 Config 对象。
     """
-    settings_path = Path.home() / ".claude" / "settings.json"
+    config_dir = os.environ.get("CLAUDE_CONFIG_DIR")
+    settings_path = (
+        Path(config_dir) / "settings.json"
+        if config_dir
+        else Path.home() / ".claude" / "settings.json"
+    )
     if not settings_path.exists():
         return None
 
@@ -155,12 +163,13 @@ def load_ccswitch() -> Config | None:
     if not isinstance(env, dict):
         return None
 
-    token = env.get("ANTHROPIC_AUTH_TOKEN", "")
-    base_url = env.get("ANTHROPIC_BASE_URL", "")
+    api_key = env.get("ANTHROPIC_API_KEY", "")
+    auth_token = env.get("ANTHROPIC_AUTH_TOKEN", "")
 
-    if not token:
+    if not api_key and not auth_token:
         return None
 
+    base_url = env.get("ANTHROPIC_BASE_URL", "")
     model = env.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
 
     return Config(
@@ -170,8 +179,9 @@ def load_ccswitch() -> Config | None:
                 name="ccswitch",
                 protocol="anthropic",
                 model=model,
-                auth_token=token,
-                base_url=base_url if base_url else None,
+                api_key=api_key,
+                auth_token=auth_token or None,
+                base_url=base_url or None,
                 thinking=False,
             )
         ],

@@ -7,7 +7,7 @@ import pytest
 
 from mewcode.prompt.assembler import PromptPayload
 from mewcode.provider.anthropic import AnthropicProvider
-from mewcode.provider.base import Message, ToolCall
+from mewcode.provider.base import Message, ToolCall, api_model
 from mewcode.provider.openai import OpenAIProvider
 
 
@@ -197,3 +197,94 @@ class TestOpenAIToolParsing:
 
         trace = json.loads((tmp_path / "openai.json").read_text(encoding="utf-8"))
         assert trace["provider_request"]["messages"] == completions.kwargs["messages"]
+
+
+class TestApiModelSuffixStripping:
+    """API 请求模型名剥 [..] 上下文后缀；provider.model 保留原值。
+
+    防回归：曾把 cfg.model 原样发给网关，带 [1M] 后缀的模型名被网关
+    ModelError 拒收（deepseek-v4-flash[1M] is not supported）。
+    """
+
+    def test_api_model_pure(self):
+        assert api_model("deepseek-v4-flash[1M]") == "deepseek-v4-flash"
+        assert api_model("model[512k]") == "model"
+        assert api_model("plain-model") == "plain-model"
+        assert api_model("") == ""
+
+    @pytest.mark.anyio
+    async def test_anthropic_strips_suffix_for_request(self, tmp_path):
+        class FakeStream:
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                if hasattr(self, "done"):
+                    raise StopAsyncIteration
+                self.done = True
+                return SimpleNamespace(type="message_stop")
+
+            async def close(self):
+                pass
+
+        class FakeMessages:
+            def __init__(self):
+                self.kwargs = None
+
+            async def create(self, **kwargs):
+                self.kwargs = kwargs
+                return FakeStream()
+
+        client_messages = FakeMessages()
+        provider = object.__new__(AnthropicProvider)
+        provider._model = "deepseek-v4-flash[1M]"
+        provider._thinking = False
+        provider._client = SimpleNamespace(messages=client_messages)
+        payload = PromptPayload(
+            stable_prompt="",
+            env_segment="",
+            messages=[Message(role="user", content="hi")],
+            trace_context={"path": str(tmp_path / "anthropic.json")},
+        )
+
+        [event async for event in provider.stream(payload)]
+
+        assert (
+            provider.model == "deepseek-v4-flash[1M]"
+        )  # 保留原值（状态栏/上下文窗口）
+        assert client_messages.kwargs["model"] == "deepseek-v4-flash"  # API 用无后缀名
+
+    @pytest.mark.anyio
+    async def test_openai_strips_suffix_for_request(self, tmp_path):
+        class FakeStream:
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                raise StopAsyncIteration
+
+        class FakeCompletions:
+            def __init__(self):
+                self.kwargs = None
+
+            async def create(self, **kwargs):
+                self.kwargs = kwargs
+                return FakeStream()
+
+        completions = FakeCompletions()
+        provider = object.__new__(OpenAIProvider)
+        provider._model = "deepseek-v4-flash[1M]"
+        provider._client = SimpleNamespace(
+            chat=SimpleNamespace(completions=completions)
+        )
+        payload = PromptPayload(
+            stable_prompt="",
+            env_segment="",
+            messages=[Message(role="user", content="hi")],
+            trace_context={"path": str(tmp_path / "openai.json")},
+        )
+
+        [event async for event in provider.stream(payload)]
+
+        assert provider.model == "deepseek-v4-flash[1M]"  # 保留原值
+        assert completions.kwargs["model"] == "deepseek-v4-flash"  # API 用无后缀名

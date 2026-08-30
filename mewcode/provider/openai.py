@@ -10,7 +10,7 @@ from ..llm import PromptTooLongError
 from ..monitor.protocol import write_request_record
 from ..prompt.assembler import PromptPayload
 from ..utils.error import ProviderError
-from .base import StreamEvent, TokenUsage, ToolCall
+from .base import StreamEvent, TokenUsage, ToolCall, api_model
 
 
 class OpenAIProvider:
@@ -89,7 +89,7 @@ class OpenAIProvider:
             api_messages.append({"role": "user", "content": r.content})
 
         kwargs: dict = {
-            "model": self._model,
+            "model": api_model(self._model),
             "messages": api_messages,
             "stream": True,
             "stream_options": {"include_usage": True},
@@ -107,7 +107,7 @@ class OpenAIProvider:
                 for t in payload.tools
             ]
 
-        write_request_record(payload, "openai", self._model, kwargs)
+        write_request_record(payload, "openai", api_model(self._model), kwargs)
 
         # tool_calls 分片拼接状态：index -> {"id": ..., "name": ..., "arguments": ...}
         _tool_call_buffers: dict[int, dict] = {}

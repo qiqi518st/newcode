@@ -28,6 +28,21 @@ def test_one_m_suffix(monkeypatch):
     assert get_context_window_for_model("claude-sonnet-4[1m]", "anthropic") == 1_000_000
 
 
+def test_suffix_case_insensitive_and_various(monkeypatch):
+    """第 2 级：后缀单位大小写不敏感，且不写死 1M（支持 512K/2M 等）。
+
+    防回归：曾写死只认小写 [1m] 且只认 1M，CC Switch 写入的大写 [1M]
+    识别不到，悄悄回落协议默认。
+    """
+    monkeypatch.delenv("CLAUDE_CODE_MAX_CONTEXT_TOKENS", raising=False)
+    assert (
+        get_context_window_for_model("deepseek-v4-flash[1M]", "anthropic") == 1_000_000
+    )
+    assert get_context_window_for_model("model[512k]", "anthropic") == 512_000
+    assert get_context_window_for_model("model[2M]", "anthropic") == 2_000_000
+    assert get_context_window_for_model("model[10K]", "openai") == 10_000
+
+
 def test_capability_table(monkeypatch):
     """第 3 级：能力表命中且 ≥100K → 取表值。"""
     monkeypatch.delenv("CLAUDE_CODE_MAX_CONTEXT_TOKENS", raising=False)

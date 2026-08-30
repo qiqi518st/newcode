@@ -10,7 +10,7 @@ from ..llm import PromptTooLongError
 from ..monitor.protocol import write_request_record
 from ..prompt.assembler import PromptPayload
 from ..utils.error import ProviderError
-from .base import StreamEvent, TokenUsage, ToolCall
+from .base import StreamEvent, TokenUsage, ToolCall, api_model
 
 
 class AnthropicProvider:
@@ -113,7 +113,7 @@ class AnthropicProvider:
             api_messages.append({"role": "user", "content": r.content})
 
         kwargs: dict = {
-            "model": self._model,
+            "model": api_model(self._model),
             "messages": api_messages,
             "max_tokens": payload.max_output_tokens or 4096,
         }
@@ -130,7 +130,7 @@ class AnthropicProvider:
                 for t in payload.tools
             ]
 
-        write_request_record(payload, "anthropic", self._model, kwargs)
+        write_request_record(payload, "anthropic", api_model(self._model), kwargs)
 
         # 流式消费状态
         _tool_name: str | None = None
