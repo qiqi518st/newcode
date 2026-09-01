@@ -150,22 +150,31 @@ class Executor:
         return extract_summary(buffer)
 
     async def _run_fork_agent(self, agent, rendered: str) -> tuple[str, int, int]:
-        """驱动子 Agent 至 DONE，累计 token，收集最终 assistant 文本。"""
-        from ..agent.events import EventType
+        """驱动子 Agent 至 DONE（ch13 F10：改用 run_to_completion 复用主循环，不手写事件消费）。
 
-        final_text = ""
-        in_tokens = 0
-        out_tokens = 0
-        async for event in agent.run(rendered, mode="normal"):
-            if event.type == EventType.TEXT:
-                final_text += event.payload
-            elif event.type == EventType.TOKEN_USAGE:
+        observer 聚合 token 用量供写回主统计（N13）；达 maxTurns 保留部分文本（与旧行为一致）。
+        """
+        from ..agent.events import EventType
+        from ..subagent.errors import MaxTurnsReached
+
+        usage = TokenUsage(0, 0)
+
+        def observer(event) -> None:
+            nonlocal usage
+            if event.type == EventType.TOKEN_USAGE:
                 tu: TokenUsage = event.payload
-                in_tokens += tu.input_tokens
-                out_tokens += tu.output_tokens
-            elif event.type == EventType.DONE:
-                break
-        return final_text.strip(), in_tokens, out_tokens
+                usage = TokenUsage(
+                    usage.input_tokens + tu.input_tokens,
+                    usage.output_tokens + tu.output_tokens,
+                    usage.cache_creation_input_tokens + tu.cache_creation_input_tokens,
+                    usage.cache_read_input_tokens + tu.cache_read_input_tokens,
+                )
+
+        try:
+            final_text = await agent.run_to_completion(rendered, observer=observer)
+        except MaxTurnsReached as exc:
+            final_text = exc.text
+        return final_text.strip(), usage.input_tokens, usage.output_tokens
 
     def _resolve_fork_provider(self, skill):
         """model override：skill.meta.model 非空且与当前会话模型不同时建新 provider。

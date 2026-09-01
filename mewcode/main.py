@@ -40,10 +40,21 @@ from mewcode.skills import ActiveSkills, Catalog, Executor
 from mewcode.slash import CommandContext, CommandRegistry
 from mewcode.slash.commands import register_all
 from mewcode.slash.commands.skill_register import register_skills_as_commands
+from mewcode.subagent.catalog import load_catalog
+from mewcode.subagent.config import load_agent_config
+from mewcode.subagent.launcher import SubAgentLauncher
+from mewcode.subagent.manager import TaskManager
 from mewcode.tools import Registry
+from mewcode.tools.agent_tool import AgentTool
 from mewcode.tools.load_skill import LoadSkillTool
 from mewcode.tools.memory_read import ReadMemoryTool
 from mewcode.tools.memory_write import WriteMemoryTool
+from mewcode.tools.task_tools import (
+    SendMessageTool,
+    TaskGetTool,
+    TaskListTool,
+    TaskStopTool,
+)
 from mewcode.tui.app import REPL
 from mewcode.tui.renderer import RichRenderer
 
@@ -193,6 +204,49 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
     active_provider_cfg = next(
         (p for p in config.providers if p.name == config.provider), None
     )
+    # ch13：模型工厂（launcher 模型分层与 Skill Executor 共用；无 provider 配置时为 None）
+    make_provider = (
+        (
+            lambda model: (
+                new_provider(replace(active_provider_cfg, model=model))
+                if active_provider_cfg
+                else None
+            )
+        )
+        if active_provider_cfg
+        else None
+    )
+
+    # ── ch13 SubAgent 装配（T20）：agents 配置 → catalog → 后台管理器 → launcher → 工具 ──
+    agents_cfg = load_agent_config(cwd)
+    subagent_catalog = load_catalog(cwd, agents_cfg)
+    task_manager = TaskManager(
+        max_tasks_per_agent=agents_cfg.max_tasks_per_agent,
+        max_queue_per_agent=agents_cfg.max_queue_per_agent,
+        max_idle_agents=agents_cfg.max_idle_agents,
+        idle_cleanup_minutes=agents_cfg.idle_cleanup_minutes,
+    )
+    launcher = SubAgentLauncher(
+        provider,
+        make_provider=make_provider,
+        parent_permission=permission,
+        hooks=hook_engine,
+        catalog=subagent_catalog,
+        manager=task_manager,
+        cfg=agents_cfg,
+        get_main_agent=lambda: agent_ref[0],  # 惰性取用（agent_ref 在下方构造后填充）
+    )
+    # 工具注册（主 Agent 可见；agent 工具经 GLOBAL_DENY 对子 Agent 剔除，F6.1）
+    registry.register(AgentTool(subagent_catalog, launcher, lambda: agent_ref[0]))
+    registry.register(TaskListTool(task_manager))
+    registry.register(TaskGetTool(task_manager))
+    registry.register(TaskStopTool(task_manager))
+    registry.register(SendMessageTool(task_manager))
+    # hook agent 动作接通（F9.1）
+    hook_engine.set_agent_launcher(launcher.launch_hook_agent)
+    # 常驻空闲清理（F7.7）
+    task_manager_task = asyncio.create_task(task_manager.run())
+
     context_mgr = ContextManager(
         provider,
         conversation,
@@ -253,6 +307,7 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
                 session_runtime=session_runtime,
                 session_archive=session_archive,
                 memory_manager=memory,
+                task_manager=task_manager,
             )
             # ch10：命令注册 + CommandContext 组装。register_all 冲突 → 打印冲突名并退出（F1.3/N4）
             cmd_registry = CommandRegistry()
@@ -269,13 +324,7 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
                 provider,
                 engine=None,
                 version=__version__,
-                make_provider=(
-                    lambda model: (
-                        new_provider(replace(active_provider_cfg, model=model))
-                        if active_provider_cfg
-                        else None
-                    )
-                ),
+                make_provider=make_provider,
             )
             register_skills_as_commands(cmd_registry, catalog, executor)
             cmd_ctx = CommandContext(
@@ -294,6 +343,7 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
                 active_skills=active_skills,
                 executor=executor,
                 hooks=hook_engine,
+                task_manager=task_manager,
             )
             repl.command_registry = cmd_registry
             repl.command_ctx = cmd_ctx
@@ -301,6 +351,10 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
     finally:
         if not cleanup_task.done():
             cleanup_task.cancel()
+        # ch13：后台任务全局清空（不跨进程/会话持久化，F7.9）
+        task_manager.clear_all()
+        if not task_manager_task.done():
+            task_manager_task.cancel()
         # ch12：session_end + shutdown + engine.close（F8.1/F9.5，后台任务尽力而为）
         await hook_engine.dispatch(HookEvent.SESSION_END, {})
         await hook_engine.dispatch(HookEvent.SHUTDOWN, {})
