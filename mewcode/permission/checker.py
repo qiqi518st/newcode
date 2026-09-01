@@ -293,6 +293,16 @@ class PermissionChecker:
             )
         return CheckResult(decision=Decision.ALLOW, reason="")
 
+    def for_subagent(self, mode: PermissionMode) -> "PermissionChecker":
+        """构造共享规则层的子 Agent 检查器（ch13 F4.2/F5.3，A2）。
+
+        - **复用父实例的 _layers**：父对话 persist_local_allow 过的精确规则，子 Agent
+          同样命中（用户已批准过的不再重问，A2）
+        - mode 换为子角色模式（独立；子 Agent 自身的模式不改变主 Agent 模式，F4.1）
+        - 子 Agent 永不触发 HITL：is_interactive=False 由 Agent 层保证（B1）
+        """
+        return PermissionChecker(project_root=self._root, mode=mode, layers=self._layers)
+
     def set_mode(self, mode: PermissionMode) -> None:
         """运行时切换权限模式"""
         self._mode = mode

@@ -99,6 +99,23 @@ class Registry:
                 sub.register(t)
         return sub
 
+    def view(self, visible: set[str] | None = None) -> "Registry":
+        """构造只含 `visible` 内工具 + 系统工具的子 Registry（ch13 子 Agent 用，F6.4）。
+
+        - visible=None → 全量（向后兼容）
+        - 系统工具（is_system_tool）豁免恒包含（F3.5 语义扩展到子 Agent 过滤）
+        - 共享底层 Tool 实例（子 Agent 用它对模型暴露收窄工具集、对调度器仍可执行）
+        """
+        sub = Registry()
+        if visible is None:
+            for t in self._tools.values():
+                sub.register(t)
+            return sub
+        for name, t in self._tools.items():
+            if is_system_tool(t) or name in visible:
+                sub.register(t)
+        return sub
+
     def _definitions_for(self, tools: list[Tool]) -> list[ToolDefinition]:
         return [
             ToolDefinition(

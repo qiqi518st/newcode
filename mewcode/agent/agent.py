@@ -52,6 +52,8 @@ class Agent:
         | None = None,  # ch12: hooks.Engine | None（None 时全部短路，N10）
         runtime: object
         | None = None,  # ch12: SessionRuntime | None（取 pending_reminders）
+        max_turns: int = 10,  # ch13: 最大迭代轮数（主 Agent 缺省保持 10，spec F2.1）
+        dont_ask: bool = False,  # ch13: dontAsk 模式（子 Agent ASK→ALLOW 短路，F5.3）
     ) -> None:
         self.provider = provider
         self.conv = conversation
@@ -61,6 +63,9 @@ class Agent:
         self._assembler = PayloadAssembler()
         self._scheduler = ToolScheduler(registry)
         self._cancelled = asyncio.Event()
+        # ch13 子 Agent 参数（主 Agent 缺省不变）
+        self._max_turns = max_turns
+        self._dont_ask = dont_ask
 
         # ch08 上下文管理（可选；无时行为与 ch07 一致，N8 向后兼容）
         self._context_mgr = context_mgr
@@ -160,6 +165,8 @@ class Agent:
         user_input: str,
         mode: str = "normal",
         plan_content: str = "",
+        *,
+        _inject: bool = True,  # ch13: run_to_completion 驱动时任务已在 conv 则跳过（F5.2）
     ) -> AsyncIterator[Event]:
         """ReAct 循环入口，对外吐出统一 Event 流
 
@@ -172,12 +179,13 @@ class Agent:
             self._cancelled.clear()
             run_id = uuid.uuid4().hex[:12]
 
-            # 注入用户消息
-            if mode == "execute" and plan_content:
-                directive = EXECUTE_DIRECTIVE.format(plan=plan_content)
-                self.conv.add_user(directive)
-            else:
-                self.conv.add_user(user_input)
+            # 注入用户消息（_inject=False 时任务已在 conv——run_to_completion 驱动）
+            if _inject:
+                if mode == "execute" and plan_content:
+                    directive = EXECUTE_DIRECTIVE.format(plan=plan_content)
+                    self.conv.add_user(directive)
+                else:
+                    self.conv.add_user(user_input)
 
             # 选择工具集（plan 模式暴露全部工具，由 SystemPrompt 引导自觉只读）
             tool_defs = self.registry.to_definitions()
@@ -192,7 +200,7 @@ class Agent:
             _emergency_retried: bool = False
 
             # ── ReAct 循环 ──
-            for turn in range(_MAX_AGENT_TURNS):
+            for turn in range(self._max_turns):
                 # 每轮开始前检查取消
                 if self._cancelled.is_set():
                     yield Event(EventType.DONE, StopReason.CANCELLED)
@@ -481,6 +489,11 @@ class Agent:
                             },
                         )
                         permission_results.append((tc, Decision.DENY, result.reason))
+                    elif result.decision == Decision.ASK and self._dont_ask:
+                        # ch13 dontAsk（F5.3）：子 Agent 自动批准规则未命中的工具（ASK→ALLOW）
+                        # 规则/黑名单/沙箱的 DENY 在前一分支已拦，不受影响
+                        allowed_calls.append(tc)
+                        permission_results.append((tc, Decision.ALLOW, ""))
                     elif result.decision == Decision.ASK:
                         if not self._interactive:
                             # 非交互：直接转为 DENY
@@ -646,10 +659,63 @@ class Agent:
             if _buffer:
                 self.conv.add_assistant(_buffer)
             # ch12 ⑪ turn_end（MAX_TURNS 也触发，F3.1）
-            await self._dispatch_hook(HookEvent.TURN_END, {"iter": _MAX_AGENT_TURNS})
+            await self._dispatch_hook(HookEvent.TURN_END, {"iter": self._max_turns})
             yield Event(EventType.DONE, StopReason.MAX_TURNS)
         finally:
             self._run_lock.release()
+
+    async def run_to_completion(
+        self,
+        task: str,
+        *,
+        already_injected: bool = False,
+        observer=None,
+    ) -> str:
+        """子 Agent「跑到底」（ch13 spec F5.2）：驱动 run() 复用主循环，返回最后一条文本。
+
+        - already_injected=True：任务已在 conv（Fork 路径 build_forked_messages 已注入）→ 不重复注入
+        - observer：可选事件回调（Manager 用它聚合 tool_count / usage，T12）
+        - 终止：NATURAL → 返回文本；MAX_TURNS → 抛 MaxTurnsReached；CANCELLED →
+          CancelledError；STREAM_ERROR / CONSECUTIVE_UNKNOWN_TOOLS → 抛 RuntimeError
+        - 子 Agent 无 memory_manager/context_mgr/runtime → 主对话专属逻辑天然不触发
+        """
+        final_text = ""
+        tool_count = 0
+        usage = TokenUsage(0, 0)
+        stop_reason = StopReason.NATURAL
+
+        async for event in self.run(
+            task, mode="normal", plan_content="", _inject=not already_injected
+        ):
+            if observer is not None:
+                observer(event)
+            if event.type == EventType.TEXT:
+                final_text += event.payload
+            elif event.type == EventType.TOOL_CALL:
+                tool_count += 1
+            elif event.type == EventType.TOKEN_USAGE:
+                tu = event.payload
+                usage = TokenUsage(
+                    usage.input_tokens + tu.input_tokens,
+                    usage.output_tokens + tu.output_tokens,
+                    usage.cache_creation_input_tokens + tu.cache_creation_input_tokens,
+                    usage.cache_read_input_tokens + tu.cache_read_input_tokens,
+                )
+            elif event.type == EventType.DONE:
+                stop_reason = event.payload
+
+        if stop_reason == StopReason.MAX_TURNS:
+            # 局部 import 避循环（subagent.__init__ 可能 import manager → agent，T12）
+            from ..subagent.errors import MaxTurnsReached
+
+            raise MaxTurnsReached(final_text, usage, tool_count)
+        if stop_reason == StopReason.CANCELLED:
+            raise asyncio.CancelledError("subagent cancelled")
+        if stop_reason == StopReason.STREAM_ERROR:
+            raise RuntimeError("subagent stream error")
+        if stop_reason == StopReason.CONSECUTIVE_UNKNOWN_TOOLS:
+            raise RuntimeError("subagent consecutive unknown tools")
+        return final_text
 
     def _schedule_memory_update(self, user_input: str) -> None:
         manager = self._memory_manager
