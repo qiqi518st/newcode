@@ -5,6 +5,22 @@
 """
 
 from .errors import MaxTurnsReached
+from .fork import (
+    FORK_BOILERPLATE,
+    FORK_BOILERPLATE_TAG,
+    build_forked_messages,
+    is_fork_context,
+)
+from .manager import (
+    BackgroundTask,
+    ForegroundHandle,
+    Status,
+    TaskBusy,
+    TaskCapReached,
+    TaskManager,
+    TaskNotFound,
+    build_task_notification,
+)
 from .types import (
     DEFAULT_MAX_TURNS,
     NOTIFICATION_XML,
@@ -16,10 +32,22 @@ from .types import (
 
 __all__ = [
     "DEFAULT_MAX_TURNS",
+    "FORK_BOILERPLATE",
+    "FORK_BOILERPLATE_TAG",
     "NOTIFICATION_XML",
     "RESULT_TRUNCATE_CHARS",
     "AgentDefinition",
+    "BackgroundTask",
     "DefinitionParseError",
+    "ForegroundHandle",
     "MaxTurnsReached",
     "Source",
+    "Status",
+    "TaskBusy",
+    "TaskCapReached",
+    "TaskManager",
+    "TaskNotFound",
+    "build_forked_messages",
+    "build_task_notification",
+    "is_fork_context",
 ]
