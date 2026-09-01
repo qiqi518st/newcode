@@ -96,14 +96,17 @@ class SubAgentLauncher:
     # ── 构造子 Agent ──────────────────────────────────────
     def make_sub_agent(
         self, role: AgentDefinition, *, fork_history: list | None = None,
-        is_background: bool = False,
+        is_background: bool = False, model_override: str = "",
     ) -> tuple[Agent, ConversationManager]:
-        """构造子 Agent（独立 conv；共享规则层 + 子模式；dont_ask；非交互，B1）。"""
+        """构造子 Agent（独立 conv；共享规则层 + 子模式；dont_ask；非交互，B1）。
+
+        model_override 非空时优先于角色 model（Agent 工具 model 参数，F1.2）。
+        """
         parent = self._get_main_agent()
         max_turns = role.max_turns or DEFAULT_MAX_TURNS
         conv = ConversationManager(max_turns, messages=list(fork_history or []))
         sub = Agent(
-            provider=self.resolve_model(role.model),
+            provider=self.resolve_model(model_override or role.model),
             conversation=conv,
             registry=self.build_sub_registry(role, is_background),
             stable_prompt=(
@@ -126,10 +129,12 @@ class SubAgentLauncher:
         *,
         name: str | None = None,
         background: bool = False,
+        model_override: str = "",
     ) -> LaunchResult:
         """定义式启动：subagent_type 非空（spec F2/F3.1）。
 
         background（参数或角色强制）且后台总闸开启 → 后台；否则前台（超时自动移交）。
+        model_override：Agent 工具 model 参数（F1.2），优先于角色 model。
         """
         role = self._catalog.resolve(role_name)
         if role is None:
@@ -137,7 +142,9 @@ class SubAgentLauncher:
         is_bg = (background or role.background) and (
             self._cfg.effective_enable_subagent_background()
         )
-        sub, _ = self.make_sub_agent(role, is_background=is_bg)
+        sub, _ = self.make_sub_agent(
+            role, is_background=is_bg, model_override=model_override
+        )
         if is_bg:
             task_id = self._manager.launch(sub, prompt, name=name, role_name=role.name)
             return LaunchResult(task_id=task_id, status="async_launched")

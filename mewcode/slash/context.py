@@ -44,3 +44,5 @@ class CommandContext:
     executor: object | None = None  # skills.Executor
     # ch12 Hook 引擎（main.py 装配注入；未接线保持 None，/hooks 显示「未启用」）
     hooks: object | None = None  # hooks.Engine
+    # ch13 后台任务管理器（main.py 装配注入；未接线保持 None，/tasks 显示「未启用」）
+    task_manager: object | None = None  # subagent.TaskManager

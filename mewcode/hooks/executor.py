@@ -81,6 +81,8 @@ class Executor:
     def __init__(self) -> None:
         # http 连接池惰性创建：无 http 动作时开销近零（N10）；单条请求 timeout 由 hook 覆盖
         self._http_client: httpx.AsyncClient | None = None
+        # ch13 agent 动作启动器（main.py 注入；None 时 _run_agent 保持占位）
+        self._launch_agent = None
 
     def _client(self) -> httpx.AsyncClient:
         if self._http_client is None:
@@ -100,7 +102,7 @@ class Executor:
         if action.type == ActionType.HTTP:
             return await self._run_http(action.http, payload, blocking, hook.timeout_s)
         if action.type == ActionType.AGENT:
-            return self._run_agent(action.agent, hook)
+            return await self._run_agent(action.agent, hook, payload)
         return ExecutionResult(err=ValueError(f"unknown action type: {action.type}"))
 
     async def _run_shell(
@@ -207,12 +209,34 @@ class Executor:
             return ExecutionResult(blocked=True, reason=str(data.get("reason", "")))
         return ExecutionResult()
 
-    def _run_agent(self, aa, hook: Hook) -> ExecutionResult:
-        """agent 动作（F5.13/N9）：本期占位——固定格式 stderr 日志，不 blocked 不 err。"""
-        print(
-            f"[hook {hook.name}] agent not yet implemented, skipped",
-            file=sys.stderr,
-        )
+    def set_agent_launcher(self, launcher) -> None:
+        """注入子 Agent 启动器（ch13 F8/F9：main.py 装配；None 保持占位向后兼容）。"""
+        self._launch_agent = launcher
+
+    async def _run_agent(self, aa, hook: Hook, payload: Payload) -> ExecutionResult:
+        """agent 动作（ch13 F9.1）：真实实现——调 launcher 触发定义式后台子 Agent。
+
+        - prompt 经 {field} 模板渲染（spec F9.1）
+        - 未注入 launcher → 保持原占位日志（向后兼容）
+        - agent_name 无效 / 触发失败 → ExecutionResult.err（引擎记 stderr，不中断 F9.1）
+        - 成功 → 不 blocked 不 err（通知型副作用，F9.4）
+        """
+        launcher = getattr(self, "_launch_agent", None)
+        if launcher is None:
+            print(
+                f"[hook {hook.name}] agent not yet implemented, skipped",
+                file=sys.stderr,
+            )
+            return ExecutionResult()
+        prompt = render_template(aa.prompt, payload)
+        try:
+            task_id = await launcher(aa.agent_name, prompt)
+        except Exception as e:  # noqa: BLE001 —— 触发失败按 hook 失败处理（F9.1）
+            return ExecutionResult(err=e)
+        if task_id is None:
+            return ExecutionResult(
+                err=RuntimeError(f"unknown agent_name: {aa.agent_name}")
+            )
         return ExecutionResult()
 
     async def aclose(self) -> None:

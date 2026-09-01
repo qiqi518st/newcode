@@ -22,6 +22,7 @@ from . import (
     session,
     skill,
     status,
+    tasks,
 )
 from . import help as help_cmd
 
@@ -38,6 +39,7 @@ COMMAND_MODULES = [
     compact,
     skill,
     hooks,
+    tasks,
     legacy,
 ]
 

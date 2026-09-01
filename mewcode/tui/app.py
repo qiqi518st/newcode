@@ -274,6 +274,9 @@ class RichUIController:
             return
         # ch12：session_end（旧会话）→ resume → 集中重置 → session_resume（F8.1/F2.2）
         await self._dispatch_hook(HookEvent.SESSION_END, {})
+        # ch13：后台任务与保留子 Agent 不跨会话（F7.9）
+        if getattr(repl, "task_manager", None) is not None:
+            repl.task_manager.clear_all()
         conv = await runtime.resume(session_id)
         self._repoint(conv)
         await runtime.reset_for_new_session()
@@ -288,6 +291,9 @@ class RichUIController:
             return
         # ch12：session_end（旧）→ create_new → 集中重置 → session_start（同 /clear）
         await self._dispatch_hook(HookEvent.SESSION_END, {})
+        # ch13：后台任务与保留子 Agent 不跨会话（F7.9）
+        if getattr(repl, "task_manager", None) is not None:
+            repl.task_manager.clear_all()
         conv = runtime.create_new()
         self._repoint(conv)
         await runtime.reset_for_new_session()
@@ -314,6 +320,9 @@ class RichUIController:
             return
         # ch12：session_end（旧会话）→ create_new → 集中重置 → session_start（F8.1/F2.2）
         await self._dispatch_hook(HookEvent.SESSION_END, {})
+        # ch13：后台任务与保留子 Agent 不跨会话（F7.9）
+        if getattr(repl, "task_manager", None) is not None:
+            repl.task_manager.clear_all()
         conv = (
             runtime.create_new()
         )  # close 旧 writer → 新会话上下文 → 新 writer → 重建 Conversation
@@ -360,6 +369,7 @@ class REPL:
         memory_manager=None,
         command_registry: CommandRegistry | None = None,
         command_ctx: CommandContext | None = None,
+        task_manager=None,  # ch13: subagent.TaskManager | None
     ) -> None:
         self.agent = agent
         self.renderer = renderer
@@ -378,6 +388,10 @@ class REPL:
         # ch10：命令系统
         self.command_registry = command_registry
         self.command_ctx = command_ctx
+        # ch13：后台任务管理器（done 队列消费 / clear_all / 状态栏任务数）
+        self.task_manager = task_manager
+        # ch13：前台子 Agent 跟踪字段（本期不实现 ESC 手动切换，预留后续章节）
+        self.foreground_sub_agent = None
         self.ui = RichUIController(
             self
         )  # UIController 实现（CommandContext.ui 注入用）
@@ -476,6 +490,8 @@ class REPL:
                 if self._exit_requested:
                     self._console.print("再见！")
                     break
+                # ch13：空闲点消费后台完成通知（流式中不消费，F7.6/N5）
+                self._drain_task_notifications()
                 try:
                     user_input = await self._session.prompt_async(
                         "❯ ",
@@ -514,6 +530,29 @@ class REPL:
 
         finally:
             pass
+
+    def _drain_task_notifications(self) -> None:
+        """ch13 F7.6：空闲点消费 done 队列——user 角色 <task-notification> 注入主对话 + 打印。
+
+        主 Agent 流式中不调用（run 主循环空闲点才调）；注入历史让后续轮可引用（N5）。
+        """
+        mgr = self.task_manager
+        if mgr is None:
+            return
+        for task_id in mgr.drain_done():
+            task = mgr.get(task_id)
+            if task is None:
+                continue
+            try:
+                from ..subagent.manager import build_task_notification
+
+                xml = build_task_notification(task)
+                self.agent.conv.add_user(xml)
+            except Exception:
+                # 通知注入失败仅记日志，不影响主流程
+                logger.exception("task notification injection failed")
+                continue
+            self._console.print(xml)
 
     async def _process_input(self, text: str) -> None:
         """提交普通用户输入（所有 "/" 前缀输入已被 dispatch_slash 拦截），启动 Agent。"""

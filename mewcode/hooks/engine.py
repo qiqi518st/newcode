@@ -46,6 +46,10 @@ class Engine:
         self._get_session_id = get_session_id
         self._get_mode = get_mode
 
+    def set_agent_launcher(self, launcher) -> None:
+        """注入子 Agent 启动器（ch13 F8/F9：main.py 装配；未注入时 agent 动作保持占位）。"""
+        self._executor.set_agent_launcher(launcher)
+
     def _base_payload(self) -> Payload:
         """通用字段补充：session_id / mode（event 由 dispatch 补全）。"""
         payload: Payload = {}
