@@ -76,7 +76,9 @@ async def _handler(ctx: CommandContext, args: str) -> None:
     if sub == "send":
         parts2 = rest.split(None, 1)
         if len(parts2) != 2:
-            ctx.ui.show_message("用法: /tasks send <task_id|name> <message>", style="yellow")
+            ctx.ui.show_message(
+                "用法: /tasks send <task_id|name> <message>", style="yellow"
+            )
             return
         target, message = parts2[0], parts2[1]
         try:
@@ -87,7 +89,9 @@ async def _handler(ctx: CommandContext, args: str) -> None:
         ctx.ui.show_message(f"已续派 {task_id}", style="green")
         return
 
-    ctx.ui.show_message(f"未知子命令: {sub}（/tasks [show|kill|send] ...）", style="yellow")
+    ctx.ui.show_message(
+        f"未知子命令: {sub}（/tasks [show|kill|send] ...）", style="yellow"
+    )
 
 
 def build() -> list[CommandDef]:

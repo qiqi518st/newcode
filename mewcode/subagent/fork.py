@@ -28,9 +28,7 @@ FORK_BOILERPLATE = """<fork_boilerplate>
 """
 
 
-def build_forked_messages(
-    parent_conv: ConversationManager, task: str
-) -> list[Message]:
+def build_forked_messages(parent_conv: ConversationManager, task: str) -> list[Message]:
     """把父对话克隆到 Fork 子对话（spec F3.2），追加 Boilerplate + 任务。
 
     1. 深拷贝 parent_conv 全部消息（Message 为 dataclass，tool_calls 需深拷贝）

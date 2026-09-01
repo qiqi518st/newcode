@@ -301,7 +301,9 @@ class PermissionChecker:
         - mode 换为子角色模式（独立；子 Agent 自身的模式不改变主 Agent 模式，F4.1）
         - 子 Agent 永不触发 HITL：is_interactive=False 由 Agent 层保证（B1）
         """
-        return PermissionChecker(project_root=self._root, mode=mode, layers=self._layers)
+        return PermissionChecker(
+            project_root=self._root, mode=mode, layers=self._layers
+        )
 
     def set_mode(self, mode: PermissionMode) -> None:
         """运行时切换权限模式"""

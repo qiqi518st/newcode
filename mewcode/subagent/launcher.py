@@ -64,7 +64,9 @@ class SubAgentLauncher:
         self._get_main_agent = get_main_agent
 
     # ── 工具集 ────────────────────────────────────────────
-    def build_sub_registry(self, role: AgentDefinition, is_background: bool) -> Registry:
+    def build_sub_registry(
+        self, role: AgentDefinition, is_background: bool
+    ) -> Registry:
         """F6.4 多层过滤 → 子 Registry（共享 Tool 实例，一次性固定）。"""
         parent = self._get_main_agent()
         visible = apply_agent_tool_filter(
@@ -95,8 +97,12 @@ class SubAgentLauncher:
 
     # ── 构造子 Agent ──────────────────────────────────────
     def make_sub_agent(
-        self, role: AgentDefinition, *, fork_history: list | None = None,
-        is_background: bool = False, model_override: str = "",
+        self,
+        role: AgentDefinition,
+        *,
+        fork_history: list | None = None,
+        is_background: bool = False,
+        model_override: str = "",
     ) -> tuple[Agent, ConversationManager]:
         """构造子 Agent（独立 conv；共享规则层 + 子模式；dont_ask；非交互，B1）。
 
@@ -110,7 +116,9 @@ class SubAgentLauncher:
             conversation=conv,
             registry=self.build_sub_registry(role, is_background),
             stable_prompt=(
-                role.body if not role.is_fork() else getattr(parent, "_stable_prompt", "")
+                role.body
+                if not role.is_fork()
+                else getattr(parent, "_stable_prompt", "")
             ),
             env_segment=getattr(parent, "_env_segment", ""),
             permission=self._parent_permission.for_subagent(role.permission_mode),
@@ -164,9 +172,7 @@ class SubAgentLauncher:
         role = self._catalog.fork_definition()
         parent = self._get_main_agent()
         forked = build_forked_messages(parent.conv, prompt)
-        sub, _ = self.make_sub_agent(
-            role, fork_history=forked, is_background=True
-        )
+        sub, _ = self.make_sub_agent(role, fork_history=forked, is_background=True)
         task_id = self._manager.launch(
             sub, prompt, name=name, role_name="fork", already_injected=True
         )
@@ -188,7 +194,9 @@ class SubAgentLauncher:
 
         后台总闸关闭（F11.1）→ 无超时（强制前台同步，等待完成、不移交）。
         """
-        handle = self._manager.launch_foreground(sub, prompt, name=name, role_name=role.name)
+        handle = self._manager.launch_foreground(
+            sub, prompt, name=name, role_name=role.name
+        )
         timeout = (
             self._cfg.async_timeout_s
             if self._cfg.effective_enable_subagent_background()

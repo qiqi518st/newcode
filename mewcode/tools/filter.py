@@ -37,8 +37,12 @@ class FilterParams:
 
     all: list[str]  # registry 全部工具名（按注册顺序）
     background: bool  # 是否后台工作者
-    role_tools: list[str] = field(default_factory=list)  # 定义 tools 白名单（空=不限制）
-    role_disallowed: list[str] = field(default_factory=list)  # 定义 disallowedTools 黑名单
+    role_tools: list[str] = field(
+        default_factory=list
+    )  # 定义 tools 白名单（空=不限制）
+    role_disallowed: list[str] = field(
+        default_factory=list
+    )  # 定义 disallowedTools 黑名单
 
 
 def is_mcp_tool(name: str) -> bool:
@@ -60,8 +64,10 @@ def apply_agent_tool_filter(p: FilterParams) -> list[str]:
             continue
         if p.role_tools and name not in p.role_tools:
             continue
-        if p.background and name not in ASYNC_AGENT_ALLOWED_TOOLS and not is_mcp_tool(
-            name
+        if (
+            p.background
+            and name not in ASYNC_AGENT_ALLOWED_TOOLS
+            and not is_mcp_tool(name)
         ):
             continue
         visible.append(name)

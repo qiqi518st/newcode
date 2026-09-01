@@ -35,13 +35,17 @@ def parse_definition(path: str, source: Source) -> AgentDefinition:
     return parse_definition_text(raw, source, str(p))
 
 
-def parse_definition_text(raw: str, source: Source, display_path: str) -> AgentDefinition:
+def parse_definition_text(
+    raw: str, source: Source, display_path: str
+) -> AgentDefinition:
     """从文本解析（内置随包数据走此入口，display_path 供诊断定位，spec F2.4）。"""
     try:
         meta, body = parse_frontmatter_and_body(raw)
     except Exception as exc:
         # 复用 skills 抛错统一包装为 DefinitionParseError（spec F2.4 可诊断）
-        raise DefinitionParseError(display_path, f"frontmatter 解析失败: {exc}") from exc
+        raise DefinitionParseError(
+            display_path, f"frontmatter 解析失败: {exc}"
+        ) from exc
 
     # name：缺省取 display_path 基名（磁盘文件）或空；非法抛错（结构性问题）
     basename = Path(display_path).stem if display_path.endswith(".md") else ""
@@ -88,7 +92,9 @@ def parse_definition_text(raw: str, source: Source, display_path: str) -> AgentD
             permission_mode = PermissionMode.DEFAULT
 
     # maxTurns / background / enabled：类型非法 → 警告缺省
-    max_turns = _int_field(meta.get("maxTurns"), DEFAULT_MAX_TURNS, display_path, "maxTurns")
+    max_turns = _int_field(
+        meta.get("maxTurns"), DEFAULT_MAX_TURNS, display_path, "maxTurns"
+    )
     background = _bool_field(meta.get("background"), False, display_path, "background")
     enabled = _bool_field(meta.get("enabled"), True, display_path, "enabled")
 

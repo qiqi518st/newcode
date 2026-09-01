@@ -49,11 +49,15 @@ class AgentDefinition:
     name: str  # 角色名（subagent_type 取值），^[a-z][a-z0-9-]*$，1-32
     description: str  # 用途说明（必填；Agent 工具 subagent_type 文档与 UI 列表用）
     body: str = ""  # 正文 = 子 Agent 系统提示（身份/职责/工作风格）
-    tools: list[str] = field(default_factory=list)  # 工具白名单（空 = 不限制，spec F2.1）
+    tools: list[str] = field(
+        default_factory=list
+    )  # 工具白名单（空 = 不限制，spec F2.1）
     disallowed_tools: list[str] = field(
         default_factory=list
     )  # 工具黑名单（spec F2.1/F6.2）
-    model: str = "inherit"  # inherit/haiku/sonnet/opus（命名分层经配置映射，F2.1/F11.1）
+    model: str = (
+        "inherit"  # inherit/haiku/sonnet/opus（命名分层经配置映射，F2.1/F11.1）
+    )
     max_turns: int = DEFAULT_MAX_TURNS  # 最大迭代轮数（spec F2.1）
     permission_mode: PermissionMode = PermissionMode.DEFAULT  # 四档（F5.3）
     dont_ask: bool = False  # frontmatter permissionMode: dontAsk → True（F5.3）

@@ -172,8 +172,14 @@ class SendMessageTool(Tool):
         return {
             "type": "object",
             "properties": {
-                "task_id": {"type": "string", "description": "任务 ID（与 name 二选一）"},
-                "name": {"type": "string", "description": "spawn 时的名字（与 task_id 二选一）"},
+                "task_id": {
+                    "type": "string",
+                    "description": "任务 ID（与 name 二选一）",
+                },
+                "name": {
+                    "type": "string",
+                    "description": "spawn 时的名字（与 task_id 二选一）",
+                },
                 "message": {"type": "string", "description": "续派任务文本"},
             },
             "required": ["message"],

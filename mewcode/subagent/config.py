@@ -31,7 +31,9 @@ class AgentConfig:
     max_idle_agents: int = 10  # 空闲子 Agent 保留上限（F7.7）
     max_tasks_per_agent: int = 10  # 每子 Agent 任务总数上限（F7.7）
     max_queue_per_agent: int = 2  # 每子 Agent 排队任务上限（F7.8）
-    model_tiers: dict[str, str] = field(default_factory=dict)  # 模型分层映射（F2.1/F11.1）
+    model_tiers: dict[str, str] = field(
+        default_factory=dict
+    )  # 模型分层映射（F2.1/F11.1）
 
     def effective_enable_subagent_background(self) -> bool:
         """后台总闸生效值（字段本身缺省 True；显式方法供调用点语义清晰）。"""

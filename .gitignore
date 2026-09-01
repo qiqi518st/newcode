@@ -51,3 +51,6 @@ docs_bak/
 
 # Scratch / test output
 /tmp/
+
+# uv lockfile（本仓库沿用 pip/venv 工作流，锁文件不入库）
+uv.lock

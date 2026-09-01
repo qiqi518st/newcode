@@ -66,7 +66,9 @@ class BackgroundTask:
     tool_count: int = 0  # 本轮工具调用次数
     last_activity: str = ""  # 最近一次工具名
     round: int = 1  # 已执行轮数（首轮=1，续派+1，上限 max_tasks_per_agent）
-    queue: deque[str] = field(default_factory=deque)  # 排队续派任务（≤max_queue_per_agent）
+    queue: deque[str] = field(
+        default_factory=deque
+    )  # 排队续派任务（≤max_queue_per_agent）
     idle_since: float | None = None  # completed/failed 后时间戳（空闲清理）
     cancel_event: asyncio.Event = field(default_factory=asyncio.Event)
     run_task: asyncio.Task | None = None  # 当前轮 run 任务（Manager 持有）
@@ -86,7 +88,9 @@ class ForegroundHandle:
 def build_task_notification(task: BackgroundTask) -> str:
     """组 `<task-notification>` XML（spec F7.6）：result 截断 RESULT_TRUNCATE_CHARS。"""
     status = task.status.name.lower()
-    result = (task.err and str(task.err)) if (task.err and not task.result) else task.result
+    result = (
+        (task.err and str(task.err)) if (task.err and not task.result) else task.result
+    )
     result = result or ""
     if len(result) > RESULT_TRUNCATE_CHARS:
         result = result[:RESULT_TRUNCATE_CHARS] + "…"
@@ -103,8 +107,14 @@ def build_task_notification(task: BackgroundTask) -> str:
 class TaskManager:
     """管理后台任务（协程安全，单事件循环，spec F7.4）。"""
 
-    def __init__(self, *, max_tasks_per_agent: int = 10, max_queue_per_agent: int = 2,
-                 max_idle_agents: int = 10, idle_cleanup_minutes: float = 15.0) -> None:
+    def __init__(
+        self,
+        *,
+        max_tasks_per_agent: int = 10,
+        max_queue_per_agent: int = 2,
+        max_idle_agents: int = 10,
+        idle_cleanup_minutes: float = 15.0,
+    ) -> None:
         self._lock = asyncio.Lock()
         self._tasks: dict[str, BackgroundTask] = {}
         self._by_name: dict[str, str] = {}  # name → id（弱引用，后启动覆盖）
@@ -142,14 +152,23 @@ class TaskManager:
 
     # ── 启动（后台）───────────────────────────────────────
     def launch(
-        self, agent: Agent, task_text: str, *, name: str | None = None,
-        already_injected: bool = False, role_name: str | None = None,
+        self,
+        agent: Agent,
+        task_text: str,
+        *,
+        name: str | None = None,
+        already_injected: bool = False,
+        role_name: str | None = None,
     ) -> str:
         """后台启动：立即返回 task_id（spec F7.4）。"""
         task_id = self._next_id()
         bt = BackgroundTask(
-            id=task_id, name=name, role=role_name or "", sub_agent=agent,
-            task_text=task_text, background=True,
+            id=task_id,
+            name=name,
+            role=role_name or "",
+            sub_agent=agent,
+            task_text=task_text,
+            background=True,
         )
         self._register(bt)
         self._start_round(bt, task_text, already_injected=already_injected)
@@ -157,14 +176,22 @@ class TaskManager:
 
     # ── 启动（前台，供 AgentTool await + 超时移交）───────────
     def launch_foreground(
-        self, agent: Agent, task_text: str, *, name: str | None = None,
+        self,
+        agent: Agent,
+        task_text: str,
+        *,
+        name: str | None = None,
         role_name: str | None = None,
     ) -> ForegroundHandle:
         """前台启动：注册运行中任务，返回 handle 供工具 await（F7.3）。"""
         task_id = self._next_id()
         bt = BackgroundTask(
-            id=task_id, name=name, role=role_name or "", sub_agent=agent,
-            task_text=task_text, background=False,
+            id=task_id,
+            name=name,
+            role=role_name or "",
+            sub_agent=agent,
+            task_text=task_text,
+            background=False,
         )
         self._register(bt)
         self._start_round(bt, task_text, already_injected=False)
@@ -202,7 +229,9 @@ class TaskManager:
         if bt.status == Status.CANCELLED:
             raise TaskBusy(f"task {bt.id} is cancelled")
         if bt.round >= self._max_tasks_per_agent:
-            raise TaskCapReached(f"task {bt.id} reached max {self._max_tasks_per_agent} tasks")
+            raise TaskCapReached(
+                f"task {bt.id} reached max {self._max_tasks_per_agent} tasks"
+            )
         if bt.status == Status.RUNNING:
             if len(bt.queue) >= self._max_queue_per_agent:
                 raise TaskBusy(f"task {bt.id} queue full ({self._max_queue_per_agent})")
@@ -242,13 +271,18 @@ class TaskManager:
                 self._drop(task_id)
                 continue
             # 空闲超时
-            if bt.idle_since is not None and now - bt.idle_since > self._idle_cleanup_seconds:
+            if (
+                bt.idle_since is not None
+                and now - bt.idle_since > self._idle_cleanup_seconds
+            ):
                 self._drop(task_id)
                 continue
             idle.append(bt)
         # 保留上限：超出关最旧
         if len(idle) > self._max_idle_agents:
-            for bt in sorted(idle, key=lambda t: t.end_time or 0)[: len(idle) - self._max_idle_agents]:
+            for bt in sorted(idle, key=lambda t: t.end_time or 0)[
+                : len(idle) - self._max_idle_agents
+            ]:
                 self._drop(bt.id)
 
     # ── 内部 ──────────────────────────────────────────────
@@ -267,7 +301,9 @@ class TaskManager:
         if bt.name and self._by_name.get(bt.name) == task_id:
             self._by_name.pop(bt.name, None)
 
-    def _start_round(self, bt: BackgroundTask, task_text: str, *, already_injected: bool) -> None:
+    def _start_round(
+        self, bt: BackgroundTask, task_text: str, *, already_injected: bool
+    ) -> None:
         """启动一轮跑动（首轮或续派；续派复用同 task_id，F7.10）。"""
         if bt.round > 1:
             bt.status = Status.RUNNING
@@ -294,7 +330,8 @@ class TaskManager:
                 bt.usage = TokenUsage(
                     bt.usage.input_tokens + tu.input_tokens,
                     bt.usage.output_tokens + tu.output_tokens,
-                    bt.usage.cache_creation_input_tokens + tu.cache_creation_input_tokens,
+                    bt.usage.cache_creation_input_tokens
+                    + tu.cache_creation_input_tokens,
                     bt.usage.cache_read_input_tokens + tu.cache_read_input_tokens,
                 )
 
@@ -328,8 +365,10 @@ class TaskManager:
             bt.total_usage = TokenUsage(
                 bt.total_usage.input_tokens + bt.usage.input_tokens,
                 bt.total_usage.output_tokens + bt.usage.output_tokens,
-                bt.total_usage.cache_creation_input_tokens + bt.usage.cache_creation_input_tokens,
-                bt.total_usage.cache_read_input_tokens + bt.usage.cache_read_input_tokens,
+                bt.total_usage.cache_creation_input_tokens
+                + bt.usage.cache_creation_input_tokens,
+                bt.total_usage.cache_read_input_tokens
+                + bt.usage.cache_read_input_tokens,
             )
             # 仅后台语义任务推完成通知（前台内联完成结果已回主 Agent，F7.6）
             if bt.background or bt.adopted or bt.round > 1:

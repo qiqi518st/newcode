@@ -38,7 +38,11 @@ class AgentTool(Tool):
         names = ", ".join(d.name for d in catalog.list())
         self._description = (
             "启动一个子 Agent 执行独立任务（独立上下文，不污染主对话）。"
-            + (f" 可用 subagent_type: {names}" if names else " 不指定 subagent_type 走 Fork 路径。")
+            + (
+                f" 可用 subagent_type: {names}"
+                if names
+                else " 不指定 subagent_type 走 Fork 路径。"
+            )
         )
 
     @property
@@ -114,7 +118,11 @@ class AgentTool(Tool):
 
         if subagent_type:
             result = await self._launcher.launch_defined(
-                subagent_type, prompt, name=name, background=run_bg, model_override=model
+                subagent_type,
+                prompt,
+                name=name,
+                background=run_bg,
+                model_override=model,
             )
         else:
             result = await self._launcher.launch_fork(prompt, name=name)
