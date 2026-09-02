@@ -23,6 +23,7 @@ from . import (
     skill,
     status,
     tasks,
+    worktree,
 )
 from . import help as help_cmd
 
@@ -40,6 +41,7 @@ COMMAND_MODULES = [
     skill,
     hooks,
     tasks,
+    worktree,
     legacy,
 ]
 

@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 
 from ..agent.agent import Agent
 from ..conversation.manager import ConversationManager
+from ..permission.modes import PermissionMode
 from ..tools.filter import FilterParams, apply_agent_tool_filter
 from ..tools.registry import Registry
 from .config import AgentConfig
@@ -103,10 +104,14 @@ class SubAgentLauncher:
         fork_history: list | None = None,
         is_background: bool = False,
         model_override: str = "",
+        permission_mode: PermissionMode | None = None,
+        sandbox_root: str | None = None,
     ) -> tuple[Agent, ConversationManager]:
         """构造子 Agent（独立 conv；共享规则层 + 子模式；dont_ask；非交互，B1）。
 
         model_override 非空时优先于角色 model（Agent 工具 model 参数，F1.2）。
+        ch14：permission_mode 覆盖角色模式（worktree 隔离 → acceptEdits，worktree 内写自动
+        放行）；sandbox_root 覆盖权限沙箱根（= worktree 路径，F4.4 沙箱根跟随工作目录）。
         """
         parent = self._get_main_agent()
         # 角色 frontmatter maxTurns > agents.max_turns 全局默认 > 代码兜底（F2.1/F11.1）
@@ -122,7 +127,9 @@ class SubAgentLauncher:
                 else getattr(parent, "_stable_prompt", "")
             ),
             env_segment=getattr(parent, "_env_segment", ""),
-            permission=self._parent_permission.for_subagent(role.permission_mode),
+            permission=self._parent_permission.for_subagent(
+                permission_mode or role.permission_mode, root=sandbox_root
+            ),
             is_interactive=False,
             hooks=self._hooks,
             max_turns=max_turns,

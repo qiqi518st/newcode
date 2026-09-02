@@ -184,7 +184,12 @@ class RichUIController:
         return getattr(self._repl.agent.provider, "model", "") or ""
 
     def get_cwd(self) -> str:
-        return os.getcwd()
+        # ch14：主 Agent 进入 worktree 后返回 effective cwd（F9.3）
+        return self._repl._effective_cwd()
+
+    # ── Worktree（ch14 F9）─────────────────────────────────
+    def worktree_accessor(self):
+        return self._repl.worktree_accessor()
 
     # ── Skill（ch11）───────────────────────────────────────
     def list_catalog_skills(self) -> list:
@@ -370,6 +375,8 @@ class REPL:
         command_registry: CommandRegistry | None = None,
         command_ctx: CommandContext | None = None,
         task_manager=None,  # ch13: subagent.TaskManager | None
+        worktree_mgr=None,  # ch14: worktree.Manager | None
+        resume_worktree: bool = False,  # ch14: --resume 时恢复上次 worktree 会话（F10.3）
     ) -> None:
         self.agent = agent
         self.renderer = renderer
@@ -392,10 +399,19 @@ class REPL:
         self.task_manager = task_manager
         # ch13：前台子 Agent 跟踪字段（本期不实现 ESC 手动切换，预留后续章节）
         self.foreground_sub_agent = None
+        # ch14：worktree 管理器与主 Agent 活跃 cwd（"" = 进程 cwd，F9.3）
+        self.worktree_mgr = worktree_mgr
+        self.active_cwd: str = ""
+        self._worktree_accessor = None
         self.ui = RichUIController(
             self
         )  # UIController 实现（CommandContext.ui 注入用）
         self._exit_requested = False
+        # ch14：--resume / 恢复——仅 --resume 时把 active_cwd 指向上次 session（F10.3）
+        if self.worktree_mgr is not None and resume_worktree:
+            sess = self.worktree_mgr.current_session()
+            if sess is not None:
+                self.active_cwd = sess.worktree_path
 
         # 累计 token 用量
         self._session_in_tokens: int = 0
@@ -699,6 +715,39 @@ class REPL:
         self._executing_slug = meta.slug
         await self._run_stream("", "execute", plan_content)
 
+    # ── ch14 Worktree：active_cwd 注入 + WorktreeAccessor ─────
+    def _effective_cwd(self) -> str:
+        """主 Agent 当前有效 cwd（active_cwd 或进程 cwd，F9.3）。
+
+        getattr 防御：既有测试用 object.__new__(REPL) 绕过 __init__，active_cwd 可能不存在。
+        """
+        return getattr(self, "active_cwd", "") or os.getcwd()
+
+    def _set_active_cwd(self, cwd: str) -> None:
+        self.active_cwd = cwd
+
+    def worktree_accessor(self):
+        """构造（缓存）WorktreeAccessor 适配器；未启用返回 None（F9）。"""
+        if getattr(self, "worktree_mgr", None) is None:
+            return None
+        if getattr(self, "_worktree_accessor", None) is None:
+            from .worktree_adapter import WorktreeAdapter
+
+            self._worktree_accessor = WorktreeAdapter(
+                self.worktree_mgr, self._set_active_cwd
+            )
+        return self._worktree_accessor
+
+    async def _run_agent_events(self, user_input: str, mode: str, plan_content: str):
+        """在 effective cwd 的 ctx 下迭代 agent.run 事件（ch14 F7.3 注入）。"""
+        from ..tools.cwd import with_cwd
+
+        with with_cwd(self._effective_cwd()):
+            async for event in self.agent.run(
+                user_input, mode=mode, plan_content=plan_content
+            ):
+                yield event
+
     async def _consume_agent_events(
         self,
         user_input: str,
@@ -724,8 +773,8 @@ class REPL:
                     refresh_per_second=10,
                     vertical_overflow="visible",
                 ) as live:
-                    async for event in self.agent.run(
-                        user_input, mode=mode, plan_content=plan_content
+                    async for event in self._run_agent_events(
+                        user_input, mode, plan_content
                     ):
                         if event.type == EventType.TEXT:
                             text = event.payload

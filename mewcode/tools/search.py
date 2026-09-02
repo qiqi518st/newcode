@@ -5,6 +5,7 @@ import os
 import re
 
 from ..provider.base import ToolResult
+from .cwd import cwd_from_ctx
 
 _LIST_LIMIT = 100  # list_files 返回上限
 _SEARCH_LIMIT = 50  # search_code 返回上限
@@ -49,7 +50,8 @@ class ListFilesTool:
 
     async def execute(self, arguments: dict) -> ToolResult:
         pattern = arguments.get("pattern", "")
-        cwd = arguments.get("cwd", os.getcwd())
+        # ch14 F7.2：显式 cwd 参数 > ctx cwd > 进程 cwd
+        cwd = arguments.get("cwd") or cwd_from_ctx() or os.getcwd()
 
         try:
             matches = glob.glob(pattern, root_dir=cwd, recursive=True)
@@ -102,7 +104,8 @@ class SearchCodeTool:
 
     async def execute(self, arguments: dict) -> ToolResult:
         pattern = arguments.get("pattern", "")
-        cwd = arguments.get("cwd", os.getcwd())
+        # ch14 F7.2：显式 cwd 参数 > ctx cwd > 进程 cwd
+        cwd = arguments.get("cwd") or cwd_from_ctx() or os.getcwd()
         file_glob = arguments.get("glob", "")
 
         try:

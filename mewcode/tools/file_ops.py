@@ -5,6 +5,7 @@ import os
 from ..permission.sandbox import check_path as sandbox_check
 from ..provider.base import ToolResult
 from ..utils.error import PathTraversalError
+from .cwd import cwd_from_ctx
 
 _DEFAULT_READ_LIMIT = 500  # 未传 limit 时的默认读取行数
 
@@ -15,7 +16,8 @@ def _check_path(path: str) -> str:
     使用沙箱模块做符号链接感知的路径检查（双重保险）。
     """
     abs_path = os.path.abspath(path)
-    cwd = os.path.abspath(os.getcwd())
+    # ch14 F7.2：沙箱根跟随 ctx cwd（worktree 隔离下沙箱边界正确；缺省进程 cwd）
+    cwd = os.path.abspath(cwd_from_ctx() or os.getcwd())
 
     # 沙箱检查（符号链接感知）
     ok, resolved = sandbox_check(path, cwd)

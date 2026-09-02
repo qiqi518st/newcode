@@ -24,6 +24,30 @@ class SkillSummary:
     source: str  # project | user | builtin
 
 
+@dataclass(frozen=True)
+class WorktreeSummary:
+    """/worktree list 用瘦展示类型（UI 协议层不依赖 worktree 包，ch14 F9）。"""
+
+    name: str
+    path: str
+    branch: str
+    active: bool
+    manual: bool
+
+
+class WorktreeAccessor(Protocol):
+    """worktree 管理器面向命令层的轻量接口（隔离 worktree 包反向依赖，F9 技术决策）。
+
+    由 tui 侧适配器实现（包装 worktree.Manager + 设 active_cwd）。
+    """
+
+    async def create(self, name: str) -> tuple[str, str]: ...  # (path, branch)
+    def list(self) -> list[WorktreeSummary]: ...
+    async def enter(self, name: str) -> None: ...
+    async def exit(self, action: str, discard: bool) -> bool: ...  # removed
+    async def remove(self, name: str, discard: bool) -> None: ...
+
+
 @runtime_checkable
 class UIController(Protocol):
     """命令执行所需的界面控制抽象：输出 / 注入 / 查询 / 生命周期 / 交互选择。
@@ -67,6 +91,9 @@ class UIController(Protocol):
     def get_model_name(self) -> str: ...
 
     def get_cwd(self) -> str: ...
+
+    # ── Worktree（ch14 F9）──────────────────────────────────
+    def worktree_accessor(self) -> WorktreeAccessor | None: ...  # 未启用返回 None
 
     # ── Skill（ch11）────────────────────────────────────────
     def list_catalog_skills(
@@ -161,6 +188,9 @@ class NopUI:
 
     def get_cwd(self) -> str:
         return ""
+
+    def worktree_accessor(self) -> WorktreeAccessor | None:
+        return None
 
     def list_catalog_skills(self) -> list[SkillSummary]:
         return []
@@ -300,6 +330,10 @@ class RecordingUI(NopUI):
 
     def get_cwd(self) -> str:
         return ""
+
+    def worktree_accessor(self) -> WorktreeAccessor | None:
+        # 测试桩默认未启用；测试可 monkeypatch 注入 stub accessor
+        return None
 
     def list_catalog_skills(self) -> list[SkillSummary]:
         return list(self._catalog_skills)

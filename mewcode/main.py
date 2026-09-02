@@ -57,6 +57,9 @@ from mewcode.tools.task_tools import (
 )
 from mewcode.tui.app import REPL
 from mewcode.tui.renderer import RichRenderer
+from mewcode.worktree import Manager as WorktreeManager
+from mewcode.worktree.config import load_worktree_config
+from mewcode.worktree.types import WorktreeError
 
 
 def main() -> None:
@@ -81,6 +84,11 @@ def main() -> None:
         type=str,
         choices=["default", "acceptEdits", "plan", "bypassPermissions"],
         help="权限模式：default / acceptEdits / plan / bypassPermissions",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="ch14：恢复上次 worktree 会话的工作目录（F10.3）",
     )
     parser.add_argument(
         "--version",
@@ -236,8 +244,28 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
         cfg=agents_cfg,
         get_main_agent=lambda: agent_ref[0],  # 惰性取用（agent_ref 在下方构造后填充）
     )
+    # ── ch14 Worktree 装配（T16）：配置 → 管理器（失败降级 None）→ sweep 后台任务 ──
+    worktrees_cfg = load_worktree_config(cwd)
+    try:
+        worktree_mgr = WorktreeManager(cwd, worktrees_cfg)
+    except WorktreeError as exc:
+        print(f"Worktree 管理器降级（功能未启用）: {exc}", file=sys.stderr)
+        worktree_mgr = None
+    if worktree_mgr is not None and worktree_mgr.cfg.background_cleanup:
+        sweep_task = asyncio.create_task(worktree_mgr.run())  # F6.5 周期清理
+    else:
+        sweep_task = None
+
     # 工具注册（主 Agent 可见；agent 工具经 GLOBAL_DENY 对子 Agent 剔除，F6.1）
-    registry.register(AgentTool(subagent_catalog, launcher, lambda: agent_ref[0]))
+    registry.register(
+        AgentTool(
+            subagent_catalog,
+            launcher,
+            lambda: agent_ref[0],
+            worktree_mgr=worktree_mgr,
+            worktrees_cfg=worktrees_cfg,
+        )
+    )
     registry.register(TaskListTool(task_manager))
     registry.register(TaskGetTool(task_manager))
     registry.register(TaskStopTool(task_manager))
@@ -308,6 +336,8 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
                 session_archive=session_archive,
                 memory_manager=memory,
                 task_manager=task_manager,
+                worktree_mgr=worktree_mgr,
+                resume_worktree=args.resume,
             )
             # ch10：命令注册 + CommandContext 组装。register_all 冲突 → 打印冲突名并退出（F1.3/N4）
             cmd_registry = CommandRegistry()
@@ -355,6 +385,9 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
         task_manager.clear_all()
         if not task_manager_task.done():
             task_manager_task.cancel()
+        # ch14：取消 worktree 周期清理任务（F6.5）
+        if sweep_task is not None and not sweep_task.done():
+            sweep_task.cancel()
         # ch12：session_end + shutdown + engine.close（F8.1/F9.5，后台任务尽力而为）
         await hook_engine.dispatch(HookEvent.SESSION_END, {})
         await hook_engine.dispatch(HookEvent.SHUTDOWN, {})

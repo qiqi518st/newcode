@@ -1,7 +1,6 @@
 """Agent ReAct 循环引擎：ch06 五层权限系统集成 + ch08 上下文管理"""
 
 import asyncio
-import os
 import uuid
 from collections.abc import AsyncIterator
 
@@ -24,6 +23,7 @@ from ..skills.adapter import (
     active_to_prompt_entries,
     catalog_to_prompt_items,
 )
+from ..tools.cwd import resolve_path
 from ..tools.registry import Registry
 from .events import Event, EventType, StopReason, TokenUsage, TurnEnd
 from .scheduler import ScheduledResult, ToolScheduler
@@ -604,7 +604,9 @@ class Agent:
                                     and tc.tool_name == "read_file"
                                     and sr.result.status == "ok"
                                 ):
-                                    abs_path = os.path.abspath(
+                                    # ch14 F7.2：按 ctx cwd 解析（主 Agent enter worktree 后
+                                    # 相对路径追踪正确；防误记到进程 cwd）
+                                    abs_path = resolve_path(
                                         tc.arguments.get("path", "")
                                     )
                                     await self._file_tracker.record(

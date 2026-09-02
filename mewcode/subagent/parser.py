@@ -96,6 +96,12 @@ def parse_definition_text(
     background = _bool_field(meta.get("background"), False, display_path, "background")
     enabled = _bool_field(meta.get("enabled"), True, display_path, "enabled")
 
+    # ch14 F8.1：isolation 字段，合法 ""/"worktree"，非法警告回落 ""
+    isolation_raw = str(meta.get("isolation") or "").strip().lower()
+    if isolation_raw not in ("", "worktree"):
+        _warn(display_path, f"unknown isolation {isolation_raw!r}, falling back to ''")
+        isolation_raw = ""
+
     return AgentDefinition(
         name=name,
         description=description,
@@ -108,6 +114,7 @@ def parse_definition_text(
         dont_ask=dont_ask,
         background=background,
         enabled=enabled,
+        isolation=isolation_raw,
         source=source,
         source_path=display_path,
     )

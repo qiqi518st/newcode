@@ -4,6 +4,7 @@ import asyncio
 import os
 
 from ..provider.base import ToolResult
+from .cwd import cwd_from_ctx
 
 _CMD_OUTPUT_LIMIT = 10 * 1024  # 命令输出上限 10KB
 _CMD_TIMEOUT = 60  # 命令执行超时 60 秒
@@ -46,7 +47,8 @@ class ExecuteCommandTool:
 
     async def execute(self, arguments: dict) -> ToolResult:
         command = arguments.get("command", "")
-        cwd = arguments.get("cwd", os.getcwd())
+        # ch14 F7.2：显式 cwd 参数 > ctx cwd > 进程 cwd（子进程 cwd 跟随）
+        cwd = arguments.get("cwd") or cwd_from_ctx() or os.getcwd()
 
         try:
             proc = await asyncio.create_subprocess_shell(
