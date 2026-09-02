@@ -76,6 +76,41 @@ async def test_stop_cancels():
     assert m.get(tid).status == Status.CANCELLED
 
 
+async def test_kill_completed_removes_from_list():
+    """防的 bug：/tasks kill 已完成任务返回「已请求终止」但任务原地不动。
+
+    kill=关闭子 Agent——已结束任务应从列表移除（用户报告：kill 后 /tasks 仍可见）。
+    """
+    m = TaskManager()
+    tid = m.launch(FakeAgent(), "x", role_name="general-purpose")
+    await asyncio.sleep(0.05)
+    assert m.get(tid).status == Status.COMPLETED
+    assert m.stop(tid) is True
+    assert m.get(tid) is None
+    assert all(t.id != tid for t in m.list())
+
+
+async def test_cancelled_task_swept():
+    """防的 bug：被取消任务永不清扫（终态集合漏 CANCELLED → 泄漏累积）。"""
+    m = TaskManager(idle_cleanup_minutes=0.001)
+    tid = m.launch(HangingAgent(), "c")
+    await asyncio.sleep(0.05)
+    m.stop(tid)
+    await asyncio.sleep(0.1)
+    assert m.get(tid).status == Status.CANCELLED
+    m._sweep_idle()
+    assert m.get(tid) is None
+
+
+async def test_old_completed_swept():
+    """防的 bug：空闲超上限的 completed 任务不被清扫（用户报告 1057s 旧任务仍在列表）。"""
+    m = TaskManager(idle_cleanup_minutes=0.001)
+    tid = m.launch(FakeAgent(), "old")
+    await asyncio.sleep(0.1)
+    m._sweep_idle()
+    assert m.get(tid) is None
+
+
 async def test_continue_same_id_round_increment():
     m = TaskManager(max_tasks_per_agent=3, max_queue_per_agent=1)
     tid = m.launch(FakeAgent(), "r1")

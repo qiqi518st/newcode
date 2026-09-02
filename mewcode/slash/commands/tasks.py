@@ -70,7 +70,7 @@ async def _handler(ctx: CommandContext, args: str) -> None:
         if not mgr.stop(rest):
             ctx.ui.show_message(f"任务不存在: {rest}", style="yellow")
             return
-        ctx.ui.show_message(f"已请求终止 {rest}", style="green")
+        ctx.ui.show_message(f"已终止 {rest}", style="green")
         return
 
     if sub == "send":

@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import secrets
 import sys
 import time
@@ -18,6 +19,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import TYPE_CHECKING
+
+logger = logging.getLogger(__name__)
 
 from ..agent.events import EventType
 from ..provider.base import TokenUsage
@@ -207,13 +210,22 @@ class TaskManager:
 
     # ── 终止 ──────────────────────────────────────────────
     def stop(self, task_id: str) -> bool:
-        """终止运行中任务（spec F7.4/F8.1 TaskStop）。"""
+        """终止任务（spec F7.4/F8.1/F8.3，kill=关闭该子 Agent）。
+
+        - 运行中 → 取消（status→cancelled，保留可见让用户看到被终止）
+        - 已结束（completed/failed/cancelled）→ **从列表移除**（kill 已结束任务 = 清理，
+          否则 /tasks 显示「已请求终止」但任务原地不动）
+        - 不存在 → False
+        """
         bt = self._tasks.get(task_id)
         if bt is None:
             return False
-        if bt.run_task is not None and not bt.run_task.done():
-            bt.cancel_event.set()
-            bt.run_task.cancel()
+        if bt.status == Status.RUNNING:
+            if bt.run_task is not None and not bt.run_task.done():
+                bt.cancel_event.set()
+                bt.run_task.cancel()
+        else:
+            self._drop(task_id)
         return True
 
     # ── 续派（同 id 复用，F7.10）───────────────────────────
@@ -253,18 +265,24 @@ class TaskManager:
         self._by_name.clear()
 
     async def run(self) -> None:
-        """常驻：空闲清理扫描（~30s 周期，F7.7）。"""
+        """常驻：空闲清理扫描（~30s 周期，F7.7）；单次清扫失败不终止循环（N3）。"""
         while True:
             await asyncio.sleep(30.0)
-            self._sweep_idle()
+            try:
+                self._sweep_idle()
+            except Exception:
+                logger.exception("task manager idle sweep failed")
 
     def _sweep_idle(self) -> None:
-        """清理：空闲超时 / 达任务上限 / 保留上限超限（关最旧）。"""
+        """清理：空闲超时 / 达任务上限 / 保留上限超限（关最旧）。
+
+        终态集合含 CANCELLED——被取消的任务无续派价值，也纳入清扫（防泄漏）。
+        """
         now = time.monotonic()
         idle: list[BackgroundTask] = []
         for task_id in list(self._tasks.keys()):
             bt = self._tasks[task_id]
-            if bt.status not in (Status.COMPLETED, Status.FAILED):
+            if bt.status not in (Status.COMPLETED, Status.FAILED, Status.CANCELLED):
                 continue
             # 达任务上限：无续派价值，直接清理
             if bt.round >= self._max_tasks_per_agent:
