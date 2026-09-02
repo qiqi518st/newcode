@@ -54,3 +54,7 @@ docs_bak/
 
 # uv lockfile（本仓库沿用 pip/venv 工作流，锁文件不入库）
 uv.lock
+
+# ch14: Worktree 隔离副本（运行时数据，不入库）
+.mewcode/worktrees/
+.mewcode/worktree_session.json

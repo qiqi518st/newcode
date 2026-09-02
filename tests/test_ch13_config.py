@@ -22,6 +22,7 @@ def test_all_defaults_when_no_config(tmp_path):
     cfg = load_agent_config(str(tmp_path))
     assert cfg.enable_verifier is False
     assert cfg.enable_subagent_background is True
+    assert cfg.max_turns == 15
     assert cfg.async_timeout_s == 120.0
     assert cfg.idle_cleanup_minutes == 15.0
     assert cfg.max_idle_agents == 10

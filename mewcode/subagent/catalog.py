@@ -19,7 +19,6 @@ from ..permission.modes import PermissionMode
 from .config import AgentConfig
 from .parser import parse_definition, parse_definition_text
 from .types import (
-    DEFAULT_MAX_TURNS,
     AgentDefinition,
     DefinitionParseError,
     Source,
@@ -62,7 +61,7 @@ class Catalog:
             name="__fork__",
             description="Fork-based subagent",
             model="inherit",
-            max_turns=DEFAULT_MAX_TURNS,
+            max_turns=0,  # 0=未设置 → 回落 agents.max_turns 全局默认（F11.1）
             permission_mode=PermissionMode.DEFAULT,
             background=True,
             source=Source.BUILTIN,

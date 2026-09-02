@@ -80,7 +80,7 @@ ch12 给 MewCode 装上了 Hook 生命周期钩子系统，Agent 在关键节点
   - `tools`（可选 list[str]）：工具白名单（内部工具名）；空 = 不限制
   - `disallowedTools`（可选 list[str]）：工具黑名单（内部工具名）
   - `model`（可选）：`haiku` / `sonnet` / `opus` / `inherit`，缺省 `inherit`；命名分层经配置映射到实际模型串（F10.1）
-  - `maxTurns`（可选 int）：最大迭代轮数，缺省继承全局 `max_turns=10`（现有 Agent 上限）
+  - `maxTurns`（可选 int）：最大迭代轮数；缺省 0 = 未设置 → 回落全局 `agents.max_turns`（缺省 15，F11.1）
   - `permissionMode`（可选）：`default` / `acceptEdits` / `plan` / `bypassPermissions` / `dontAsk`，缺省 `default`；`dontAsk` 是子 Agent 专属（主 Agent 不可用）——自动批准所有规则未命中的工具（F5.3）
   - `background`（可选 bool，缺省 false）：true 时角色强制后台——Agent 工具忽略 `run_in_background` 参数
   - `enabled`（可选 bool，缺省 true）：false 时不加载该角色（内置 verifier 用）
@@ -97,9 +97,9 @@ ch12 给 MewCode 装上了 Hook 生命周期钩子系统，Agent 在关键节点
 - F2.3：同名定义按优先级覆盖——`resolve(name)` 返回优先级最高的版本；低优先级未被覆盖的角色仍可用
 - F2.4：解析失败——内置级失败（代码 bug）启动期 fail-fast 直接 raise；用户/项目级单个文件失败（frontmatter 不合法、未知 model/permissionMode 等字段错）→ stderr 定位到文件与字段并跳过该角色，非法枚举值 warning 降级为缺省（model→inherit、permissionMode→default），不阻断启动
 - F2.5：内置角色（frontmatter + 正文均为真实内容，正文参照 Claude Code 内置 subagent 模板写法——身份/职责/工作风格 + 工具使用纪律）：
-  - `general-purpose`——通用全能：无 disallowedTools，model=inherit，maxTurns=20，permissionMode=default
-  - `explore`——代码探索（只读为主）：disallowedTools=[write_file, edit_file]，model=haiku，maxTurns=15，permissionMode=default
-  - `plan`——计划制定（只读 + 产出计划）：disallowedTools=[write_file, edit_file]，model=inherit，maxTurns=10，permissionMode=plan
+  - `general-purpose`——通用全能：无 disallowedTools，model=inherit，maxTurns=25，permissionMode=default
+  - `explore`——代码探索（只读为主）：disallowedTools=[write_file, edit_file]，model=haiku，maxTurns=30，permissionMode=default
+  - `plan`——计划制定（只读 + 产出计划）：disallowedTools=[write_file, edit_file]，model=inherit，maxTurns=15，permissionMode=plan
   - `verifier`——验证角色，**默认 `enabled: false`**，经 `.mewcode/config.yaml` 的 `agents.enable_verifier` 开关启用（F10.1）
   - （maxTurns / model 为建议初值，实现时可调）
 
@@ -223,6 +223,7 @@ ch12 给 MewCode 装上了 Hook 生命周期钩子系统，Agent 在关键节点
   agents:
     enable_verifier: false          # 启用内置 verifier 角色（F2.5）
     enable_subagent_background: true # 后台总闸；false 时显式/超时后台全部失效，Fork 报错「后台禁用，无法 Fork」
+    max_turns: 15                   # 子 Agent 全局缺省最大轮次（角色未设 maxTurns 时，F2.1）
     async_timeout_s: 120            # 前台子 Agent 自动转后台阈值（F7.1）
     idle_cleanup_minutes: 15        # 空闲子 Agent 清理超时（F7.7）
     max_idle_agents: 10             # 空闲子 Agent 保留上限（F7.7）

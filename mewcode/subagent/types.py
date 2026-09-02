@@ -13,8 +13,8 @@ from enum import IntEnum
 
 from ..permission.modes import PermissionMode
 
-# 子 Agent 缺省最大迭代轮数（与主 Agent 现有 _MAX_AGENT_TURNS 对齐，spec F2.1）
-DEFAULT_MAX_TURNS: int = 10
+# 子 Agent 缺省最大迭代轮数（spec F2.1/F11.1：agents.max_turns 全局默认，可配置）
+DEFAULT_MAX_TURNS: int = 15
 
 # 注入主对话的 <task-notification> result 字段截断上限（spec F7.6/N6）
 RESULT_TRUNCATE_CHARS: int = 800
@@ -58,7 +58,7 @@ class AgentDefinition:
     model: str = (
         "inherit"  # inherit/haiku/sonnet/opus（命名分层经配置映射，F2.1/F11.1）
     )
-    max_turns: int = DEFAULT_MAX_TURNS  # 最大迭代轮数（spec F2.1）
+    max_turns: int = 0  # 最大迭代轮数；0=未设置 → 回落 agents.max_turns 全局默认（F2.1/F11.1）
     permission_mode: PermissionMode = PermissionMode.DEFAULT  # 四档（F5.3）
     dont_ask: bool = False  # frontmatter permissionMode: dontAsk → True（F5.3）
     background: bool = False  # 角色强制后台（F2.1）

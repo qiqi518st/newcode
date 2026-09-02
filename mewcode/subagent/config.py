@@ -26,6 +26,7 @@ class AgentConfig:
 
     enable_verifier: bool = False  # 启用内置 verifier 角色（F2.5）
     enable_subagent_background: bool = True  # 后台总闸（N7）
+    max_turns: int = 15  # 子 Agent 全局缺省最大轮次（角色未设 maxTurns 时，F2.1/F11.1）
     async_timeout_s: float = 120.0  # 前台自动转后台阈值（F7.1）
     idle_cleanup_minutes: float = 15.0  # 空闲子 Agent 清理超时（F7.7）
     max_idle_agents: int = 10  # 空闲子 Agent 保留上限（F7.7）
@@ -81,6 +82,7 @@ def load_agent_config(project_root: str | Path) -> AgentConfig:
     cfg.enable_subagent_background = bool(
         _coerce(merged, "enable_subagent_background", True, bool)
     )
+    cfg.max_turns = int(_coerce(merged, "max_turns", 15, int))
     cfg.async_timeout_s = float(_coerce(merged, "async_timeout_s", 120.0, (int, float)))
     cfg.idle_cleanup_minutes = float(
         _coerce(merged, "idle_cleanup_minutes", 15.0, (int, float))

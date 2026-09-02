@@ -109,7 +109,8 @@ class SubAgentLauncher:
         model_override 非空时优先于角色 model（Agent 工具 model 参数，F1.2）。
         """
         parent = self._get_main_agent()
-        max_turns = role.max_turns or DEFAULT_MAX_TURNS
+        # 角色 frontmatter maxTurns > agents.max_turns 全局默认 > 代码兜底（F2.1/F11.1）
+        max_turns = role.max_turns or self._cfg.max_turns or DEFAULT_MAX_TURNS
         conv = ConversationManager(max_turns, messages=list(fork_history or []))
         sub = Agent(
             provider=self.resolve_model(model_override or role.model),

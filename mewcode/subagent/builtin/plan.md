@@ -5,7 +5,7 @@ disallowedTools:
   - write_file
   - edit_file
 model: inherit
-maxTurns: 10
+maxTurns: 15
 permissionMode: plan
 ---
 

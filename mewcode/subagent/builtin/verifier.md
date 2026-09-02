@@ -2,7 +2,7 @@
 name: verifier
 description: 验证子 Agent，审查改动/方案的正确性、完整性并给出结论（默认关闭，经 agents.enable_verifier 启用）
 model: inherit
-maxTurns: 10
+maxTurns: 20
 permissionMode: default
 enabled: false
 ---

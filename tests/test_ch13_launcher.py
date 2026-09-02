@@ -155,6 +155,36 @@ async def test_fork_blocked_when_background_disabled():
     assert "后台禁用，无法 Fork" in res.error
 
 
+async def test_max_turns_resolution_global_default():
+    """防的 bug：角色未设 maxTurns 时被硬编码 10 卡住——应回落 agents.max_turns 全局默认；
+    角色显式设了 → 角色值优先；fork 跟随全局。"""
+    reg = Registry.default()
+    parent = Agent(
+        SeqProvider([_txt()]), ConversationManager(20), reg, "s", "e",
+        permission=PermissionChecker.create(tempfile.mkdtemp()),
+    )
+    launcher = SubAgentLauncher(
+        SeqProvider([_txt()]), None, parent.permission, None, StubCatalog(),
+        TaskManager(), AgentConfig(max_turns=25), lambda: parent,
+    )
+    role_unset = AgentDefinition(name="u", description="d", body="b", max_turns=0, source=Source.BUILTIN)
+    sub, _ = launcher.make_sub_agent(role_unset, is_background=False)
+    assert sub._max_turns == 25  # 全局默认
+    role_set = AgentDefinition(name="s", description="d", body="b", max_turns=30, source=Source.BUILTIN)
+    sub2, _ = launcher.make_sub_agent(role_set, is_background=False)
+    assert sub2._max_turns == 30  # 角色显式优先
+
+
+async def test_fork_uses_global_max_turns():
+    mgr = TaskManager()
+    launcher, _parent, mgr = _make(
+        SeqProvider([_txt()]), cfg=AgentConfig(max_turns=18)
+    )
+    res = await launcher.launch_fork("t")
+    await asyncio.sleep(0.05)
+    assert mgr.get(res.task_id).sub_agent._max_turns == 18  # fork 跟随全局
+
+
 async def test_model_tiers_resolution():
     made = []
 

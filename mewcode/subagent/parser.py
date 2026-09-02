@@ -13,7 +13,7 @@ from pathlib import Path
 
 from ..permission.modes import PermissionMode
 from ..skills.parser import parse_frontmatter_and_body
-from .types import DEFAULT_MAX_TURNS, AgentDefinition, DefinitionParseError, Source
+from .types import AgentDefinition, DefinitionParseError, Source
 
 # 角色名归一化后合法性（与 subagent_type 取值一致，spec F2.1）
 _NAME_RE = re.compile(r"^[a-z][a-z0-9-]*$")
@@ -91,10 +91,8 @@ def parse_definition_text(
             )
             permission_mode = PermissionMode.DEFAULT
 
-    # maxTurns / background / enabled：类型非法 → 警告缺省
-    max_turns = _int_field(
-        meta.get("maxTurns"), DEFAULT_MAX_TURNS, display_path, "maxTurns"
-    )
+    # maxTurns / background / enabled：类型非法 → 警告缺省（maxTurns 缺省 0=未设置，回落全局 agents.max_turns）
+    max_turns = _int_field(meta.get("maxTurns"), 0, display_path, "maxTurns")
     background = _bool_field(meta.get("background"), False, display_path, "background")
     enabled = _bool_field(meta.get("enabled"), True, display_path, "enabled")
 

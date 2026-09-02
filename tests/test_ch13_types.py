@@ -23,7 +23,9 @@ from mewcode.subagent.types import (
 def test_agent_definition_defaults():
     d = AgentDefinition(name="x", description="d", source=Source.BUILTIN)
     assert d.model == "inherit"
-    assert d.max_turns == DEFAULT_MAX_TURNS == 10
+    # max_turns 缺省 0 = 未设置（回落 agents.max_turns 全局默认，F2.1/F11.1）
+    assert d.max_turns == 0
+    assert DEFAULT_MAX_TURNS == 15
     assert d.permission_mode is PermissionMode.DEFAULT
     assert d.dont_ask is False and d.background is False and d.enabled is True
     assert d.tools == [] and d.disallowed_tools == [] and d.body == ""

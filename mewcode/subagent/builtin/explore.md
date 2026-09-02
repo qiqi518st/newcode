@@ -5,7 +5,7 @@ disallowedTools:
   - write_file
   - edit_file
 model: haiku
-maxTurns: 15
+maxTurns: 30
 permissionMode: default
 ---
 

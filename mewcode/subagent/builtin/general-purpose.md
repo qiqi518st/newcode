@@ -2,7 +2,7 @@
 name: general-purpose
 description: 通用全能子 Agent，拥有全部工具，用于需要完整能力但独立上下文的场景
 model: inherit
-maxTurns: 20
+maxTurns: 25
 permissionMode: default
 ---
 
