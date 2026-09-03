@@ -39,6 +39,10 @@ class SessionRuntime:
         # 与 plan reminder 同注入点、会话生命周期内重置（/clear、/resume、/session_new）。
         self.pending_reminders: list[str] = []
         self._reminders_lock = threading.Lock()
+        # ch15 TD-3：raw reminder 通道（<team-update> 等已构好的 Message，不经
+        # hook_notification 包装；agent.run 每轮直接拼入 reminders）
+        self.pending_raw_reminders: list[Message] = []
+        self._raw_lock = threading.Lock()
         # Hook 引擎（TUI/main 装配时设置；None = 未启用，重置 once 时跳过）
         self.hook_engine: Engine | None = None
 
@@ -74,6 +78,24 @@ class SessionRuntime:
         """清空 reminder 队列（新会话重置，与 ActiveSkills 同生命周期 N8）。"""
         with self._reminders_lock:
             self.pending_reminders = []
+        with self._raw_lock:
+            self.pending_raw_reminders = []
+
+    # ── ch15 TD-3：raw reminder 通道（线程安全）──────────
+
+    def append_raw_reminders(self, msgs: list) -> None:
+        """追加已构好的 Message reminder（如 <team-update>）；无内容跳过。"""
+        if not msgs:
+            return
+        with self._raw_lock:
+            self.pending_raw_reminders.extend(msgs)
+
+    def take_raw_reminders(self) -> list:
+        """取出并清空 raw reminder（线程安全）。"""
+        with self._raw_lock:
+            msgs = list(self.pending_raw_reminders)
+            self.pending_raw_reminders = []
+            return msgs
 
     async def reset_for_new_session(self) -> None:
         """集中重置点（/clear、/resume、/session_new 调用，调用方只调这一个）：
@@ -119,6 +141,41 @@ class SessionRuntime:
             ),
         )
         return self.conversation
+
+    @classmethod
+    def open_at(
+        cls,
+        abs_session_dir: str | Path,
+        max_turns: int = 50,
+        model: str | None = None,
+    ) -> SessionRuntime:
+        """构造指向**绝对** session 目录的 SessionRuntime（ch15 F6.1，Pane 子进程用）。
+
+        与 create_new 不同：不走 workspace 派生路径，直接挂到已存在的
+        `<abs_session_dir>/conversation.jsonl`（Lead spawn 时已创建该目录）。
+        """
+        session_dir = Path(abs_session_dir)
+        session_dir.mkdir(parents=True, exist_ok=True)
+        spill = session_dir / "tool-results"
+        spill.mkdir(exist_ok=True)
+        context = SessionContext(
+            session_dir.name,
+            str(spill),
+            str(session_dir),
+            str(session_dir / "conversation.jsonl"),
+        )
+        runtime = cls(workspace=session_dir.parent, max_turns=max_turns, model=model)
+        runtime.context = context
+        runtime.writer = SessionWriter.open_existing(context.session_dir, model=model)
+        runtime.conversation = ConversationManager(
+            max_turns,
+            on_append=runtime.writer.append_message,
+            on_replace=lambda messages: (
+                runtime.writer.write_compact_marker(),
+                runtime.writer.append_all(messages),
+            ),
+        )
+        return runtime
 
     def close(self) -> None:
         if self.writer:

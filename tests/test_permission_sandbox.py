@@ -68,28 +68,23 @@ class TestCheckPath:
         assert ok
 
     def test_outside_denied(self, tmp_path):
-        ok, _ = check_path("../outside.txt", str(tmp_path))
+        # ch15 N14：/tmp 是系统临时白名单（pytest tmp_path 在 /tmp 下，../ 会落到 /tmp）。
+        # 项目根用非 /tmp 的假路径，../ 越界到非白名单位置仍拒。
+        root = "/nonexistent-proj-root-xyz"
+        ok, _ = check_path("../outside.txt", root)
         assert not ok
 
     def test_absolute_outside_denied(self, tmp_path):
-        # 防的 bug：绝对越界路径被前缀匹配放行
-        import tempfile
-
-        with tempfile.TemporaryDirectory() as outside:
-            ok, _ = check_path(outside, str(tmp_path))
-            assert not ok
+        # 防的 bug：绝对越界路径被前缀匹配放行；/etc 非白名单（N14 仅 /tmp /private/tmp）
+        ok, _ = check_path("/etc/nonexistent-outside.txt", str(tmp_path))
+        assert not ok
 
     def test_prefix_confusion_denied(self, tmp_path):
         # 防的 bug：/rootfoo 被 startswith(/root) 误判为项目内
-        import tempfile
-
-        with tempfile.TemporaryDirectory() as parent:
-            root = os.path.join(parent, "proj")
-            os.makedirs(root, exist_ok=True)
-            evil = parent + "evil"  # 与 root 同前缀但不同目录
-            os.makedirs(evil, exist_ok=True)
-            ok, _ = check_path(os.path.join(evil, "x.txt"), root)
-            assert not ok
+        root = "/nonexistent-parent-xyz/proj"
+        evil = "/nonexistent-parent-xyz" + "evil"  # 与 root 同前缀但不同目录
+        ok, _ = check_path(os.path.join(evil, "x.txt"), root)
+        assert not ok
 
     def test_nonexistent_with_missing_intermediate_ok(self, tmp_path):
         # 祖先回退：新建文件含未创建中间目录，仍应判定在项目内
@@ -99,14 +94,21 @@ class TestCheckPath:
         assert "file.py" in resolved
 
     def test_nonexistent_outside_denied(self, tmp_path):
-        # 祖先回退也要阻止越界：../../outside 不含任何项目内祖先
-        ok, _ = check_path("../..//outside", str(tmp_path))
+        # 祖先回退也要阻止越界：../../outside 不含任何项目内祖先；
+        # 用非 /tmp 假根（/tmp 是 N14 白名单，pytest 根在其下无法构造真越界）
+        root = "/nonexistent-proj-root-xyz"
+        ok, _ = check_path("../..//outside", root)
         assert not ok
 
-    def test_symlink_escape_denied(self, tmp_path):
-        # 防的 bug：符号链接指向外部目录，前缀匹配放行导致逃逸
+    def test_symlink_escape_denied(self, tmp_path, monkeypatch):
+        # 防的 bug：符号链接指向外部目录，前缀匹配放行导致逃逸。
+        # 本测试只关心 symlink 解析——关掉 N14 /tmp 白名单（pytest tmp_path 在 /tmp 下，
+        # 真 escape 目标必然落在 /tmp，会撞白名单；白名单行为由 test_n14 单独测）
         import tempfile
 
+        import mewcode.permission.sandbox as sandbox_mod
+
+        monkeypatch.setattr(sandbox_mod, "TEMP_DIR_WHITELIST", ())
         with tempfile.TemporaryDirectory() as outside:
             link = tmp_path / "link"
             if not _make_symlink(str(link), outside):

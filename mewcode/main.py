@@ -18,9 +18,13 @@ logger = logging.getLogger(__name__)
 from mewcode import __version__
 from mewcode.agent import Agent
 from mewcode.agent.events import EventType
+from mewcode.config.features import load_features_config
 from mewcode.config.loader import load as load_config
 from mewcode.config.loader import load_ccswitch
 from mewcode.context import ContextManager, FileTracker
+from mewcode.coordinator import allowed_tools as coordinator_allowed_tools
+from mewcode.coordinator import is_enabled as coordinator_enabled
+from mewcode.coordinator import system_prompt_suffix as coordinator_prompt_suffix
 from mewcode.hooks import load as load_hooks
 from mewcode.hooks.types import Event as HookEvent
 from mewcode.instructions import InstructionLoader
@@ -44,11 +48,25 @@ from mewcode.subagent.catalog import load_catalog
 from mewcode.subagent.config import load_agent_config
 from mewcode.subagent.launcher import SubAgentLauncher
 from mewcode.subagent.manager import TaskManager
+from mewcode.team.cleanup import TEAM_CLEANUP_DISCIPLINE, guard_team_git_cleanup
+from mewcode.team.manager import Manager as TeamManager
+from mewcode.team.registry import AgentNameRegistry
+from mewcode.team.spawn import TeamHookImpl
+from mewcode.team.tools import (
+    new_send_message_tool,
+    new_task_create_tool,
+    new_task_get_tool,
+    new_task_list_tool,
+    new_task_update_tool,
+    new_team_create_tool,
+    new_team_delete_tool,
+)
 from mewcode.tools import Registry
 from mewcode.tools.agent_tool import AgentTool
 from mewcode.tools.load_skill import LoadSkillTool
 from mewcode.tools.memory_read import ReadMemoryTool
 from mewcode.tools.memory_write import WriteMemoryTool
+from mewcode.tools.shell import ExecuteCommandTool
 from mewcode.tools.task_tools import (
     SendMessageTool,
     TaskGetTool,
@@ -90,12 +108,45 @@ def main() -> None:
         action="store_true",
         help="ch14：恢复上次 worktree 会话的工作目录（F10.3）",
     )
+    # ch15：Pane 后端子进程的 team-member 模式（F6/F19a）
+    parser.add_argument(
+        "--team-member",
+        action="store_true",
+        help="ch15：以团队队员自治协程运行（不启动 TUI，被 tmux/iterm2 后端 spawn）",
+    )
+    parser.add_argument("--team", type=str, help="ch15：团队名（--team-member 用）")
+    parser.add_argument("--member", type=str, help="ch15：队员名（--team-member 用）")
+    parser.add_argument(
+        "--agent-id", type=str, help="ch15：队员 agent_id（--team-member 用）"
+    )
+    parser.add_argument(
+        "--session-dir", type=str, help="ch15：队员 session 目录（--team-member 用）"
+    )
+    parser.add_argument(
+        "--worktree", type=str, help="ch15：队员 worktree 路径（--team-member 用）"
+    )
+    parser.add_argument(
+        "--agent-type", type=str, help="ch15：角色名（--team-member 用）"
+    )
+    parser.add_argument("--model", type=str, help="ch15：模型覆盖（--team-member 用）")
+    parser.add_argument(
+        "--plan-mode",
+        action="store_true",
+        help="ch15：以 plan 模式起步（--team-member 用）",
+    )
     parser.add_argument(
         "--version",
         action="version",
         version=f"mewcode {__version__}",
     )
     args = parser.parse_args()
+
+    # ch15 F6：--team-member 短路——不构造 TUI/oneshot，跑自治协程后退出
+    if args.team_member:
+        from mewcode.team.cli_team_member import run_team_member
+
+        asyncio.run(run_team_member(args))
+        return
 
     config_path = os.path.join(os.getcwd(), ".mewcode.yaml")
 
@@ -256,6 +307,72 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
     else:
         sweep_task = None
 
+    # ── ch15 Team 装配（T27）：features → name_reg → TeamManager → 工具 → team_hook ──
+    features_cfg = load_features_config(cwd)
+    name_reg = AgentNameRegistry()
+    task_manager.set_name_registry(name_reg)
+    try:
+        team_mgr = TeamManager(
+            home_dir=str(Path.home()),
+            project_root=cwd,
+            wt_mgr=worktree_mgr,
+            task_mgr=task_manager,
+            registry=name_reg,
+        )
+    except Exception as exc:  # noqa: BLE001 —— 团队目录不可写等 → 结构化降级
+        print(f"Team Manager 降级（团队功能未启用）: {exc}", file=sys.stderr)
+        team_mgr = None
+    team_hook = None
+    team_sweep_task = None
+    if team_mgr is not None:
+        # TD-13：成员完成回调（cli 装配，非 Manager 自注册）
+        task_manager.on_task_done(lambda tid: team_mgr.handle_task_done(tid))
+        team_hook = TeamHookImpl(team_mgr, subagent_catalog, launcher, features_cfg)
+        # ch15 收尾 F2.7/F3.4：execute_command 守卫 + 孤儿清扫（启动一次 + 周期）
+        registry.register(
+            ExecuteCommandTool(guard=lambda cmd: guard_team_git_cleanup(team_mgr, cmd))
+        )
+        try:
+            await team_mgr.sweep_orphan_worktrees()  # 启动补扫（best-effort）
+        except Exception as exc:  # noqa: BLE001 —— 启动清扫失败不阻断
+            print(f"team: 启动孤儿清扫失败: {exc}", file=sys.stderr)
+        team_sweep_task = asyncio.create_task(
+            team_mgr.run(worktrees_cfg.cleanup_interval_minutes * 60)
+        )
+
+    # 协作工具注册辅助（TD-2）：建队时动态注册 / 删队后注销
+    def _register_collab() -> None:
+        if team_mgr is None:
+            return
+        for factory in (
+            new_task_create_tool,
+            new_task_get_tool,
+            new_task_list_tool,
+            new_task_update_tool,
+            new_send_message_tool,
+        ):
+            name = {
+                new_task_create_tool: "TaskCreate",
+                new_task_get_tool: "TaskGet",
+                new_task_list_tool: "TaskList",
+                new_task_update_tool: "TaskUpdate",
+                new_send_message_tool: "SendMessage",
+            }[factory]
+            if registry.get(name) is None:
+                registry.register(factory(team_mgr))
+
+    def _unregister_collab() -> None:
+        if team_mgr is None or team_mgr.list_():
+            return
+        for name in ("TaskCreate", "TaskGet", "TaskList", "TaskUpdate", "SendMessage"):
+            registry.unregister(name)
+
+    coordinator_on = (
+        coordinator_enabled(features_cfg) if team_mgr is not None else False
+    )
+    if coordinator_on:
+        _register_collab()  # coordinator 启动即注册（TD-2）
+
     # 工具注册（主 Agent 可见；agent 工具经 GLOBAL_DENY 对子 Agent 剔除，F6.1）
     registry.register(
         AgentTool(
@@ -264,12 +381,20 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
             lambda: agent_ref[0],
             worktree_mgr=worktree_mgr,
             worktrees_cfg=worktrees_cfg,
+            team_hook=team_hook,
         )
     )
     registry.register(TaskListTool(task_manager))
     registry.register(TaskGetTool(task_manager))
     registry.register(TaskStopTool(task_manager))
     registry.register(SendMessageTool(task_manager))
+    if team_mgr is not None:
+        registry.register(
+            new_team_create_tool(team_mgr, on_team_created=_register_collab)
+        )
+        registry.register(
+            new_team_delete_tool(team_mgr, on_team_deleted=_unregister_collab)
+        )
     # hook agent 动作接通（F9.1）
     hook_engine.set_agent_launcher(launcher.launch_hook_agent)
     # 常驻空闲清理（F7.7）
@@ -287,6 +412,13 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
         ),
         workspace=cwd,
     )
+    # ch15 收尾 F1.1：团队清理纪律（团队功能启用时通用生效）
+    if team_mgr is not None:
+        stable_prompt = stable_prompt + "\n\n" + TEAM_CLEANUP_DISCIPLINE
+    # ch15 F14：Coordinator 激活——stable_prompt 拼四阶段提示词（构造前），构造后收窄工具集
+    if coordinator_on:
+        stable_prompt = stable_prompt + "\n\n" + coordinator_prompt_suffix()
+
     # 延迟绑定 agent 引用（emit_event 闭包需访问 agent，但 agent 在下方构造）
     agent_ref: list[Agent] = []
     agent = Agent(
@@ -304,6 +436,8 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
         hooks=hook_engine,
         runtime=session_runtime,
     )
+    if coordinator_on:
+        agent.set_allowed_tools(coordinator_allowed_tools())  # F14.3 收窄（TD-11）
     agent_ref.append(agent)
     # 阶段一摘要注入：with_catalog 后 env 每轮含 Available Skills 段（F4.1）
     agent.with_catalog(catalog)
@@ -338,6 +472,8 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
                 task_manager=task_manager,
                 worktree_mgr=worktree_mgr,
                 resume_worktree=args.resume,
+                team_mgr=team_mgr,
+                coordinator_mode=coordinator_on,
             )
             # ch10：命令注册 + CommandContext 组装。register_all 冲突 → 打印冲突名并退出（F1.3/N4）
             cmd_registry = CommandRegistry()
@@ -388,6 +524,9 @@ async def _amain(args: argparse.Namespace, config, provider) -> None:
         # ch14：取消 worktree 周期清理任务（F6.5）
         if sweep_task is not None and not sweep_task.done():
             sweep_task.cancel()
+        # ch15 收尾 F3.4：取消团队孤儿清扫周期任务
+        if team_sweep_task is not None and not team_sweep_task.done():
+            team_sweep_task.cancel()
         # ch12：session_end + shutdown + engine.close（F8.1/F9.5，后台任务尽力而为）
         await hook_engine.dispatch(HookEvent.SESSION_END, {})
         await hook_engine.dispatch(HookEvent.SHUTDOWN, {})

@@ -120,8 +120,12 @@ class TaskManager:
     ) -> None:
         self._lock = asyncio.Lock()
         self._tasks: dict[str, BackgroundTask] = {}
-        self._by_name: dict[str, str] = {}  # name → id（弱引用，后启动覆盖）
+        self._by_name: dict[
+            str, str
+        ] = {}  # name → id（弱引用，后启动覆盖；name_reg 优先）
+        self._name_reg = None  # ch15: AgentNameRegistry | None（团队寻址，T20）
         self._done: asyncio.Queue[str] = asyncio.Queue(maxsize=32)
+        self._on_task_done: list = []  # ch15: on_task_done 回调（队员完成通知，TD-13）
         self._max_tasks_per_agent = max_tasks_per_agent
         self._max_queue_per_agent = max_queue_per_agent
         self._max_idle_agents = max_idle_agents
@@ -133,6 +137,8 @@ class TaskManager:
 
     def get_by_name(self, name: str) -> BackgroundTask | None:
         task_id = self._by_name.get(name)
+        if task_id is None and self._name_reg is not None:
+            task_id = self._name_reg.resolve(name)  # ch15：委托团队名称注册表
         return self._tasks.get(task_id) if task_id else None
 
     def _resolve(self, task_id_or_name: str) -> BackgroundTask | None:
@@ -152,6 +158,15 @@ class TaskManager:
             except asyncio.QueueEmpty:
                 break
         return ids
+
+    # ── ch15：团队寻址 + 完成回调（TD-13）──────────────────
+    def set_name_registry(self, reg) -> None:
+        """注入团队名称注册表（name → agent_id 委托，plan T20）。"""
+        self._name_reg = reg
+
+    def on_task_done(self, fn) -> None:
+        """注册任务完成回调（可多个；终态逐个 await，TD-13 依赖反转）。"""
+        self._on_task_done.append(fn)
 
     # ── 启动（后台）───────────────────────────────────────
     def launch(
@@ -311,6 +326,8 @@ class TaskManager:
         self._tasks[bt.id] = bt
         if bt.name:
             self._by_name[bt.name] = bt.id  # 后启动覆盖前（弱引用）
+            if self._name_reg is not None:
+                self._name_reg.register(bt.name, bt.id)  # ch15：同步团队注册表
 
     def _drop(self, task_id: str) -> None:
         bt = self._tasks.pop(task_id, None)
@@ -318,6 +335,8 @@ class TaskManager:
             return
         if bt.name and self._by_name.get(bt.name) == task_id:
             self._by_name.pop(bt.name, None)
+            if self._name_reg is not None:
+                self._name_reg.unregister(bt.name)
 
     def _start_round(
         self, bt: BackgroundTask, task_text: str, *, already_injected: bool
@@ -397,6 +416,12 @@ class TaskManager:
                         f"[task manager] done queue full, dropping notification for {bt.id}",
                         file=sys.stderr,
                     )
+            # ch15 TD-13：on_task_done 回调（队员完成 → team.handle_task_done）
+            for fn in self._on_task_done:
+                try:
+                    await fn(bt.id)
+                except Exception:
+                    logger.exception("on_task_done callback failed for %s", bt.id)
             # 排队续派：本轮结束后从队列取下一个（F7.8），不达上限
             if (
                 bt.status != Status.CANCELLED

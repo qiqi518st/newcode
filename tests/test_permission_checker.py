@@ -127,10 +127,13 @@ class TestCheckShortCircuit:
 
     def test_sandbox_wins_over_allow_rule(self, tmp_path):
         # 沙箱越界 + 规则 allow → DENY
+        # ch15 N14：/tmp 是系统临时白名单（tmp_path 在其下），用 /etc 绝对越界路径
         layers = _empty_layers()
         layers.project.allow.append(Rule("Write", "**", "allow", "project"))
         c = _checker(PermissionMode.DEFAULT, layers, str(tmp_path))
-        r = c.check(_call("write_file", {"path": "../outside.txt", "content": "x"}))
+        r = c.check(
+            _call("write_file", {"path": "/etc/nonexistent-out.txt", "content": "x"})
+        )
         assert r.decision == Decision.DENY
         assert "项目目录之外" in r.reason
 
@@ -147,9 +150,9 @@ class TestCheckShortCircuit:
         assert r.decision == Decision.DENY
 
     def test_bypass_keeps_sandbox(self, tmp_path):
-        # AC14：bypass 下沙箱仍生效
+        # AC14：bypass 下沙箱仍生效（/etc 非 N14 临时白名单）
         c = _checker(PermissionMode.BYPASS, _empty_layers(), str(tmp_path))
-        r = c.check(_call("read_file", {"path": "../etc/passwd"}))
+        r = c.check(_call("read_file", {"path": "/etc/passwd"}))
         assert r.decision == Decision.DENY
 
 

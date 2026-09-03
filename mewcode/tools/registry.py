@@ -28,6 +28,10 @@ class Registry:
         """注册一个工具"""
         self._tools[tool.name] = tool
 
+    def unregister(self, name: str) -> None:
+        """按名注销工具（ch15 TD-2：删队后注销协作工具）。"""
+        self._tools.pop(name, None)
+
     def count(self) -> int:
         """已注册工具数量（O(1)，基于内部 dict 长度）。"""
         return len(self._tools)

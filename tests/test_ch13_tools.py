@@ -79,7 +79,8 @@ async def test_parameters_schema_stable():
     t = _tool()
     params = t.parameters
     assert params["required"] == ["prompt"]
-    # 固定参数集（ch13 六参 + ch14 动态隔离 isolation）；不随角色增减而变化（F1.4）
+    # 固定参数集（ch13 六参 + ch14 动态隔离 isolation + ch15 team_name/plan_mode_required）；
+    # 不随角色增减而变化（F1.4）
     assert set(params["properties"]) == {
         "prompt",
         "description",
@@ -88,6 +89,8 @@ async def test_parameters_schema_stable():
         "run_in_background",
         "name",
         "isolation",
+        "team_name",
+        "plan_mode_required",
     }
     assert t.read_only is False and t.is_system is False
 

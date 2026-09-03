@@ -54,6 +54,9 @@ class Agent:
         | None = None,  # ch12: SessionRuntime | None（取 pending_reminders）
         max_turns: int = 10,  # ch13: 最大迭代轮数（主 Agent 缺省保持 10，spec F2.1）
         dont_ask: bool = False,  # ch13: dontAsk 模式（子 Agent ASK→ALLOW 短路，F5.3）
+        teammate: object
+        | None = None,  # ch15: TeammateContext | None（队员邮箱注入，F11.1）
+        allowed_tools: list[str] | None = None,  # ch15: Coordinator 收窄白名单（F14.3）
     ) -> None:
         self.provider = provider
         self.conv = conversation
@@ -66,6 +69,9 @@ class Agent:
         # ch13 子 Agent 参数（主 Agent 缺省不变）
         self._max_turns = max_turns
         self._dont_ask = dont_ask
+        # ch15：队员上下文（TeammateContext，每轮邮箱注入）与工具白名单（Coordinator 收窄）
+        self._teammate = teammate
+        self._allowed_tools = allowed_tools
 
         # ch08 上下文管理（可选；无时行为与 ch07 一致，N8 向后兼容）
         self._context_mgr = context_mgr
@@ -107,6 +113,15 @@ class Agent:
         """清空激活 Skill（/clear 与 /session_new 调用，F5.5/F8.2）。"""
         if self._active_skills is not None:
             self._active_skills.clear()
+
+    # ── ch15 Coordinator 工具收窄（F14.3/TD-11）──────────
+    def set_allowed_tools(self, allowed: list[str] | None) -> None:
+        """设置工具白名单（None=不限制）。
+
+        生效：run() 的 tool_defs 收窄到白名单；known_calls 硬过滤（不在白名单的
+        已知工具直接产 error 结果、不执行）——只藏定义可被注入提示绕过，双保险（TD-11）。
+        """
+        self._allowed_tools = allowed
 
     def _compose_env_segment(self) -> str:
         """每轮组装 env：基础环境 + Available Skills 摘要段（F4.1）+ 激活 Skill 段（F5.2）。
@@ -179,6 +194,12 @@ class Agent:
             self._cancelled.clear()
             run_id = uuid.uuid4().hex[:12]
 
+            # ch15 TD-14：成员执行上下文注入（嵌套 spawn 拦截；ContextVar 任务本地）
+            if self._teammate is not None:
+                from .team_hook import set_current_teammate
+
+                set_current_teammate(self._teammate)
+
             # 注入用户消息（_inject=False 时任务已在 conv——run_to_completion 驱动）
             if _inject:
                 if mode == "execute" and plan_content:
@@ -188,7 +209,11 @@ class Agent:
                     self.conv.add_user(user_input)
 
             # 选择工具集（plan 模式暴露全部工具，由 SystemPrompt 引导自觉只读）
-            tool_defs = self.registry.to_definitions()
+            # ch15 TD-11：allowed_tools 非空时收窄到白名单（Coordinator 模式）
+            if self._allowed_tools is not None:
+                tool_defs = self.registry.definitions_filtered(self._allowed_tools)
+            else:
+                tool_defs = self.registry.to_definitions()
 
             # ch12 ① turn_start（F8.1）：一轮对话开始（用户消息已入历史）
             await self._dispatch_hook(HookEvent.TURN_START, {"prompt": user_input})
@@ -229,6 +254,16 @@ class Agent:
                     hook_prompts = self._runtime.take_reminders()
                     if hook_prompts:
                         reminders.extend(hook_notification(p) for p in hook_prompts)
+                # ch15 TD-3：raw reminder 通道（<team-update> 等不经 hook_notification 包装）
+                if self._runtime is not None:
+                    raw_prompts = self._runtime.take_raw_reminders()
+                    if raw_prompts:
+                        reminders.extend(raw_prompts)
+                # ch15 F11.1：队员每轮读 mailbox → <incoming-messages> reminder（惰性导入避环）
+                if self._teammate is not None:
+                    from .team_mailbox import inject_incoming
+
+                    reminders.extend(await inject_incoming(self, self._teammate))
                 # ch12 ④ pre_send：消息发给 LLM 之前（payload 含对话末尾 user 消息）
                 if self._hooks is not None:
                     await self._dispatch_hook(
@@ -430,6 +465,23 @@ class Agent:
                             error=f"未知工具: {tc.tool_name}",
                         ),
                     )
+
+                # ch15 TD-11：allowed_tools 硬过滤——不在白名单的已知工具直接产 error
+                # 结果、不执行（防注入提示绕过 Coordinator 收窄；N8 运行时不可解锁）
+                if self._allowed_tools is not None:
+                    filtered_calls: list[ToolCall] = []
+                    for tc in known_calls:
+                        if tc.tool_name in self._allowed_tools:
+                            filtered_calls.append(tc)
+                            continue
+                        tr = ToolResult(
+                            status="error",
+                            error=f"工具不在当前白名单（Coordinator 模式）: {tc.tool_name}",
+                        )
+                        yield Event(EventType.TOOL_CALL, tc)
+                        yield Event(EventType.TOOL_RESULT, tr)
+                        self.conv.add_tool_result(tc, tr)
+                    known_calls = filtered_calls
 
                 # ── 权限检查（ch06）──
                 # 对每个 known_call 做权限检查，分出 allowed_calls

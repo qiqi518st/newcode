@@ -102,6 +102,11 @@ def parse_definition_text(
         _warn(display_path, f"unknown isolation {isolation_raw!r}, falling back to ''")
         isolation_raw = ""
 
+    # ch15 F48/F13.1：planModeRequired 字段（spawn 进 Team 时以 plan 模式起步）
+    plan_mode_required = _bool_field(
+        meta.get("planModeRequired"), False, display_path, "planModeRequired"
+    )
+
     return AgentDefinition(
         name=name,
         description=description,
@@ -115,6 +120,7 @@ def parse_definition_text(
         background=background,
         enabled=enabled,
         isolation=isolation_raw,
+        plan_mode_required=plan_mode_required,
         source=source,
         source_path=display_path,
     )

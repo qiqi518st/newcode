@@ -1,11 +1,15 @@
 """路径沙箱（L2）
 
-文件类工具读写限定在项目根目录内。
+文件类工具读写限定在项目根目录内；ch15 N14 额外开放系统临时目录白名单。
 先解析符号链接再做前缀判断，防止逃逸。
 在任何权限模式（含 bypassPermissions）下都生效。
 """
 
 import os
+
+# ch15 N14：系统临时目录白名单（file-class 工具生效；bash 走 exec-class 不受沙箱约束）。
+# 理由：工具脚本和队员经常需要 /tmp 做中转文件，严格限定项目根内会误杀正常用法。
+TEMP_DIR_WHITELIST: tuple[str, ...] = ("/tmp", "/private/tmp")
 
 
 def resolve_root(root: str) -> str:
@@ -81,6 +85,11 @@ def check_path(target_path: str, project_root: str) -> tuple[bool, str]:
         return False, ""
 
     root = resolve_root(project_root)
+
+    # ch15 N14：系统临时目录白名单（/tmp、/private/tmp）→ 放行（file-class 中转文件）
+    for temp_dir in TEMP_DIR_WHITELIST:
+        if resolved == temp_dir or resolved.startswith(temp_dir + os.sep):
+            return True, resolved
 
     # 按段比对，避免 /rootfoo 误匹配 /root/foo
     if resolved == root:

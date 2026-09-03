@@ -46,3 +46,5 @@ class CommandContext:
     hooks: object | None = None  # hooks.Engine
     # ch13 后台任务管理器（main.py 装配注入；未接线保持 None，/tasks 显示「未启用」）
     task_manager: object | None = None  # subagent.TaskManager
+    # ch15 团队管理器（main.py 装配注入；未接线保持 None，/team 显示「未启用」）
+    team_mgr: object | None = None  # team.Manager

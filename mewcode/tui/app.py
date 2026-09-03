@@ -377,6 +377,8 @@ class REPL:
         task_manager=None,  # ch13: subagent.TaskManager | None
         worktree_mgr=None,  # ch14: worktree.Manager | None
         resume_worktree: bool = False,  # ch14: --resume 时恢复上次 worktree 会话（F10.3）
+        team_mgr=None,  # ch15: team.Manager | None（Lead 邮箱消费 / 团队通知）
+        coordinator_mode: bool = False,  # ch15: Coordinator Mode 标签（F14.4）
     ) -> None:
         self.agent = agent
         self.renderer = renderer
@@ -403,6 +405,10 @@ class REPL:
         self.worktree_mgr = worktree_mgr
         self.active_cwd: str = ""
         self._worktree_accessor = None
+        # ch15：团队管理器 / Coordinator 标记 / Lead 邮箱事件（F11.3/F14.4）
+        self.team_mgr = team_mgr
+        self.coordinator_mode = coordinator_mode
+        self._lead_mail_event: asyncio.Event = asyncio.Event()
         self.ui = RichUIController(
             self
         )  # UIController 实现（CommandContext.ui 注入用）
@@ -488,7 +494,10 @@ class REPL:
 
     @property
     def _toolbar(self) -> str:
-        """底部状态栏：左侧权限模式，右侧 token 用量；中部高频命令提示从注册表派生（F11.2/N5）。"""
+        """底部状态栏：左侧权限模式，右侧 token 用量；中部高频命令提示从注册表派生（F11.2/N5）。
+
+        ch15 F14.4：Coordinator 显示 [COORDINATOR]；有活跃团队显示 [team:<name>]。
+        """
         pm = self._permission_mode_label
         tokens = f"Σ in:{self._session_in_tokens} out:{self._session_out_tokens}"
         reg = self.command_registry
@@ -497,10 +506,23 @@ class REPL:
             hint = " ".join(names) + " | /help 查看全部"
         else:
             hint = "/help"
-        return f"{pm} | Shift+Tab 切换模式 | Alt+Enter 换行，Enter 发送 | {hint} | {tokens}"
+        flags = ""
+        if getattr(self, "coordinator_mode", False):
+            flags += " [COORDINATOR]"
+        if getattr(self, "team_mgr", None) is not None:
+            active = self.team_mgr.active_team()
+            if active is not None:
+                flags += f" [team:{active.sanitized_name}]"
+        return f"{pm} | Shift+Tab 切换模式 | Alt+Enter 换行，Enter 发送 | {hint}{flags} | {tokens}"
 
     async def run(self) -> None:
         """主循环：回车输入 → dispatch_slash 分流（True=命令处理完）→ 否则走 AgentLoop。"""
+        # ch15 F11.3/F11.4：启动 Lead 邮箱消费 + idle 自动续推后台任务
+        if getattr(self, "team_mgr", None) is not None:
+            from .tasks import consume_lead_mail, wait_for_lead_mail
+
+            asyncio.create_task(consume_lead_mail(self))
+            asyncio.create_task(wait_for_lead_mail(self))
         try:
             while True:
                 if self._exit_requested:
@@ -528,6 +550,12 @@ class REPL:
                     self._console.print("再见！")
                     break
 
+                if user_input is None:
+                    # ch15 TD-5：被 lead_mail 打断（session.app.exit 返回 None）→ 自动续推
+                    if self._lead_mail_event.is_set():
+                        await self._begin_autonomous_turn()
+                    continue
+
                 text = user_input.strip()
                 if not text:
                     continue
@@ -551,6 +579,7 @@ class REPL:
         """ch13 F7.6：空闲点消费 done 队列——user 角色 <task-notification> 注入主对话 + 打印。
 
         主 Agent 流式中不调用（run 主循环空闲点才调）；注入历史让后续轮可引用（N5）。
+        ch15 F9.1：团队成员用团队格式（含 <usage>，build_team_notification）。
         """
         mgr = self.task_manager
         if mgr is None:
@@ -560,9 +589,33 @@ class REPL:
             if task is None:
                 continue
             try:
-                from ..subagent.manager import build_task_notification
+                if getattr(
+                    self, "team_mgr", None
+                ) is not None and self.team_mgr.is_teammate(task.id):
+                    from ..team.notify import build_team_notification
 
-                xml = build_task_notification(task)
+                    member = self.team_mgr.member_of(task.id)
+                    member_name = member[1].name if member else (task.name or task.id)
+                    xml = build_team_notification(
+                        task.id,
+                        member_name,
+                        task.status.name.lower(),
+                        task.result or (str(task.err) if task.err else ""),
+                        total_tokens=(
+                            task.total_usage.input_tokens
+                            + task.total_usage.output_tokens
+                        ),
+                        tool_uses=task.tool_count,
+                        duration_ms=(
+                            int((task.end_time - task.start_time) * 1000)
+                            if task.end_time and task.start_time
+                            else 0
+                        ),
+                    )
+                else:
+                    from ..subagent.manager import build_task_notification
+
+                    xml = build_task_notification(task)
                 self.agent.conv.add_user(xml)
             except Exception:
                 # 通知注入失败仅记日志，不影响主流程
@@ -714,6 +767,18 @@ class REPL:
         self._print_plan_info(meta)
         self._executing_slug = meta.slug
         await self._run_stream("", "execute", plan_content)
+
+    # ── ch15 F11.4：Lead idle 自动续推 ─────────────────────
+    async def _begin_autonomous_turn(self) -> None:
+        """收到队员更新且 Lead 空闲时，合成 user 消息自动开新轮（用户在 RichLog 可见）。"""
+        if self.state != SessionState.IDLE:
+            return
+        self._lead_mail_event.clear()
+        self._console.print("[team-update] 队员发来新消息，自动续推", style="cyan")
+        await self._run_stream(
+            "[team-update] 队员发来新消息，请按协调流程处理。", "normal", ""
+        )
+        self.state = SessionState.IDLE
 
     # ── ch14 Worktree：active_cwd 注入 + WorktreeAccessor ─────
     def _effective_cwd(self) -> str:

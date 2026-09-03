@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+from collections.abc import Callable
 
 from ..provider.base import ToolResult
 from .cwd import cwd_from_ctx
@@ -12,6 +13,13 @@ _CMD_TIMEOUT = 60  # 命令执行超时 60 秒
 
 class ExecuteCommandTool:
     """在指定目录下执行 shell 命令"""
+
+    def __init__(
+        self,
+        guard: Callable[[str], str | None] | None = None,
+    ) -> None:
+        """ch15 收尾 F2.7：可选命令守卫（团队清理引导；None=不守卫，行为与现状一致）。"""
+        self._guard = guard
 
     @property
     def read_only(self) -> bool:
@@ -47,6 +55,11 @@ class ExecuteCommandTool:
 
     async def execute(self, arguments: dict) -> ToolResult:
         command = arguments.get("command", "")
+        # ch15 收尾 F2.3：守卫命中 → 返回结构化引导错误，不执行、不弹权限确认
+        if self._guard is not None:
+            hint = self._guard(command)
+            if hint:
+                return ToolResult(status="error", error=hint)
         # ch14 F7.2：显式 cwd 参数 > ctx cwd > 进程 cwd（子进程 cwd 跟随）
         cwd = arguments.get("cwd") or cwd_from_ctx() or os.getcwd()
 

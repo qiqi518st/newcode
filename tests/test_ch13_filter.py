@@ -12,6 +12,7 @@ from __future__ import annotations
 from mewcode.tools.filter import (
     ASYNC_AGENT_ALLOWED_TOOLS,
     GLOBAL_DENY,
+    TEAMMATE_EXTRA_TOOLS,
     FilterParams,
     apply_agent_tool_filter,
     is_mcp_tool,
@@ -78,4 +79,6 @@ def test_is_mcp_tool():
 
 
 def test_global_deny_is_fixed():
-    assert GLOBAL_DENY == frozenset({"agent"})
+    # ch15 N2：协作工具也纳入全局剔除（普通子 Agent 不可见；团队成员经 extra_tools 注入）
+    assert "agent" in GLOBAL_DENY
+    assert TEAMMATE_EXTRA_TOOLS <= GLOBAL_DENY

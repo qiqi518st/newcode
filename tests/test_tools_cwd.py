@@ -108,7 +108,9 @@ async def test_cross_context_aclose_no_crash():
     async def _close():
         await g.aclose()
 
-    await asyncio.create_task(_close())  # 修复前在此抛「created in a different Context」
+    await asyncio.create_task(
+        _close()
+    )  # 修复前在此抛「created in a different Context」
 
 
 def test_with_cwd_sync_reset():

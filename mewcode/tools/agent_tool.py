@@ -12,6 +12,7 @@ import json
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
+from ..agent.team_hook import TeamSpawnRequest
 from ..provider.base import ToolResult
 from .agent_worktree import _execute_with_worktree
 from .base import Tool
@@ -35,6 +36,8 @@ class AgentTool(Tool):
         get_main_agent: Callable[[], object],
         worktree_mgr: WorktreeManager | None = None,
         worktrees_cfg: WorktreesConfig | None = None,
+        team_hook: object
+        | None = None,  # ch15: TeamHook | None（team_name 分支委托，TD-12）
     ) -> None:
         self._catalog = catalog
         self._launcher = launcher
@@ -42,11 +45,14 @@ class AgentTool(Tool):
         # ch14：worktree 管理器与配置（None / enable=false → 隔离降级不启用，F11.2）
         self._worktree_mgr = worktree_mgr
         self._worktrees_cfg = worktrees_cfg
+        # ch15：TeamHook（None=团队功能未启用 → team_name 分支报错，TD-12）
+        self._team_hook = team_hook
         names = ", ".join(d.name for d in catalog.list())
         self._description = (
             "启动一个子 Agent 执行独立任务（独立上下文，不污染主对话）。"
             "隔离：可传 isolation='worktree' 让本次子 Agent 在独立 Git Worktree 中运行"
             "（或用 frontmatter 声明 isolation:worktree 的角色），isolation='none' 强制不隔离。"
+            "团队：传 team_name 把子 Agent spawn 进已有 Team 当队员（F25）。"
             + (
                 f" 可用 subagent_type: {names}"
                 if names
@@ -100,6 +106,14 @@ class AgentTool(Tool):
                         "none=强制不隔离；不传沿用角色 frontmatter 的 isolation 声明"
                     ),
                 },
+                "team_name": {
+                    "type": "string",
+                    "description": "ch15：非空时把子 Agent spawn 进已有 Team 当队员（F24）",
+                },
+                "plan_mode_required": {
+                    "type": "boolean",
+                    "description": "ch15：队员 spawn 时以 plan 模式起步，需 Lead 审批后执行（F48）",
+                },
             },
             "required": ["prompt"],
         }
@@ -124,6 +138,28 @@ class AgentTool(Tool):
         isolation_arg = str(arguments.get("isolation") or "").strip().lower()
         if isolation_arg not in ("", "worktree", "none"):
             isolation_arg = ""
+        # ch15 F24/F25：team_name 分支（spawn 进团队当队员）
+        team_name = str(arguments.get("team_name") or "").strip()
+        plan_mode_required = bool(arguments.get("plan_mode_required") or False)
+        if team_name:
+            if self._team_hook is None:
+                return ToolResult(
+                    status="error", error="团队功能未启用（team_hook 未注入）"
+                )
+            try:
+                text = await self._team_hook.spawn_teammate(
+                    TeamSpawnRequest(
+                        team_name=team_name,
+                        prompt=prompt,
+                        subagent_type=subagent_type,
+                        model=model,
+                        name=name or "",
+                        plan_mode_required=plan_mode_required,
+                    )
+                )
+            except Exception as exc:  # noqa: BLE001 —— 权限拦截（InProcessTeammateNoSpawn 等）转错误
+                return ToolResult(status="error", error=str(exc))
+            return ToolResult(status="ok", output=text)
 
         # 防嵌套兜底（B2 层 1，F6.5）：主对话含 fork 标记 → 拒绝（正常情况下子 Agent
         # 工具集已被过滤剔除 agent，此步是双保险）

@@ -15,6 +15,22 @@ from .base import SYSTEM_TOOL_NAMES
 # F6.1：任何子 Agent 永远不能用的工具名（防 A→B→C 链式嵌套，不可配置覆盖）
 GLOBAL_DENY: frozenset[str] = frozenset({"agent"})
 
+# ch15 TD-7：团队协作工具白名单——经 apply_agent_tool_filter 的普通子 Agent 天然不可见；
+# 团队成员由 build_sub_registry(extra_tools=TEAMMATE_EXTRA_TOOLS) 在过滤后显式注入（N2）
+TEAMMATE_EXTRA_TOOLS: frozenset[str] = frozenset(
+    {
+        "task_create",
+        "task_get",
+        "task_list",
+        "task_update",
+        "send_message",
+    }
+)
+
+# ch15：协作工具也纳入子 Agent 全局剔除（团队成员经 extra_tools 绕回；普通子 Agent
+# 即使在 TeamCreate 后也不可见——TD-2 动态注册进主 registry 的副作用防护）
+GLOBAL_DENY = GLOBAL_DENY | TEAMMATE_EXTRA_TOOLS
+
 # F6.3：后台工作者工具白名单——不含 agent 自身（B2 层 2）；mcp__* 前缀动态识别；
 # load_skill 经 is_system_tool 豁免恒可见
 ASYNC_AGENT_ALLOWED_TOOLS: frozenset[str] = frozenset(

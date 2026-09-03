@@ -66,9 +66,16 @@ class SubAgentLauncher:
 
     # ── 工具集 ────────────────────────────────────────────
     def build_sub_registry(
-        self, role: AgentDefinition, is_background: bool
+        self,
+        role: AgentDefinition,
+        is_background: bool,
+        extra_tools: tuple[str, ...] = (),
     ) -> Registry:
-        """F6.4 多层过滤 → 子 Registry（共享 Tool 实例，一次性固定）。"""
+        """F6.4 多层过滤 → 子 Registry（共享 Tool 实例，一次性固定）。
+
+        ch15：extra_tools 在过滤后显式注入（队员 collab 工具，TD-7）——collab 工具
+        在 filter 的全局剔除集里，普通子 Agent 不可见；队员经此注入可见。
+        """
         parent = self._get_main_agent()
         visible = apply_agent_tool_filter(
             FilterParams(
@@ -78,6 +85,10 @@ class SubAgentLauncher:
                 role_disallowed=role.disallowed_tools,
             )
         )
+        if extra_tools:
+            for name in extra_tools:
+                if name not in visible:
+                    visible.append(name)
         return parent.registry.view(set(visible))
 
     # ── 模型分层 ──────────────────────────────────────────
@@ -106,21 +117,34 @@ class SubAgentLauncher:
         model_override: str = "",
         permission_mode: PermissionMode | None = None,
         sandbox_root: str | None = None,
+        runtime: object
+        | None = None,  # ch15: SessionRuntime | None（成员，writer 已接线）
+        teammate: object | None = None,  # ch15: TeammateContext | None（成员邮箱注入）
+        extra_tools: tuple[str, ...] = (),  # ch15: collab 工具注入
+        dont_ask: bool | None = None,  # ch15: 覆盖角色 dont_ask（队员强制 True，F6.3）
     ) -> tuple[Agent, ConversationManager]:
         """构造子 Agent（独立 conv；共享规则层 + 子模式；dont_ask；非交互，B1）。
 
         model_override 非空时优先于角色 model（Agent 工具 model 参数，F1.2）。
         ch14：permission_mode 覆盖角色模式（worktree 隔离 → acceptEdits，worktree 内写自动
         放行）；sandbox_root 覆盖权限沙箱根（= worktree 路径，F4.4 沙箱根跟随工作目录）。
+        ch15：runtime 给定 → conv = runtime.conversation（SessionWriter 已接线，transcript
+        落盘）；teammate/extra_tools 透传 Agent；dont_ask 非 None 覆盖角色（队员强制 True）。
         """
         parent = self._get_main_agent()
         # 角色 frontmatter maxTurns > agents.max_turns 全局默认 > 代码兜底（F2.1/F11.1）
         max_turns = role.max_turns or self._cfg.max_turns or DEFAULT_MAX_TURNS
-        conv = ConversationManager(max_turns, messages=list(fork_history or []))
+        if runtime is not None and getattr(runtime, "conversation", None) is not None:
+            conv = runtime.conversation
+        else:
+            conv = ConversationManager(max_turns, messages=list(fork_history or []))
+        eff_dont_ask = role.dont_ask if dont_ask is None else dont_ask
         sub = Agent(
             provider=self.resolve_model(model_override or role.model),
             conversation=conv,
-            registry=self.build_sub_registry(role, is_background),
+            registry=self.build_sub_registry(
+                role, is_background, extra_tools=extra_tools
+            ),
             stable_prompt=(
                 role.body
                 if not role.is_fork()
@@ -133,7 +157,8 @@ class SubAgentLauncher:
             is_interactive=False,
             hooks=self._hooks,
             max_turns=max_turns,
-            dont_ask=role.dont_ask,
+            dont_ask=eff_dont_ask,
+            teammate=teammate,
         )
         return sub, conv
 

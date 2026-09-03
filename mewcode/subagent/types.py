@@ -58,12 +58,17 @@ class AgentDefinition:
     model: str = (
         "inherit"  # inherit/haiku/sonnet/opus（命名分层经配置映射，F2.1/F11.1）
     )
-    max_turns: int = 0  # 最大迭代轮数；0=未设置 → 回落 agents.max_turns 全局默认（F2.1/F11.1）
+    max_turns: int = (
+        0  # 最大迭代轮数；0=未设置 → 回落 agents.max_turns 全局默认（F2.1/F11.1）
+    )
     permission_mode: PermissionMode = PermissionMode.DEFAULT  # 四档（F5.3）
     dont_ask: bool = False  # frontmatter permissionMode: dontAsk → True（F5.3）
     background: bool = False  # 角色强制后台（F2.1）
     enabled: bool = True  # False 时不加载（内置 verifier 用，F2.5）
     isolation: str = ""  # ch14：""=不隔离 / "worktree"=Git Worktree 文件隔离（F5.1）
+    plan_mode_required: bool = (
+        False  # ch15：spawn 进 Team 时以 plan 模式起步（F48/F13.1）
+    )
     source: Source = Source.BUILTIN  # 来源（诊断与过滤用，F2.2/F6.4）
     source_path: str = ""  # 来源文件绝对路径（诊断用）
 
