@@ -12,10 +12,10 @@ from pathlib import Path
 
 import pytest
 
-from mewcode.provider.base import StreamEvent, TokenUsage
-from mewcode.skills import ActiveSkills, Catalog, Executor
-from mewcode.slash import CommandContext, CommandRegistry, RecordingUI
-from mewcode.tools import Registry
+from newcode.provider.base import StreamEvent, TokenUsage
+from newcode.skills import ActiveSkills, Catalog, Executor
+from newcode.slash import CommandContext, CommandRegistry, RecordingUI
+from newcode.tools import Registry
 
 pytestmark = pytest.mark.anyio
 
@@ -138,7 +138,7 @@ async def test_inline_unknown_skill_shows_message(tmp_path):
 
 async def test_fork_isolates_conversation_and_reflows(tmp_path):
     """防 bug：fork 子会话独立（主 conv 不被污染）+ final_text 回流主对话 + token 写回。"""
-    from mewcode.conversation.manager import ConversationManager
+    from newcode.conversation.manager import ConversationManager
 
     catalog = _catalog(tmp_path)
     store = ActiveSkills()
@@ -167,7 +167,7 @@ async def test_fork_isolates_conversation_and_reflows(tmp_path):
 
 async def test_fork_context_none_starts_empty(tmp_path):
     """防 bug：context=none 时 fork 子 conv 只含 run 注入的 rendered（无主对话残留）。"""
-    from mewcode.conversation.manager import ConversationManager
+    from newcode.conversation.manager import ConversationManager
 
     catalog = _catalog(tmp_path)
     store = ActiveSkills()
@@ -186,7 +186,7 @@ async def test_fork_context_none_starts_empty(tmp_path):
 
 async def test_fork_context_recent_copies_last_n(tmp_path):
     """防 bug：context=recent 带最近 N 条（缺省 5）进 fork 子会话，追加 rendered。"""
-    from mewcode.conversation.manager import ConversationManager
+    from newcode.conversation.manager import ConversationManager
 
     catalog = _catalog(tmp_path)
     store = ActiveSkills()
@@ -208,7 +208,7 @@ async def test_fork_context_recent_copies_last_n(tmp_path):
 
 async def test_fork_context_full_summarizes(tmp_path):
     """防 bug：context=full 先走 LLM 摘要请求（复用 summarize 模式），再跑子 Agent。"""
-    from mewcode.conversation.manager import ConversationManager
+    from newcode.conversation.manager import ConversationManager
 
     catalog = _catalog(tmp_path)
     store = ActiveSkills()
@@ -238,7 +238,7 @@ async def test_fork_context_full_summarizes(tmp_path):
 
 async def test_fork_failure_writes_fallback(tmp_path):
     """防 bug：fork 任一步出错 → final_text 兜底 "[skill <name> failed: ...]" 仍写回主对话。"""
-    from mewcode.conversation.manager import ConversationManager
+    from newcode.conversation.manager import ConversationManager
 
     catalog = _catalog(tmp_path)
     store = ActiveSkills()

@@ -5,8 +5,8 @@
 
 import pytest
 
-from mewcode.context import capabilities as cap_mod
-from mewcode.context.window import get_context_window_for_model
+from newcode.context import capabilities as cap_mod
+from newcode.context.window import get_context_window_for_model
 
 
 def test_env_override(monkeypatch):

@@ -1,4 +1,4 @@
-# MewCode ch06 — 五层权限系统 验收清单 (checklist.md)
+# NewCode ch06 — 五层权限系统 验收清单 (checklist.md)
 
 > 每一项通过运行代码或观察行为来验证，聚焦系统行为；括号内为验证方式与对应需求。函数/类型名仅作定位提示，核验断言本身不依赖其命名（重命名实现而行为不变时本清单仍适用）。
 
@@ -36,29 +36,29 @@
 
 ## 编译与测试
 
-- [ ] `python -m mewcode` 能正常启动（在合法配置下进入 TUI）。
+- [ ] `python -m newcode` 能正常启动（在合法配置下进入 TUI）。
 - [ ] `ruff format .` 无错误。
 - [ ] `ruff check .` 无告警（含 `permission` 子包）。
 - [ ] `pytest tests/ -v` 通过（config、conversation、tool、agent、prompt、permission、tui 单测）。
 - [ ] `pytest tests/test_agent.py tests/test_permission_*.py tests/test_permission_tui.py -v --timeout=30` 无超时（重点守护人在回路阻塞/取消）。(N9)
-- [ ] （可选）`mypy mewcode/` 通过（含 `permission` 子包）。
-- [ ] 含密钥的本地配置层已被 gitignore（验证：`git check-ignore .mewcode/permissions.local.yaml` 命中）；对话区与任何输出均不出现 api_key 明文。
+- [ ] （可选）`mypy newcode/` 通过（含 `permission` 子包）。
+- [ ] 含密钥的本地配置层已被 gitignore（验证：`git check-ignore .newcode/permissions.local.yaml` 命中）；对话区与任何输出均不出现 api_key 明文。
 
 ## 端到端场景（实跑）
 
 - [ ] **场景 1（default 写需确认）**：default 模式下让模型写一个新文件 → 弹出多行人在回路待批准块（`● 工具名` + 参数预览 + 触发原因 + 三选菜单）；选「允许本次」→ 文件被写、Loop 继续。(AC9/F7)
 - [ ] **场景 2（拒绝→改路径→完成闭环）**：让模型写项目外路径 → 被拒（含「路径在项目目录之外」原因）→ 模型在后续轮**改写到项目内合法路径并成功完成任务**，体现「拒绝回灌让模型调整而非终止」。(AC10/F8)
 - [ ] **场景 3（菜单交互）**：待批准块用 ↑↓ 移动高亮 + 回车确认；数字键 1/2/3 亦可直选；便捷键 `y`=允许本次、`n`/`d`=拒绝本次；默认高亮「允许本次」。(AC9/F7)
-- [ ] **场景 4（永久放行 + 文件产物）**：对某调用选「永久」→ (a) 用 cat/grep 确认本地层配置文件出现该精确 allow 条目；(b) 重启 mewcode 后同调用不再弹窗直接执行。(AC9/F7)
+- [ ] **场景 4（永久放行 + 文件产物）**：对某调用选「永久」→ (a) 用 cat/grep 确认本地层配置文件出现该精确 allow 条目；(b) 重启 newcode 后同调用不再弹窗直接执行。(AC9/F7)
 - [ ] **场景 5（acceptEdits）**：Shift+Tab 切到 acceptEdits（状态栏左侧显示 `ACCEPT EDITS`）后写/改文件**不弹窗**直接执行，但命令执行仍弹窗。(AC8/F6)
 - [ ] **场景 6（bypass + 黑名单兜底）**：Shift+Tab 循环到 bypassPermissions（状态栏左侧显示 `BYPASS`）后普通命令不弹窗；但让模型跑 `rm -rf /` 仍被黑名单拦下、回灌被拒。(AC1/AC15/N2)
 - [ ] **场景 7（沙箱拦截）**：让模型读 `/etc/passwd` 或写项目外路径 → 被沙箱拦、回灌「路径在项目目录之外」，模型据此停手或改项目内路径。(AC3/F3)
 - [ ] **场景 8（plan 不变）**：`/plan` 暴露全部工具，只读操作自动放行，写/命令操作触发 Ask 确认；`/do` 选择执行——沿用 ch04.5 行为不退化。(AC11/AC12/F9)
 - [ ] **场景 9（取消 + 恢复）**：人在回路弹窗时按 Esc → 干净回到空闲、不退出程序、不泄漏 task；再发一条消息可继续不报 400。(AC16/N9)
 - [ ] **场景 10（模式跨轮保持）**：Shift+Tab 切到 acceptEdits 后发送下一轮对话 → 模式保持 acceptEdits，状态栏不变，不被重置。(AC14/F11)
-- [ ] **场景 11（非交互拒绝）**：`mewcode -c "git push --force"` → 命令执行被拒绝，拒绝原因回灌模型。(AC13/F10)
-- [ ] **场景 12（非交互 bypass）**：`mewcode -c "git status" --mode bypassPermissions` → 命令执行不被询问，正常执行。(AC13/F10)
-- [ ] **场景 13（非交互 plan）**：`mewcode -c -p "写一个排序函数"` → 直接生成计划文件，不弹确认，不弹「是否执行」。(AC13/F10)
+- [ ] **场景 11（非交互拒绝）**：`newcode -c "git push --force"` → 命令执行被拒绝，拒绝原因回灌模型。(AC13/F10)
+- [ ] **场景 12（非交互 bypass）**：`newcode -c "git status" --mode bypassPermissions` → 命令执行不被询问，正常执行。(AC13/F10)
+- [ ] **场景 13（非交互 plan）**：`newcode -c -p "写一个排序函数"` → 直接生成计划文件，不弹确认，不弹「是否执行」。(AC13/F10)
 
 ## 自检
 

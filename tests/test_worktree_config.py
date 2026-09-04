@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mewcode.worktree.config import load_worktree_config
+from newcode.worktree.config import load_worktree_config
 
 
 def _write(path: Path, text: str) -> None:
@@ -30,7 +30,7 @@ def test_all_defaults_when_no_config(tmp_path):
 
 def test_project_config_applies(tmp_path):
     _write(
-        tmp_path / ".mewcode" / "config.yaml",
+        tmp_path / ".newcode" / "config.yaml",
         "worktrees:\n  enable: false\n  expire_minutes: 30\n",
     )
     cfg = load_worktree_config(str(tmp_path))
@@ -41,11 +41,11 @@ def test_project_config_applies(tmp_path):
 
 def test_local_overrides_project(tmp_path):
     _write(
-        tmp_path / ".mewcode" / "config.yaml",
+        tmp_path / ".newcode" / "config.yaml",
         "worktrees:\n  enable: true\n  expire_minutes: 30\n",
     )
     _write(
-        tmp_path / ".mewcode" / "config.local.yaml",
+        tmp_path / ".newcode" / "config.local.yaml",
         "worktrees:\n  expire_minutes: 90\n",
     )
     cfg = load_worktree_config(str(tmp_path))
@@ -55,7 +55,7 @@ def test_local_overrides_project(tmp_path):
 
 def test_invalid_value_falls_back(tmp_path, capsys):
     _write(
-        tmp_path / ".mewcode" / "config.yaml",
+        tmp_path / ".newcode" / "config.yaml",
         "worktrees:\n  enable: not-a-bool\n  expire_minutes: abc\n",
     )
     cfg = load_worktree_config(str(tmp_path))
@@ -67,7 +67,7 @@ def test_invalid_value_falls_back(tmp_path, capsys):
 
 def test_symlink_dirs_override(tmp_path):
     _write(
-        tmp_path / ".mewcode" / "config.yaml",
+        tmp_path / ".newcode" / "config.yaml",
         "worktrees:\n  symlink_dirs: [node_modules]\n",
     )
     cfg = load_worktree_config(str(tmp_path))

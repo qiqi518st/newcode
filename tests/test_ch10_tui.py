@@ -11,10 +11,10 @@ import asyncio
 
 from rich.console import Console
 
-from mewcode.plans import PlanManager
-from mewcode.slash import CommandContext, CommandRegistry
-from mewcode.slash.commands import register_all
-from mewcode.tui.app import REPL, AppMode, SessionState
+from newcode.plans import PlanManager
+from newcode.slash import CommandContext, CommandRegistry
+from newcode.slash.commands import register_all
+from newcode.tui.app import REPL, AppMode, SessionState
 
 
 class _FakeAgent:
@@ -65,7 +65,7 @@ def _make_repl(state=SessionState.IDLE, agent=None, runtime=None):
 
     object.__new__ 跳过 __init__：需把 RichUIController 访问的 repl.* 属性补齐。
     """
-    from mewcode.tui.app import RichUIController
+    from newcode.tui.app import RichUIController
 
     reg = CommandRegistry()
     register_all(reg)
@@ -219,7 +219,7 @@ def test_clear_atomic_reset():
 
 def test_handler_exception_does_not_crash():
     """handler 抛异常 → dispatch 上屏"命令执行失败"且返回 True（F6 兜底）。"""
-    from mewcode.slash.registry import CommandDef, CommandKind
+    from newcode.slash.registry import CommandDef, CommandKind
 
     async def boom(ctx, args):
         raise RuntimeError("boom")

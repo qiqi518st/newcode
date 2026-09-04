@@ -8,9 +8,9 @@
 
 from __future__ import annotations
 
-from mewcode.permission.modes import PermissionMode
-from mewcode.subagent.errors import MaxTurnsReached
-from mewcode.subagent.types import (
+from newcode.permission.modes import PermissionMode
+from newcode.subagent.errors import MaxTurnsReached
+from newcode.subagent.types import (
     DEFAULT_MAX_TURNS,
     NOTIFICATION_XML,
     RESULT_TRUNCATE_CHARS,

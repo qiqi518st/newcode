@@ -1,14 +1,14 @@
-# MewCode Plan 文件管理 — 验收清单 (checklist-plan-files.md)
+# NewCode Plan 文件管理 — 验收清单 (checklist-plan-files.md)
 
 > 每一项通过运行代码或观察行为来验证，聚焦系统行为。
 
 ## 实现完整性
 
-- [ ] PlanManager 所有方法已实现且可调用（验证：`from mewcode.plans import PlanManager` 成功）
-- [ ] Config 移除 `plan_file`，新增 `cleanup_period_days`（验证：`from mewcode.config.schema import Config; print(Config.__dataclass_fields__)` 确认字段变化）
+- [ ] PlanManager 所有方法已实现且可调用（验证：`from newcode.plans import PlanManager` 成功）
+- [ ] Config 移除 `plan_file`，新增 `cleanup_period_days`（验证：`from newcode.config.schema import Config; print(Config.__dataclass_fields__)` 确认字段变化）
 - [ ] PLAN_MODE_REMINDER 包含 slug 声明要求（验证：`assert 'slug' in PLAN_MODE_REMINDER`）
 - [ ] REPL 使用 PlanManager 替代 `_read_plan_file`/`_write_plan_file`（验证：grep 确认两个方法已移除）
-- [ ] main.py 启动时创建 PlanManager 并执行清理（验证：`python -c "from mewcode.main import main"` 无导入错误）
+- [ ] main.py 启动时创建 PlanManager 并执行清理（验证：`python -c "from newcode.main import main"` 无导入错误）
 
 ## 集成
 
@@ -18,9 +18,9 @@
 
 ## 编译与测试
 
-- [ ] 项目编译无错误（验证：`python -c "import mewcode"` 无错误）
+- [ ] 项目编译无错误（验证：`python -c "import newcode"` 无错误）
 - [ ] 所有单元测试通过（验证：`pytest tests/ -v` 全部通过）
-- [ ] 无 lint 错误（验证：`ruff check mewcode/` 无错误）
+- [ ] 无 lint 错误（验证：`ruff check newcode/` 无错误）
 
 ## 端到端场景
 
@@ -46,7 +46,7 @@
 - [ ] `/delete-plan` → 勾选 → Esc 取消 → 文件保留
 
 ### 场景 8：启动清理
-- [ ] 手动在 `plans/` 下创建超过 30 天的 plan 文件和 `.meta.json` 条目 → 启动 MewCode → 过期文件被自动删除
+- [ ] 手动在 `plans/` 下创建超过 30 天的 plan 文件和 `.meta.json` 条目 → 启动 NewCode → 过期文件被自动删除
 
 ### 场景 9：.meta.json 自愈
 - [ ] 手动删除 `plans/<slug>.md` 文件（保留 `.meta.json` 中的条目）→ `/do` 列出 plan → 对应条目被自动清除

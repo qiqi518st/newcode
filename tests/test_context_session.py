@@ -6,7 +6,7 @@
 import re
 from pathlib import Path
 
-from mewcode.context.session import SessionPaths, new_session_context
+from newcode.context.session import SessionPaths, new_session_context
 
 
 def test_session_id_format(tmp_path):
@@ -22,7 +22,7 @@ def test_session_id_format(tmp_path):
 
 def test_session_id_collision_retries(tmp_path, monkeypatch):
     """防 bug：同秒/固定随机后缀碰撞时不能复用已有会话目录。"""
-    import mewcode.context.session as session_module
+    import newcode.context.session as session_module
 
     ids = iter(["20260820-120000-abcd", "20260820-120000-ef01"])
     monkeypatch.setattr(session_module, "_new_session_id", lambda: next(ids))

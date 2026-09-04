@@ -2,15 +2,15 @@
 
 import pytest
 
-from mewcode.agent import Agent, EventType, StopReason
-from mewcode.conversation.manager import ConversationManager
-from mewcode.provider.base import (
+from newcode.agent import Agent, EventType, StopReason
+from newcode.conversation.manager import ConversationManager
+from newcode.provider.base import (
     StreamEvent,
     TokenUsage,
     ToolCall,
     ToolResult,
 )
-from mewcode.tools.registry import Registry
+from newcode.tools.registry import Registry
 
 
 class MockProvider:

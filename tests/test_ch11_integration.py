@@ -11,13 +11,13 @@ from pathlib import Path
 
 import pytest
 
-from mewcode.agent.agent import Agent
-from mewcode.agent.events import EventType
-from mewcode.conversation.manager import ConversationManager
-from mewcode.provider.base import StreamEvent, ToolCall
-from mewcode.skills import ActiveSkills, Catalog
-from mewcode.tools import Registry
-from mewcode.tools.load_skill import LoadSkillTool
+from newcode.agent.agent import Agent
+from newcode.agent.events import EventType
+from newcode.conversation.manager import ConversationManager
+from newcode.provider.base import StreamEvent, ToolCall
+from newcode.skills import ActiveSkills, Catalog
+from newcode.tools import Registry
+from newcode.tools.load_skill import LoadSkillTool
 
 pytestmark = pytest.mark.anyio
 

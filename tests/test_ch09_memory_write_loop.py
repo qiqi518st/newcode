@@ -8,12 +8,12 @@
 
 import pytest
 
-from mewcode.agent import Agent, EventType
-from mewcode.conversation.manager import ConversationManager
-from mewcode.memory.manager import MemoryManager
-from mewcode.provider.base import StreamEvent, TokenUsage, ToolCall
-from mewcode.tools.memory_write import WriteMemoryTool
-from mewcode.tools.registry import Registry
+from newcode.agent import Agent, EventType
+from newcode.conversation.manager import ConversationManager
+from newcode.memory.manager import MemoryManager
+from newcode.provider.base import StreamEvent, TokenUsage, ToolCall
+from newcode.tools.memory_write import WriteMemoryTool
+from newcode.tools.registry import Registry
 
 
 class _WriteProvider:
@@ -64,7 +64,7 @@ async def test_agent_writes_memory_via_tool(tmp_path):
         provider,
         conv,
         registry,
-        "你是 MewCode。长期记忆索引：无。当用户要求记住信息时用 write_memory。",
+        "你是 NewCode。长期记忆索引：无。当用户要求记住信息时用 write_memory。",
         "mock-env",
     )
 

@@ -6,8 +6,8 @@
 
 from pathlib import Path
 
-from mewcode.skills.render import render_body
-from mewcode.skills.types import Skill, SkillMeta, SkillSource
+from newcode.skills.render import render_body
+from newcode.skills.types import Skill, SkillMeta, SkillSource
 
 _DIR = Path(".")
 

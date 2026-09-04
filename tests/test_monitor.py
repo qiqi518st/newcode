@@ -1,13 +1,13 @@
 import json
 
-from mewcode.monitor.app import _workspace_groups, _workspace_records
-from mewcode.monitor.protocol import (
+from newcode.monitor.app import _workspace_groups, _workspace_records
+from newcode.monitor.protocol import (
     MonitorLease,
     is_monitor_active,
     write_request_record,
 )
-from mewcode.prompt.assembler import PromptPayload
-from mewcode.provider.base import Message
+from newcode.prompt.assembler import PromptPayload
+from newcode.provider.base import Message
 
 
 def test_monitor_lease_controls_tracing(tmp_path):
@@ -54,7 +54,7 @@ def test_request_record_contains_assembled_and_provider_history(tmp_path):
 
 
 def test_monitor_records_are_sorted_newest_first(tmp_path):
-    request_dir = tmp_path / ".mewcode" / "sessions" / "s1" / "requests"
+    request_dir = tmp_path / ".newcode" / "sessions" / "s1" / "requests"
     request_dir.mkdir(parents=True)
     for name, timestamp in (("request-000001.json", 1), ("request-000002.json", 2)):
         (request_dir / name).write_text(
@@ -67,7 +67,7 @@ def test_monitor_records_are_sorted_newest_first(tmp_path):
 
 
 def test_monitor_groups_calls_by_user_submission(tmp_path):
-    request_dir = tmp_path / ".mewcode" / "sessions" / "s1" / "requests"
+    request_dir = tmp_path / ".newcode" / "sessions" / "s1" / "requests"
     request_dir.mkdir(parents=True)
     records = [
         {"recorded_at": 1, "session_id": "s1", "run_id": "run-a", "user_input": "a"},

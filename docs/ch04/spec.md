@@ -1,10 +1,10 @@
-# MewCode Agent Loop — 需求规格 (spec.md)
+# NewCode Agent Loop — 需求规格 (spec.md)
 
 ## 背景
 
-MewCode 是一个终端 AI 编程助手（类似 Claude Code）。ch03 已完成工具系统，模型能调用六个核心工具来观察和操作项目，但每次只能做一步——模型返回一个 `tool_use`，Agent 执行后回灌，再调一次模型获取最终文本答复即结束。ch03 明确把 "Agent Loop / 多工具连环调用 / 自动循环判断" 列在"不做的事"中。
+NewCode 是一个终端 AI 编程助手（类似 Claude Code）。ch03 已完成工具系统，模型能调用六个核心工具来观察和操作项目，但每次只能做一步——模型返回一个 `tool_use`，Agent 执行后回灌，再调一次模型获取最终文本答复即结束。ch03 明确把 "Agent Loop / 多工具连环调用 / 自动循环判断" 列在"不做的事"中。
 
-ch04 的目标是用 ReAct 循环引擎**替代** ch03 的单轮闭环。装上 Agent Loop 后，MewCode 能自主循环——先想，再调工具，看结果，边做边调整，直到任务完成。从被动应答变成真正能自主干活的 Agent。
+ch04 的目标是用 ReAct 循环引擎**替代** ch03 的单轮闭环。装上 Agent Loop 后，NewCode 能自主循环——先想，再调工具，看结果，边做边调整，直到任务完成。从被动应答变成真正能自主干活的 Agent。
 
 ## 目标
 
@@ -204,7 +204,7 @@ API 密钥不回显到对话区或任何输出中（沿用 ch03 N11）。
 
 ## 验收标准
 
-- **AC1（ReAct 循环替代单轮）**: 用户输入"读取 main.py 和 mewcode/agent/agent.py，对比两个文件的导入部分，然后创建一个 analysis.md 记录对比结果"，Agent 自动进行多轮工具调用（如 list_files → read_file ×2 → write_file），无需用户逐轮确认。TUI 中可见多轮工具调用行，与 ch03 的单工具调用后即停止行为明显不同。
+- **AC1（ReAct 循环替代单轮）**: 用户输入"读取 main.py 和 newcode/agent/agent.py，对比两个文件的导入部分，然后创建一个 analysis.md 记录对比结果"，Agent 自动进行多轮工具调用（如 list_files → read_file ×2 → write_file），无需用户逐轮确认。TUI 中可见多轮工具调用行，与 ch03 的单工具调用后即停止行为明显不同。
 
 - **AC2（自然终止）**: 用户输入"1+1 等于几"，模型直接回答文本，不调用工具，Agent 循环正常终止。无工具调用行出现。
 
@@ -232,7 +232,7 @@ API 密钥不回显到对话区或任何输出中（沿用 ch03 N11）。
 
 - **AC14（Plan Mode 执行）**: 用户 review 计划文件后输入 `/do`，Agent 读取 `plan.md` 内容，恢复全工具集，执行计划中的操作。
 
-- **AC15（单次调用模式支持 Agent Loop）**: `mewcode -c "读取所有 py 文件并统计行数"` 能完整走通 Agent Loop（多轮工具调用），终端输出工具行和最终回复后退出。
+- **AC15（单次调用模式支持 Agent Loop）**: `newcode -c "读取所有 py 文件并统计行数"` 能完整走通 Agent Loop（多轮工具调用），终端输出工具行和最终回复后退出。
 
 - **AC16（跨协议一致）**: 使用 Anthropic 和 OpenAI 两种 provider 分别测试相同的多工具任务，Agent Loop 行为一致（循环轮数、事件类型、终止条件均相同）。
 

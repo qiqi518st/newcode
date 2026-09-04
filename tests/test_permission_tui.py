@@ -14,11 +14,11 @@ from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import DummyOutput
 from prompt_toolkit.styles import Style
 
-from mewcode.agent import EventType, StopReason
-from mewcode.agent.events import Event
-from mewcode.permission.hitl import HITLRequest
-from mewcode.permission.modes import PermissionMode
-from mewcode.tui.app import REPL, SessionState
+from newcode.agent import EventType, StopReason
+from newcode.agent.events import Event
+from newcode.permission.hitl import HITLRequest
+from newcode.permission.modes import PermissionMode
+from newcode.tui.app import REPL, SessionState
 
 
 def _raw_repl():
@@ -211,7 +211,7 @@ def test_consume_renders_deny_result():
     """权限拒绝以 error 工具结果渲染（红字），Loop 不中断"""
     from rich.console import Console
 
-    from mewcode.provider.base import ToolCall, ToolResult
+    from newcode.provider.base import ToolCall, ToolResult
 
     repl = _raw_repl()
     repl.agent = FakePermAgent()

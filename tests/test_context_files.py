@@ -5,7 +5,7 @@
 
 import pytest
 
-from mewcode.context.files import FileTracker
+from newcode.context.files import FileTracker
 
 
 @pytest.mark.anyio

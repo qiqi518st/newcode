@@ -1,43 +1,43 @@
-# MewCode ch12 - Hook 生命周期挂钩系统 Tasks
+# NewCode ch12 - Hook 生命周期挂钩系统 Tasks
 
-> 顺序执行。每完成一个任务跑 `export PYTHONIOENCODING=utf-8 && ruff check mewcode/hooks mewcode/permission/matcher.py` 确保无 lint 错；接入主流程的任务（T13）做完后立刻跑一次端到端冒烟（T14）再进下一项。**文档保护**：任何批量命令（ruff、git）跑完先确认 docs/ 未被动过。
+> 顺序执行。每完成一个任务跑 `export PYTHONIOENCODING=utf-8 && ruff check newcode/hooks newcode/permission/matcher.py` 确保无 lint 错；接入主流程的任务（T13）做完后立刻跑一次端到端冒烟（T14）再进下一项。**文档保护**：任何批量命令（ruff、git）跑完先确认 docs/ 未被动过。
 
 ## 文件清单
 
 | 操作 | 文件 | 职责 |
 |------|------|------|
-| 修改 | `mewcode/__init__.py`、`pyproject.toml` | 版本号 0.11.0 → 0.12.0 |
-| 新建 | `mewcode/permission/matcher.py` | Matcher Protocol + Exact/Glob/Regex/Not 四实现 + compile_matcher/matcher_from_spec/evaluate |
-| 修改 | `mewcode/permission/rules.py` | Rule.matcher 字段、match_target 用 evaluate、build_rule_set 失败 stderr（F1.4） |
-| 新建 | `mewcode/hooks/__init__.py` | 包导出（Engine/Event/load/Hook/DispatchResult） |
-| 新建 | `mewcode/hooks/types.py` | Event(str Enum)/Action 嵌套/Hook/Payload/DispatchResult/ExecutionResult/常量 |
-| 新建 | `mewcode/hooks/conditions.py` | Condition/AtomCondition/eval_condition/get_by_path |
-| 新建 | `mewcode/hooks/executor.py` | Executor 四动作 + render_template + ExecutionResult |
-| 新建 | `mewcode/hooks/loader.py` | 三层加载合并校验（HOOK_FILE_*） |
-| 新建 | `mewcode/hooks/engine.py` | Engine 统一 dispatch/once/后台任务/close |
-| 修改 | `mewcode/session/runtime.py` | pending_reminders（create_new/resume 清空） |
-| 修改 | `mewcode/agent/agent.py` | hooks 注入 + 11 节点 _dispatch_hook + reminder join + 拦截整合 |
-| 修改 | `mewcode/slash/context.py` | hooks 字段 |
-| 新建 | `mewcode/slash/commands/hooks.py` | /hooks 命令（F10） |
-| 修改 | `mewcode/slash/commands/__init__.py` | register_all 注册 /hooks |
-| 修改 | `mewcode/tui/app.py` | user_prompt_submit 拦截 / command_execute / 会话生命周期事件 |
-| 修改 | `mewcode/main.py` | engine 装配/load + startup/shutdown/session_start/session_end |
+| 修改 | `newcode/__init__.py`、`pyproject.toml` | 版本号 0.11.0 → 0.12.0 |
+| 新建 | `newcode/permission/matcher.py` | Matcher Protocol + Exact/Glob/Regex/Not 四实现 + compile_matcher/matcher_from_spec/evaluate |
+| 修改 | `newcode/permission/rules.py` | Rule.matcher 字段、match_target 用 evaluate、build_rule_set 失败 stderr（F1.4） |
+| 新建 | `newcode/hooks/__init__.py` | 包导出（Engine/Event/load/Hook/DispatchResult） |
+| 新建 | `newcode/hooks/types.py` | Event(str Enum)/Action 嵌套/Hook/Payload/DispatchResult/ExecutionResult/常量 |
+| 新建 | `newcode/hooks/conditions.py` | Condition/AtomCondition/eval_condition/get_by_path |
+| 新建 | `newcode/hooks/executor.py` | Executor 四动作 + render_template + ExecutionResult |
+| 新建 | `newcode/hooks/loader.py` | 三层加载合并校验（HOOK_FILE_*） |
+| 新建 | `newcode/hooks/engine.py` | Engine 统一 dispatch/once/后台任务/close |
+| 修改 | `newcode/session/runtime.py` | pending_reminders（create_new/resume 清空） |
+| 修改 | `newcode/agent/agent.py` | hooks 注入 + 11 节点 _dispatch_hook + reminder join + 拦截整合 |
+| 修改 | `newcode/slash/context.py` | hooks 字段 |
+| 新建 | `newcode/slash/commands/hooks.py` | /hooks 命令（F10） |
+| 修改 | `newcode/slash/commands/__init__.py` | register_all 注册 /hooks |
+| 修改 | `newcode/tui/app.py` | user_prompt_submit 拦截 / command_execute / 会话生命周期事件 |
+| 修改 | `newcode/main.py` | engine 装配/load + startup/shutdown/session_start/session_end |
 | 新建 | `tests/test_ch12_{matcher,conditions,executor,loader,engine,runtime,agent,tui,integration}.py` | 9 个测试文件 |
 
 ## T1: 版本号更新到 0.12.0
 
-**文件：** `mewcode/__init__.py`、`pyproject.toml`
+**文件：** `newcode/__init__.py`、`pyproject.toml`
 **依赖：** 无
 **完成标准：**
-- [ ] `mewcode/__init__.py` 的 `__version__` = `"0.12.0"`
+- [ ] `newcode/__init__.py` 的 `__version__` = `"0.12.0"`
 - [ ] `pyproject.toml` 的 `version` = `"0.12.0"`，两处一致
 - [ ] 独立提交 `chore: bump version to 0.12.0`
 
-**验证：** `export PYTHONIOENCODING=utf-8 && python -c "import mewcode; print(mewcode.__version__)"` 输出 0.12.0。
+**验证：** `export PYTHONIOENCODING=utf-8 && python -c "import newcode; print(newcode.__version__)"` 输出 0.12.0。
 
 ## T2: permission/matcher.py —— 共享匹配器（前置基础 F1）
 
-**文件：** `mewcode/permission/matcher.py`
+**文件：** `newcode/permission/matcher.py`
 **依赖：** T1
 **完成标准：**
 - [ ] `Matcher` Protocol：`match(s) -> bool` + `__str__()`
@@ -49,11 +49,11 @@
 - [ ] `matcher_from_spec(d, *, is_command=False)`：`{type: exact|glob|regex, value}` / `{type: not, inner}`；未知 type / 缺 value / not 缺 inner → ValueError
 - [ ] `evaluate(spec, target)` ≡ `spec.match(target)`；保留 `match_pattern` 名称 re-export 兼容 rules
 
-**验证：** `python -c "from mewcode.permission.matcher import compile_matcher, evaluate; assert evaluate(compile_matcher('=git status'),'git status'); assert not evaluate(compile_matcher('=git status'),'git status -s'); assert evaluate(compile_matcher('~^rm'),'rm -rf .'); assert not evaluate(compile_matcher('!~^rm'),'rm -rf .')"`。
+**验证：** `python -c "from newcode.permission.matcher import compile_matcher, evaluate; assert evaluate(compile_matcher('=git status'),'git status'); assert not evaluate(compile_matcher('=git status'),'git status -s'); assert evaluate(compile_matcher('~^rm'),'rm -rf .'); assert not evaluate(compile_matcher('!~^rm'),'rm -rf .')"`。
 
 ## T3: permission/rules.py 改造
 
-**文件：** `mewcode/permission/rules.py`
+**文件：** `newcode/permission/rules.py`
 **依赖：** T2
 **完成标准：**
 - [ ] `Rule` 增加 `matcher: Matcher | None`（None = 该工具全匹配）+ 保留 `pattern`/`raw` 原文供错误日志与调试
@@ -66,7 +66,7 @@
 
 ## T4: hooks/types.py —— 数据结构与常量
 
-**文件：** `mewcode/hooks/types.py`（新建包）
+**文件：** `newcode/hooks/types.py`（新建包）
 **依赖：** T2
 **完成标准：**
 - [ ] `Event(str, Enum)` 18 个（snake_case，见 spec F3.1）；`BLOCKING_EVENTS = {PRE_TOOL_USE, USER_PROMPT_SUBMIT}`；`is_blocking(e)`
@@ -76,22 +76,22 @@
 - [ ] `Payload = dict[str, Any]`（json.dumps(payload, sort_keys=True) 用，N5）
 - [ ] `DispatchResult{blocked, reason, blocking_hook_name, injected_prompts}`、`ExecutionResult{blocked, reason, prompt, err}`
 
-**验证：** `python -c "from mewcode.hooks.types import Event, is_blocking; assert Event('pre_tool_use') is Event.PRE_TOOL_USE; assert is_blocking(Event.PRE_TOOL_USE); assert not is_blocking(Event.TURN_START)"`。
+**验证：** `python -c "from newcode.hooks.types import Event, is_blocking; assert Event('pre_tool_use') is Event.PRE_TOOL_USE; assert is_blocking(Event.PRE_TOOL_USE); assert not is_blocking(Event.TURN_START)"`。
 
 ## T5: hooks/conditions.py
 
-**文件：** `mewcode/hooks/conditions.py`
+**文件：** `newcode/hooks/conditions.py`
 **依赖：** T2、T4
 **完成标准：**
 - [ ] `Condition{mode, atoms}`、`AtomCondition{field, matcher}`
 - [ ] `get_by_path(payload, path)`：点分遍历嵌套 dict（如 `tool_input.path`）；路径不存在 → `""`；值非 str 时 **bool 转小写（`"true"`/`"false"`，与 YAML 直觉及 spec 场景 1 的 `is_error: false` 一致）**、int/float → `str()`，嵌套 dict/list → `json.dumps(value, sort_keys=True)`（与 N5 稳定序列化一致）（F4.3）
 - [ ] `eval_condition(cond, payload)`：cond=None → True；否则逐一 `evaluate(atom.matcher, get_by_path(...))`，按 mode 做 all/any 组合（F4.6）
 
-**验证：** `python -c "from mewcode.hooks.conditions import get_by_path, eval_condition; from mewcode.hooks.types import Condition, AtomCondition, CombineMode; from mewcode.permission.matcher import matcher_from_spec; p={'tool_input':{'path':'a/b.py'}}; assert get_by_path(p,'tool_input.path')=='a/b.py'; assert get_by_path(p,'tool_input.missing')==''; c=Condition(CombineMode.ALL_OF,[AtomCondition('tool_input.path', matcher_from_spec({'type':'glob','value':'**/*.py'}))]); assert eval_condition(c,p)"`。
+**验证：** `python -c "from newcode.hooks.conditions import get_by_path, eval_condition; from newcode.hooks.types import Condition, AtomCondition, CombineMode; from newcode.permission.matcher import matcher_from_spec; p={'tool_input':{'path':'a/b.py'}}; assert get_by_path(p,'tool_input.path')=='a/b.py'; assert get_by_path(p,'tool_input.missing')==''; c=Condition(CombineMode.ALL_OF,[AtomCondition('tool_input.path', matcher_from_spec({'type':'glob','value':'**/*.py'}))]); assert eval_condition(c,p)"`。
 
 ## T6: hooks/executor.py
 
-**文件：** `mewcode/hooks/executor.py`
+**文件：** `newcode/hooks/executor.py`
 **依赖：** T4
 **完成标准：**
 - [ ] `render_template(text, payload)`：`{field}` 点分替换（{event}/{tool_name}/{file_path}/{message}/{error}/{tool_input.xxx} 映射 $VAR 语义，F4.7）；容错——format_map 抛 KeyError/IndexError/ValueError（裸 `{}` 等）返回原文、未知字段→`""`、绝不抛给调用方（F4.8）
@@ -101,14 +101,14 @@
 - [ ] `_run_http`（F5.9-F5.12）：body = render_template(ha.body) if ha.body else payload JSON；httpx request(method/url/content/headers/timeout)；2xx 且 json `{"decision":"block","reason"}` → blocked；网络/超时/JSON 解析错 → err；`_http_client = httpx.AsyncClient(timeout=30.0)`
 - [ ] `_run_agent`（F5.13）：stderr `[hook <name>] agent not yet implemented, skipped`（N9），不 blocked 不 err
 
-**验证：** `python -c "from mewcode.hooks.executor import render_template; assert render_template('x {tool_input.path} y', {'tool_input':{'path':'a.py'}})=='x a.py y'; assert render_template('{missing}', {})==''; assert render_template('echo {}', {})=='echo {}'"`。
+**验证：** `python -c "from newcode.hooks.executor import render_template; assert render_template('x {tool_input.path} y', {'tool_input':{'path':'a.py'}})=='x a.py y'; assert render_template('{missing}', {})==''; assert render_template('echo {}', {})=='echo {}'"`。
 
 ## T7: hooks/loader.py —— 三层加载与校验
 
-**文件：** `mewcode/hooks/loader.py`
+**文件：** `newcode/hooks/loader.py`
 **依赖：** T4、T5
 **完成标准：**
-- [ ] `HOOK_FILE_LOCAL = ".mewcode/config.local.yaml"`（本地，最高优先级）、`HOOK_FILE_PROJECT = ".mewcode/config.yaml"`、`HOOK_FILE_USER = os.path.expanduser("~/.mewcode/config.yaml")`（F6.1）
+- [ ] `HOOK_FILE_LOCAL = ".newcode/config.local.yaml"`（本地，最高优先级）、`HOOK_FILE_PROJECT = ".newcode/config.yaml"`、`HOOK_FILE_USER = os.path.expanduser("~/.newcode/config.yaml")`（F6.1）
 - [ ] `load(project_root) -> Engine`：本地 → 项目 → 用户 依次加载、追加合并（优先级高者在前）；文件缺失跳过；整体 YAML 非法/顶层非 dict → stderr 告警 + 该文件空；同名 hook 冲突 → stderr 提示 + 跳过后到者（F6.4）
 - [ ] 逐条校验（F6.5/F6.6）：name 必填、event 枚举、action.type 四选一 + 子字段必填（command 有 command、http 有 url、prompt 有 text、agent 有 agent_name+prompt）、if 顶层 all_of/any_of 互斥（同时出现报错）、matcher 编译失败、async+拦截事件冲突、timeout 格式合法
 - [ ] 任一失败 → stderr `hook "<name>" (in <file>): <原因>, skipped` 并跳过该条，其余正常加载（N1/N2/N3）
@@ -119,7 +119,7 @@
 
 ## T8: hooks/engine.py + hooks/__init__.py
 
-**文件：** `mewcode/hooks/engine.py`、`mewcode/hooks/__init__.py`
+**文件：** `newcode/hooks/engine.py`、`newcode/hooks/__init__.py`
 **依赖：** T5、T6、T7
 **完成标准：**
 - [ ] `Engine(rules, sources)`：`_once_fired: set[str]`、`_lock = asyncio.Lock()`、`_executor = Executor()`
@@ -134,11 +134,11 @@
 - [ ] `sources` / `rules` 属性（拷贝）；`close()`：记录未完成后台任务，不强制等待（F9.5）
 - [ ] `hooks/__init__.py` 导出 `Engine / Event / load / Hook / DispatchResult`
 
-**验证：** `python -c "from mewcode.hooks import Engine, Event, load"` 通过；mock executor 冒烟 dispatch 顺序/短路（T18 单测覆盖）。
+**验证：** `python -c "from newcode.hooks import Engine, Event, load"` 通过；mock executor 冒烟 dispatch 顺序/短路（T18 单测覆盖）。
 
 ## T9: session/runtime.py —— pending_reminders
 
-**文件：** `mewcode/session/runtime.py`
+**文件：** `newcode/session/runtime.py`
 **依赖：** T8（Engine 类型标注，TYPE_CHECKING 避免运行期依赖）
 **完成标准：**
 - [ ] `SessionRuntime.pending_reminders: list[str] = field(default_factory=list)` + `_reminders_lock = threading.Lock()`
@@ -152,7 +152,7 @@
 
 ## T10: agent/agent.py 集成
 
-**文件：** `mewcode/agent/agent.py`
+**文件：** `newcode/agent/agent.py`
 **依赖：** T8、T9
 **完成标准：**
 - [ ] `__init__` 增加 `hooks: Engine | None = None`、`runtime: SessionRuntime | None = None`（None 时全部短路，N10 与 active_skills 同模式；runtime 用于取 pending_reminders——模板借鉴：Agent 需访问 runtime 的 take_reminders）
@@ -173,7 +173,7 @@
 
 ## T11: slash —— /hooks 命令 + context 字段
 
-**文件：** `mewcode/slash/context.py`、`mewcode/slash/commands/hooks.py`（新）、`mewcode/slash/commands/__init__.py`
+**文件：** `newcode/slash/context.py`、`newcode/slash/commands/hooks.py`（新）、`newcode/slash/commands/__init__.py`
 **依赖：** T8
 **完成标准：**
 - [ ] `CommandContext` 增加 `hooks: object | None = None`
@@ -184,7 +184,7 @@
 
 ## T12: tui/app.py 集成
 
-**文件：** `mewcode/tui/app.py`
+**文件：** `newcode/tui/app.py`
 **依赖：** T8、T11
 **完成标准：**
 - [ ] `_process_input`：`dispatch(USER_PROMPT_SUBMIT, {prompt: text})` 在 `_run_stream` 前；blocked → `self._console.print(f"[hook {name}] {reason}", style="red")` 后 return（消息不写历史、不启动 agent、焦点回输入框，F7.5）
@@ -198,7 +198,7 @@
 
 ## T13: main.py 装配
 
-**文件：** `mewcode/main.py`
+**文件：** `newcode/main.py`
 **依赖：** T8-T12
 **完成标准：**
 - [ ] `_amain` 装配顺序：permission 创建后 → `hook_engine = load_hooks(project_root)`（调 `hooks.load`，返回 Engine）→ `runtime.hook_engine = hook_engine` → 注入 agent(`hooks=hook_engine, runtime=session_runtime`) 与 `CommandContext(hooks=hook_engine)`
@@ -206,16 +206,16 @@
 - [ ] `startup` 事件在装配完成后 dispatch（{仅通用字段}）
 - [ ] `session_start` 在 create_new 后、首条消息前 dispatch
 - [ ] 退出 finally：dispatch `session_end` + `shutdown` → `engine.close()`
-- [ ] `.gitignore` 追加 `config.local.yaml`（保证 `.mewcode/config.local.yaml` 不被追踪，F6.1）
+- [ ] `.gitignore` 追加 `config.local.yaml`（保证 `.newcode/config.local.yaml` 不被追踪，F6.1）
 
-**验证：** `python -c "import mewcode.main"` 通过；T14 端到端冒烟覆盖装配后行为。
+**验证：** `python -c "import newcode.main"` 通过；T14 端到端冒烟覆盖装配后行为。
 
 ## T14: 手动端到端冒烟（参考 ch11 T22 五步）
 
-**文件：** 无（仅运行验证）；测试配置 `.mewcode/config.local.yaml`
+**文件：** 无（仅运行验证）；测试配置 `.newcode/config.local.yaml`
 **依赖：** T13
 **完成标准：**
-- [ ] 创建 `.mewcode/config.local.yaml`：
+- [ ] 创建 `.newcode/config.local.yaml`：
   ```yaml
   hooks:
     - name: block-rm
@@ -239,8 +239,8 @@
             match: { type: exact, value: "false" }
       action: { type: command, command: "echo fmt {tool_input.path}" }
   ```
-- [ ] 手动启动 `python -m mewcode`，依次验证：
-  1. `/hooks` 列出三条 hook、按 event 分组、末尾 Loaded from 含 `.mewcode/config.local.yaml`
+- [ ] 手动启动 `python -m newcode`，依次验证：
+  1. `/hooks` 列出三条 hook、按 event 分组、末尾 Loaded from 含 `.newcode/config.local.yaml`
   2. 让 Agent 执行 `rm -rf /tmp/x` → 工具被拦截、tool_result 显示 `[hook block-rm] dangerous: rm -rf`、不弹审批
   3. 首轮对话 LLM reminder 区出现 zh-Hint 注入（调试通道观察），后续轮不注入
   4. 让 Agent 写文件 → fmt-once 触发一次，再次写文件不触发（once 生效）

@@ -1,32 +1,32 @@
-# MewCode ch10 - SlashCommand 框架 Tasks
+# NewCode ch10 - SlashCommand 框架 Tasks
 
 ## 文件清单
 
 | 操作 | 文件 | 职责 |
 |---|---|---|
-| 修改 | `mewcode/__init__.py` | `__version__` → `"0.10.0"` |
+| 修改 | `newcode/__init__.py` | `__version__` → `"0.10.0"` |
 | 修改 | `pyproject.toml` | `version` → `"0.10.0"` |
-| 新建 | `mewcode/slash/__init__.py` | 包导出 |
-| 新建 | `mewcode/slash/registry.py` | CommandKind / CommandDef / CommandRegistry |
-| 新建 | `mewcode/slash/parser.py` | parse_command |
-| 新建 | `mewcode/slash/context.py` | CommandContext |
-| 新建 | `mewcode/slash/ui.py` | UIController Protocol |
-| 新建 | `mewcode/slash/commands/__init__.py` | register_all(registry) |
-| 新建 | `mewcode/slash/commands/help.py` | /help |
-| 新建 | `mewcode/slash/commands/status.py` | /status |
-| 新建 | `mewcode/slash/commands/memory.py` | /memory /memory_list /memory_add /memory_clear |
-| 新建 | `mewcode/slash/commands/permission.py` | /permission /permission_rules /permission_add /permission_reset |
-| 新建 | `mewcode/slash/commands/session.py` | /session /session_list /session_resume /session_new |
-| 新建 | `mewcode/slash/commands/plan.py` | /plan /normal |
-| 新建 | `mewcode/slash/commands/do.py` | /do |
-| 新建 | `mewcode/slash/commands/clear.py` | /clear |
-| 新建 | `mewcode/slash/commands/compact.py` | /compact |
-| 新建 | `mewcode/slash/commands/review.py` | /review |
-| 新建 | `mewcode/slash/commands/legacy.py` | /exit /quit /resume /delete-plan |
-| 修改 | `mewcode/tui/app.py` | 分流器 dispatch_slash / completer / 状态栏 / RichUIController / 移除 /exit-plan |
-| 修改 | `mewcode/main.py` | 装配接线 + 冲突检测 panic + session_runtime/archive 传入 |
-| 修改 | `mewcode/context/manager.py` | 新增 reset_for_new_session()（T0b，/clear 重置 compact 子状态） |
-| 修改 | `mewcode/permission/checker.py` | count_rules / add_rule / reset_rules（T0a） |
+| 新建 | `newcode/slash/__init__.py` | 包导出 |
+| 新建 | `newcode/slash/registry.py` | CommandKind / CommandDef / CommandRegistry |
+| 新建 | `newcode/slash/parser.py` | parse_command |
+| 新建 | `newcode/slash/context.py` | CommandContext |
+| 新建 | `newcode/slash/ui.py` | UIController Protocol |
+| 新建 | `newcode/slash/commands/__init__.py` | register_all(registry) |
+| 新建 | `newcode/slash/commands/help.py` | /help |
+| 新建 | `newcode/slash/commands/status.py` | /status |
+| 新建 | `newcode/slash/commands/memory.py` | /memory /memory_list /memory_add /memory_clear |
+| 新建 | `newcode/slash/commands/permission.py` | /permission /permission_rules /permission_add /permission_reset |
+| 新建 | `newcode/slash/commands/session.py` | /session /session_list /session_resume /session_new |
+| 新建 | `newcode/slash/commands/plan.py` | /plan /normal |
+| 新建 | `newcode/slash/commands/do.py` | /do |
+| 新建 | `newcode/slash/commands/clear.py` | /clear |
+| 新建 | `newcode/slash/commands/compact.py` | /compact |
+| 新建 | `newcode/slash/commands/review.py` | /review |
+| 新建 | `newcode/slash/commands/legacy.py` | /exit /quit /resume /delete-plan |
+| 修改 | `newcode/tui/app.py` | 分流器 dispatch_slash / completer / 状态栏 / RichUIController / 移除 /exit-plan |
+| 修改 | `newcode/main.py` | 装配接线 + 冲突检测 panic + session_runtime/archive 传入 |
+| 修改 | `newcode/context/manager.py` | 新增 reset_for_new_session()（T0b，/clear 重置 compact 子状态） |
+| 修改 | `newcode/permission/checker.py` | count_rules / add_rule / reset_rules（T0a） |
 | 新建 | `tests/test_ch10_registry.py` | 注册中心单测 |
 | 新建 | `tests/test_ch10_parser.py` | 解析器单测 |
 | 新建 | `tests/test_ch10_commands.py` | 各命令 handler 单测（mock UIController） |
@@ -52,7 +52,7 @@ T0a/T0b 为被多任务消费的底层 helper（permission API / ContextManager.
 
 ## T0a: permission/checker.py 新增 count_rules / add_rule / reset_rules
 
-**文件：** `mewcode/permission/checker.py`、`tests/test_ch10_commands.py`（或新增 `tests/test_ch10_permission_api.py`）
+**文件：** `newcode/permission/checker.py`、`tests/test_ch10_commands.py`（或新增 `tests/test_ch10_permission_api.py`）
 **依赖：** 无
 **步骤：**
 1. `count_rules() -> int`：统计三层规则文件（local/project/user）规则总数
@@ -70,7 +70,7 @@ export PYTHONIOENCODING=utf-8 && python -m pytest tests/test_ch10_commands.py -v
 
 ## T0b: context/manager.py 新增 reset_for_new_session
 
-**文件：** `mewcode/context/manager.py`
+**文件：** `newcode/context/manager.py`
 **依赖：** 无
 **步骤：**
 1. 新增 `reset_for_new_session() -> None`：清空 `ContentReplacementState` 账本（`_seen_ids`/`_replacements`）、`AutoCompactGate` 计数归零、`usage_anchor`/`anchor_msg_len` 归零（/clear 用）
@@ -78,7 +78,7 @@ export PYTHONIOENCODING=utf-8 && python -m pytest tests/test_ch10_commands.py -v
 
 **验证：**
 ```bash
-export PYTHONIOENCODING=utf-8 && python -c "from mewcode.context.manager import ContextManager; ContextManager().reset_for_new_session()"
+export PYTHONIOENCODING=utf-8 && python -c "from newcode.context.manager import ContextManager; ContextManager().reset_for_new_session()"
 ```
 > 本任务为 T10 的 request_clear_session（/clear 原子重置）提供被调方法。
 
@@ -86,15 +86,15 @@ export PYTHONIOENCODING=utf-8 && python -c "from mewcode.context.manager import 
 
 ## T1: 版本 bump 到 0.10.0
 
-**文件：** `mewcode/__init__.py`、`pyproject.toml`
+**文件：** `newcode/__init__.py`、`pyproject.toml`
 **依赖：** 无
 **步骤：**
-1. `mewcode/__init__.py` 中 `__version__ = "0.10.0"`
+1. `newcode/__init__.py` 中 `__version__ = "0.10.0"`
 2. `pyproject.toml` 中 `version = "0.10.0"`
 
 **验证：**
 ```bash
-export PYTHONIOENCODING=utf-8 && python -c "import mewcode; print(mewcode.__version__)"   # 输出 0.10.0
+export PYTHONIOENCODING=utf-8 && python -c "import newcode; print(newcode.__version__)"   # 输出 0.10.0
 ```
 提交信息：`chore: bump version to 0.10.0`（独立提交）
 
@@ -102,7 +102,7 @@ export PYTHONIOENCODING=utf-8 && python -c "import mewcode; print(mewcode.__vers
 
 ## T2: registry.py — 注册中心
 
-**文件：** `mewcode/slash/registry.py`
+**文件：** `newcode/slash/registry.py`
 **依赖：** T1
 **步骤：**
 1. 定义 `CommandKind(Enum)`：`LOCAL` / `UI` / `PROMPT`
@@ -125,7 +125,7 @@ export PYTHONIOENCODING=utf-8 && python -m pytest tests/test_ch10_registry.py -v
 
 ## T3: parser.py — 解析器
 
-**文件：** `mewcode/slash/parser.py`
+**文件：** `newcode/slash/parser.py`
 **依赖：** T2
 **步骤：**
 1. `parse_command(text) -> tuple[str, str] | None`：
@@ -150,7 +150,7 @@ export PYTHONIOENCODING=utf-8 && python -m pytest tests/test_ch10_parser.py -v
 
 ## T4: ui.py — UIController 抽象接口
 
-**文件：** `mewcode/slash/ui.py`
+**文件：** `newcode/slash/ui.py`
 **依赖：** 无
 **步骤：**
 1. 定义 `UIController` Protocol（或 ABC），方法见 plan.md 核心数据结构一节：show_message / send_user_message / get_permission_mode / set_permission_mode / get_app_mode / query_token_usage / query_tool_count / query_memory_files / get_model_name / get_cwd / request_exit / request_session_list / request_compact / request_clear_session
@@ -172,7 +172,7 @@ NopUI / mock 满足 Protocol 检查（`isinstance(impl, UIController)` 通过）
 
 ## T5: context.py — CommandContext
 
-**文件：** `mewcode/slash/context.py`
+**文件：** `newcode/slash/context.py`
 **依赖：** T4
 **步骤：**
 1. 定义 `CommandContext` dataclass：registry、ui、agent、conversation、plan_manager、session_runtime、session_archive、memory_manager、permission、version、cwd
@@ -188,7 +188,7 @@ export PYTHONIOENCODING=utf-8 && python -m pytest tests/test_ch10_commands.py -v
 
 ## T6: commands/__init__.py — 命令装配
 
-**文件：** `mewcode/slash/commands/__init__.py`
+**文件：** `newcode/slash/commands/__init__.py`
 **依赖：** T2-T5
 **步骤：**
 1. `register_all(registry)`：遍历 help/status/memory/permission/session/plan/do/clear/compact/review/legacy 各模块的 `build()`，收集所有 CommandDef 并 `registry.register()`（T10 前先以 stub handler 占位）
@@ -204,7 +204,7 @@ export PYTHONIOENCODING=utf-8 && python -m pytest tests/test_ch10_registry.py -v
 
 ## T7: 命令实现 — help/status/memory/permission/session
 
-**文件：** `mewcode/slash/commands/{help,status,memory,permission,session}.py`
+**文件：** `newcode/slash/commands/{help,status,memory,permission,session}.py`
 **依赖：** T6 + T0a（permission.py 调 `ctx.permission.count_rules()` 等，方法由 T0a 提供）
 **步骤：**
 1. **help.py**：遍历 `ctx.registry.list()`（含 hidden 过滤），按 name 字典序输出"name + description"两列对齐——先算最长 name 长度做 key 列宽，`name.ljust(w)` 填充后再拼 description（AC1）；不硬编码命令列表（N5）
@@ -223,7 +223,7 @@ export PYTHONIOENCODING=utf-8 && python -m pytest tests/test_ch10_commands.py -v
 
 ## T8: 命令实现 — do/plan/normal/clear/compact/legacy
 
-**文件：** `mewcode/slash/commands/{do,plan,clear,compact,legacy}.py`（plan.py 含 /normal）
+**文件：** `newcode/slash/commands/{do,plan,clear,compact,legacy}.py`（plan.py 含 /normal）
 **依赖：** T7 + T0a（permission 系命令依赖 count/add/reset 方法）
 **步骤：**
 1. **do.py**：`/do <slug>` → `ctx.plan_manager.get_plan` + `read_plan_content` → 执行；`/do` 无参 → 经 `ctx.ui` 弹计划列表选择后执行（语义与 app.py 现有 `_process_input` 完全一致，N8/AC10）
@@ -242,7 +242,7 @@ export PYTHONIOENCODING=utf-8 && python -m pytest tests/test_ch10_commands.py te
 
 ## T9: 命令实现 — review.py（KindPrompt）
 
-**文件：** `mewcode/slash/commands/review.py`
+**文件：** `newcode/slash/commands/review.py`
 **依赖：** T8
 **步骤：**
 1. 定义固定"代码审查请求"文本（含审查关键字，如"review"、"code review"、"diff" 相关引导但不读 diff）
@@ -259,7 +259,7 @@ export PYTHONIOENCODING=utf-8 && python -m pytest tests/test_ch10_commands.py -v
 
 ## T10: tui/app.py 接入
 
-**文件：** `mewcode/tui/app.py`
+**文件：** `newcode/tui/app.py`
 **依赖：** T7-T9 + T0b（request_clear_session 调 `context_manager.reset_for_new_session()`，方法由 T0b 提供；本任务不再实现）
 **步骤：**
 0. **红测试先行（顺序前置，动手改代码前先做）**：先跑 `tests/test_tui_wiring.py tests/test_tui_resume.py tests/test_tui_compact.py` 建立全绿基线；待本任务切换到新分发器后，确认旧 slash 相关用例因路径变迁而变红——证明旧断言确实在护卫旧 `_process_input`/`_is_known_command` 路径，后续迁移才有依据（借鉴模板 T13 红测试先行）
@@ -280,7 +280,7 @@ export PYTHONIOENCODING=utf-8 && python -m pytest tests/test_ch10_tui.py tests/t
 
 ## T11: main.py 接线
 
-**文件：** `mewcode/main.py`
+**文件：** `newcode/main.py`
 **依赖：** T10 + T0a + T0b
 **步骤：**
 1. main.py：构造 `registry = CommandRegistry()` → `register_all(registry)` → try/except 捕获冲突 RuntimeError → 打印冲突名字 → `sys.exit(1)`（N4/F1.3）
@@ -320,7 +320,7 @@ export PYTHONIOENCODING=utf-8 && python -m pytest tests/ -v
 **文件：** 无（运行可执行文件）
 **依赖：** T12
 **步骤：**
-1. `uv sync`（或 `pip install -e ".[dev]"`）；`tmux new-session -d -s mewspec 'uv run mewcode'`（无 tmux 环境时改用真实终端直接 `python -m mewcode`，或对应项标"待人工验证"）
+1. `uv sync`（或 `pip install -e ".[dev]"`）；`tmux new-session -d -s mewspec 'uv run newcode'`（无 tmux 环境时改用真实终端直接 `python -m newcode`，或对应项标"待人工验证"）
 2. 按 checklist.md 的「端到端场景」全部项（当前 12 项）+ 存量 slash 行为逐条实跑并记录观测：
    - 键入 `/` 补全立即激活（AC11）；`/s` 过滤为 /session* 候选项、多匹配弹列表（AC12/AC13）
    - `/help` 全部命令两列对齐、`/status` 六项固定顺序（AC1/AC4）

@@ -2,8 +2,8 @@
 
 import logging
 
-from mewcode.prompt.assembler import PayloadAssembler, PromptPayload
-from mewcode.provider.base import Message, ToolDefinition
+from newcode.prompt.assembler import PayloadAssembler, PromptPayload
+from newcode.provider.base import Message, ToolDefinition
 
 
 def _tool(name="t1"):
@@ -55,20 +55,20 @@ class TestStableConsistency:
     def test_same_stable_no_warning(self, caplog):
         asm = PayloadAssembler()
         asm.assemble("SAME", "E", [], [], None)
-        with caplog.at_level(logging.WARNING, logger="mewcode.prompt.assembler"):
+        with caplog.at_level(logging.WARNING, logger="newcode.prompt.assembler"):
             asm.assemble("SAME", "E", [], [], None)
         assert not [r for r in caplog.records if "跨轮变化" in r.getMessage()]
 
     def test_changed_stable_warns(self, caplog):
         asm = PayloadAssembler()
         asm.assemble("OLD", "E", [], [], None)
-        with caplog.at_level(logging.WARNING, logger="mewcode.prompt.assembler"):
+        with caplog.at_level(logging.WARNING, logger="newcode.prompt.assembler"):
             asm.assemble("NEW", "E", [], [], None)
         assert any("跨轮变化" in r.getMessage() for r in caplog.records)
 
     def test_first_call_no_warning(self, caplog):
         """首次调用（无基线）不告警"""
         asm = PayloadAssembler()
-        with caplog.at_level(logging.WARNING, logger="mewcode.prompt.assembler"):
+        with caplog.at_level(logging.WARNING, logger="newcode.prompt.assembler"):
             asm.assemble("FIRST", "E", [], [], None)
         assert not [r for r in caplog.records if "跨轮变化" in r.getMessage()]

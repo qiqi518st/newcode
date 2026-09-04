@@ -15,7 +15,7 @@ import os
 
 import pytest
 
-from mewcode.hooks import loader as L
+from newcode.hooks import loader as L
 
 
 def _write(path, data: str):
@@ -26,7 +26,7 @@ def _write(path, data: str):
 
 @pytest.fixture
 def isolated(tmp_path, monkeypatch):
-    """隔离三层路径：用户级指向临时目录，避免污染真实 ~/.mewcode。"""
+    """隔离三层路径：用户级指向临时目录，避免污染真实 ~/.newcode。"""
     monkeypatch.setattr(L, "HOOK_FILE_USER", str(tmp_path / "user.yaml"))
     return tmp_path
 
@@ -41,19 +41,19 @@ class TestTierMerge:
             "hooks:\n  - {name: u1, event: turn_start, action: {type: prompt, text: user}}\n",
         )
         _write(
-            tmp / ".mewcode" / "config.yaml",
+            tmp / ".newcode" / "config.yaml",
             "hooks:\n  - {name: p1, event: turn_start, action: {type: prompt, text: proj}}\n",
         )
         _write(
-            tmp / ".mewcode" / "config.local.yaml",
+            tmp / ".newcode" / "config.local.yaml",
             "hooks:\n  - {name: l1, event: turn_start, action: {type: prompt, text: local}}\n",
         )
         eng = L.load(str(tmp))
         names = [r.name for r in eng.rules]
         assert names == ["l1", "p1", "u1"]  # 本地在前
         assert eng.sources == [
-            str(tmp / ".mewcode" / "config.local.yaml"),
-            str(tmp / ".mewcode" / "config.yaml"),
+            str(tmp / ".newcode" / "config.local.yaml"),
+            str(tmp / ".newcode" / "config.yaml"),
             str(user),
         ]
 
@@ -66,17 +66,17 @@ class TestTierMerge:
         """整体 YAML 非法 → stderr 告警 + 该文件空，不阻断其它层（N2）。"""
         tmp = isolated
         _write(
-            tmp / ".mewcode" / "config.local.yaml",
+            tmp / ".newcode" / "config.local.yaml",
             "hooks:\n  - {name: ok, event: turn_start, action: {type: prompt, text: x}}\n",
         )
-        _write(tmp / ".mewcode" / "config.yaml", ": : bad :\n\t")
+        _write(tmp / ".newcode" / "config.yaml", ": : bad :\n\t")
         eng = L.load(str(tmp))
         assert len(eng.rules) == 1
         assert "格式错误" in capsys.readouterr().err
 
     def test_non_dict_top_level_warns(self, isolated, capsys):
         tmp = isolated
-        _write(tmp / ".mewcode" / "config.yaml", "just a string")
+        _write(tmp / ".newcode" / "config.yaml", "just a string")
         eng = L.load(str(tmp))
         assert eng.rules == []
         assert "顶层必须是对象" in capsys.readouterr().err
@@ -85,11 +85,11 @@ class TestTierMerge:
         """同名冲突 → stderr 提示并保留高优先级层（F6.4/AC13）。"""
         tmp = isolated
         _write(
-            tmp / ".mewcode" / "config.local.yaml",
+            tmp / ".newcode" / "config.local.yaml",
             "hooks:\n  - {name: dup, event: turn_start, action: {type: prompt, text: local}}\n",
         )
         _write(
-            tmp / ".mewcode" / "config.yaml",
+            tmp / ".newcode" / "config.yaml",
             "hooks:\n  - {name: dup, event: turn_start, action: {type: prompt, text: proj}}\n",
         )
         eng = L.load(str(tmp))
@@ -103,7 +103,7 @@ class TestHookValidation:
 
     def _load_one(self, isolated, hook_yaml: str):
         tmp = isolated
-        _write(tmp / ".mewcode" / "config.yaml", "hooks:\n" + hook_yaml)
+        _write(tmp / ".newcode" / "config.yaml", "hooks:\n" + hook_yaml)
         return L.load(str(tmp))
 
     def test_unknown_event(self, isolated, capsys):

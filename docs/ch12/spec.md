@@ -1,8 +1,8 @@
-# MewCode ch12 - Hook 生命周期挂钩系统 Spec
+# NewCode ch12 - Hook 生命周期挂钩系统 Spec
 
 ## 背景
 
-ch11 为 MewCode 装上了 Skill 技能包系统，Agent 能按需加载预定义的提示词和工具集合。但 MewCode 在「用户怎么扩展行为」这条路径上还差最后一环：**在 Agent 生命周期的固定时刻自动跑一段用户配置的动作**。当前的扩展点都是显式触发——Skill 要 `/name` 唤起、Slash 命令要用户手敲。想做「触发条件明确、动作固定」的重复事，只能每次手动来：
+ch11 为 NewCode 装上了 Skill 技能包系统，Agent 能按需加载预定义的提示词和工具集合。但 NewCode 在「用户怎么扩展行为」这条路径上还差最后一环：**在 Agent 生命周期的固定时刻自动跑一段用户配置的动作**。当前的扩展点都是显式触发——Skill 要 `/name` 唤起、Slash 命令要用户手敲。想做「触发条件明确、动作固定」的重复事，只能每次手动来：
 
 - 写完文件想立刻 `ruff format`，得手动跑或写监听脚本
 - 想阻止 Agent 跑 `rm -rf` 之类的命令，权限规则要逐个加 deny
@@ -64,7 +64,7 @@ ch08 的权限引擎覆盖了「该不该允许工具调用」，但只在工具
   - `Bash(value)` 不带前缀沿用 glob 语义
 - F1.3：精确匹配做整串相等比较；glob 沿用现有 fnmatch 实现；正则在加载期 `re.compile` 并缓存，编译失败按 F1.4 处理；反向是「任意其它类型的取反包装」，支持嵌套（如 `Bash(!=value)`）
 - F1.4：扩展后权限引擎的 Allow/Deny 判定语义不变，但规则解析失败由原本的静默跳过改为「stderr 打印失败规则与原因、其余规则正常加载」
-- F1.5：现有 ch08 的所有权限测试、既有的 `.mewcode/permissions.yaml` 用户配置（仅写 `Bash(git *)` 这种）必须继续工作，不破坏向后兼容
+- F1.5：现有 ch08 的所有权限测试、既有的 `.newcode/permissions.yaml` 用户配置（仅写 `Bash(git *)` 这种）必须继续工作，不破坏向后兼容
 
 ### F2 Hook 规则模型
 
@@ -94,8 +94,8 @@ ch08 的权限引擎覆盖了「该不该允许工具调用」，但只在工具
 | 工具级 | `post_tool_use` | 工具拿到 result 之后；被权限 Deny 的也触发（is_error=True） | 否 |
 | 消息级 | `pre_send` | 消息发送给 LLM 之前（每轮 stream 前，payload 含对话末尾的 user 消息） | 否 |
 | 消息级 | `post_receive` | 收到 LLM 响应之后 | 否 |
-| 系统级 | `startup` | MewCode 进程启动时 | 否 |
-| 系统级 | `shutdown` | MewCode 进程退出时 | 否 |
+| 系统级 | `startup` | NewCode 进程启动时 | 否 |
+| 系统级 | `shutdown` | NewCode 进程退出时 | 否 |
 | 系统级 | `error` | 发生错误时 | 否 |
 | 系统级 | `pre_compact` | 上下文压缩之前（自动 / 紧急 / 手动三路径合并） | 否 |
 | 系统级 | `post_compact` | 上下文压缩完成后 | 否 |
@@ -216,9 +216,9 @@ if:
 ### F6 配置加载与校验
 
 - F6.1：Hook 配置从三个位置加载，按顺序 本地临时 > 项目级 > 用户级：
-  - 本地临时：`.mewcode/config.local.yaml`（与权限规则的 `permissions.local.yaml` 命名对齐，不被 git 追踪，优先级最高）
-  - 项目级：项目根目录下的 `.mewcode/config.yaml`
-  - 用户级：`~/.mewcode/config.yaml`
+  - 本地临时：`.newcode/config.local.yaml`（与权限规则的 `permissions.local.yaml` 命名对齐，不被 git 追踪，优先级最高）
+  - 项目级：项目根目录下的 `.newcode/config.yaml`
+  - 用户级：`~/.newcode/config.yaml`
 - F6.2：三处文件不存在不报错，找到就加载；Hook 配置是**追加合并**的——所有规则共同参与事件分派，不存在「覆盖同名」概念；合并后同一事件的多个 Hook 按优先级高者在前、同级内按 YAML 出现顺序执行
 - F6.3：YAML 顶层结构为 `hooks:` 数组，每条 hook 为对象，字段：`name`（必填，用于日志、once 跟踪、冲突检测）、`event`（必填）、`if`（可选）、`action`（必填）、`once`（可选 bool）、`async`（可选 bool）、`timeout`（可选时长字符串）
 - F6.4：三层中出现同名 hook 时，加载期 stderr 提示冲突并跳过后到者（低优先级层）
@@ -268,7 +268,7 @@ if:
 ## 非功能需求
 
 - N1：**错误隔离**——任何 Hook 执行失败、配置非法、执行器报错，都不影响 Agent 主流程的正常运行（对应 F9.1、F6.6）
-- N2：**加载不阻断**——所有加载错误一律 stderr 输出后继续启动，不阻断 mewcode 进程（对应 F6.6）
+- N2：**加载不阻断**——所有加载错误一律 stderr 输出后继续启动，不阻断 newcode 进程（对应 F6.6）
 - N3：**配置可诊断**——非法配置的错误信息必须定位到具体 Hook（文件 + 条目 + 字段），不能只报「配置错误」
 - N4：**防卡死**——事件分派支持 CancelledError 传播，拦截同步等待、async 后台执行被取消时及时退出（对应 F9.3）
 - N5：**payload 稳定序列化**——Hook payload JSON 序列化 `sort_keys=True` 保持字段顺序稳定，方便用户脚本直接 grep
@@ -277,22 +277,22 @@ if:
 - N8：**once 内存集合生命周期**——放在会话运行时状态上，与 ActiveSkills 同生命周期；`/clear` 与 `/resume` 切换时清空（对应 F2.2）
 - N9：**占位日志可搜索**——agent 占位日志输出固定格式 `[hook <name>] agent not yet implemented, skipped`，方便后续章节对接时文本搜索替换
 - N10：**无侵入**——未配置任何 Hook 时，AgentLoop 的开销接近于零（空引擎短路），不改变现有行为
-- N11：**文档保护**——docs/ 不可变；ch12 四份文档走 mew-spec 流程生成，逐份经用户审批
-- N12：**版本号**——本章完成后 bump 到 0.12.0，`mewcode/__init__.py` 与 `pyproject.toml` 同步更新
+- N11：**文档保护**——docs/ 不可变；ch12 四份文档走 new-spec 流程生成，逐份经用户审批
+- N12：**版本号**——本章完成后 bump 到 0.12.0，`newcode/__init__.py` 与 `pyproject.toml` 同步更新
 - N13：**测试规范**——接线测试自动跑、不依赖真实终端；mock 驱动真实代码路径；每个测试标注它防的 bug
 
 ## 验收标准
 
-- AC1（F1.2）：写一份只含 `Bash(=git status)` 的精确规则到 `.mewcode/permissions.yaml`，启动后调用 `git status` 被该规则命中、调用 `git status -s` 不命中
+- AC1（F1.2）：写一份只含 `Bash(=git status)` 的精确规则到 `.newcode/permissions.yaml`，启动后调用 `git status` 被该规则命中、调用 `git status -s` 不命中
 - AC2（F1.2）：写一份 `Bash(~^npm (install|test)$)` 的正则规则，启动后调用 `npm install` 命中、`npm run dev` 不命中；写法非法（如未闭合括号）启动期 stderr 打印失败规则与原因并跳过该条
 - AC3（F1.2）：写一份 `Bash(!~^rm)` 的反向正则规则，调用 `rm -rf .` 不命中（以 rm 起头）、调用 `ls -lh` 命中（不以 rm 起头）
 - AC4（F1.5）：现有 ch08 权限测试全部通过，既有 `Bash(git *)` 风格配置行为不变
-- AC5（F5.4）：在 `<projectRoot>/.mewcode/config.yaml` 写一条 pre_tool_use hook——条件 `tool_name = write_file`，动作 `command: "echo blocked >&2; exit 2"`；启动后 LLM 调用 write_file 工具时被拦截，tool_result 显示 `[hook <name>] blocked`，文件未被写入
+- AC5（F5.4）：在 `<projectRoot>/.newcode/config.yaml` 写一条 pre_tool_use hook——条件 `tool_name = write_file`，动作 `command: "echo blocked >&2; exit 2"`；启动后 LLM 调用 write_file 工具时被拦截，tool_result 显示 `[hook <name>] blocked`，文件未被写入
 - AC6（F5.4）：上面 AC5 的 hook 把动作命令改成 `exit 0`，再调用 write_file，hook 触发但放行，文件成功写入
 - AC7（F7.4）：AC5 拦截发生时，权限引擎未被调用（不弹审批），PhaseEnd 的 is_error=True
-- AC8（F5.6）：写一条 session_start hook——动作 `prompt: "用 zh-CN 回复"`；重启 mewcode 后首轮对话中 LLM reminder 区能看到该文本，后续轮不再注入
+- AC8（F5.6）：写一条 session_start hook——动作 `prompt: "用 zh-CN 回复"`；重启 newcode 后首轮对话中 LLM reminder 区能看到该文本，后续轮不再注入
 - AC9（F2.2）：写一条 once + turn_start 的 hook，动作 `command: "echo first-turn >&2"`；第一轮 turn_start 时 stderr 出现 `first-turn`，后续轮不再出现；执行 `/clear` 进入新会话后下一轮再次出现
-- AC10（F2.2/F6.5）：写一条 async + pre_tool_use 的 hook，启动 mewcode 时 stderr 打印 `hook "<name>": async not allowed for blocking events, skipped` 并跳过该条，其余 hook 正常加载
+- AC10（F2.2/F6.5）：写一条 async + pre_tool_use 的 hook，启动 newcode 时 stderr 打印 `hook "<name>": async not allowed for blocking events, skipped` 并跳过该条，其余 hook 正常加载
 - AC11（F7.5）：写一条 user_prompt_submit hook——条件 prompt 正则匹配 `(?i)delete`，动作 `command: "echo \"prompt contains delete keyword\" >&2; exit 2"`；用户在 TUI 输入「请帮我 delete 那个文件」时被拦截，输入框下方提示 `[hook <name>] prompt contains delete keyword`，消息未进入对话历史
 - AC12（F6.6）：在 hooks 配置中写 `event: UnknownEvent`，启动后 stderr 打印 `hook "<name>": unknown event "UnknownEvent", skipped`，其余 hook 正常加载
 - AC13（F6.4）：同时在用户级与项目级配置各写一条同名 hook，启动后 stderr 提示冲突并保留高优先级层那条；`/hooks` 命令输出合并列表，末尾显示两个加载来源文件路径

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mewcode.tools.cwd import cwd_from_ctx, resolve_path, with_cwd
+from newcode.tools.cwd import cwd_from_ctx, resolve_path, with_cwd
 
 
 def test_resolve_absolute_passthrough(tmp_path):

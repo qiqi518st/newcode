@@ -61,8 +61,8 @@
 
 | 文件 | 改动 |
 |------|------|
-| `mewcode/slash/commands/skill.py` | 删 on/off；load/unload 新语义；list 用 list_all + [disabled]；info 加 disabled 行；usage 更新 |
-| `mewcode/skills/catalog.py` | 新增 `list_all()`（全部含 disabled）与 `invalidate(name)`（清内存缓存） |
+| `newcode/slash/commands/skill.py` | 删 on/off；load/unload 新语义；list 用 list_all + [disabled]；info 加 disabled 行；usage 更新 |
+| `newcode/skills/catalog.py` | 新增 `list_all()`（全部含 disabled）与 `invalidate(name)`（清内存缓存） |
 | `tests/test_ch11_skill_command.py` | on/off 用例迁移到 load/unload 新语义；新增 list 显示 [disabled]、load 恢复命令用例 |
 | `tests/test_ch10_integration.py` | /skill usage 断言更新 |
 

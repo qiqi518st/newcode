@@ -1,7 +1,7 @@
 """ch05 F7 典型场景评估脚本：跑 Agent，打印工具调用序列 + 每轮 TokenUsage + 缓存命中标注。
 
 用法：
-    python scripts/eval_scenarios.py --scenario 1          # 跑场景 1（真实 provider，读 .mewcode.yaml）
+    python scripts/eval_scenarios.py --scenario 1          # 跑场景 1（真实 provider，读 .newcode.yaml）
     python scripts/eval_scenarios.py --scenario 5 --mock   # 用 mock provider（无 API key，验证输出管线）
 
 场景：
@@ -19,15 +19,15 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from mewcode import __version__
-from mewcode.agent import Agent
-from mewcode.agent.events import EventType
-from mewcode.conversation.manager import ConversationManager
-from mewcode.prompt.builder import PromptBuilder
-from mewcode.prompt.env import collect_env, format_env
-from mewcode.prompt.sections import fixed_sections, optional_sections
-from mewcode.provider.base import StreamEvent, TokenUsage, ToolCall
-from mewcode.tools import Registry
+from newcode import __version__
+from newcode.agent import Agent
+from newcode.agent.events import EventType
+from newcode.conversation.manager import ConversationManager
+from newcode.prompt.builder import PromptBuilder
+from newcode.prompt.env import collect_env, format_env
+from newcode.prompt.sections import fixed_sections, optional_sections
+from newcode.provider.base import StreamEvent, TokenUsage, ToolCall
+from newcode.tools import Registry
 
 SCENARIOS = [
     ("工具优先级遵守", "用 grep 在项目里找 'def main' 的位置", "normal"),
@@ -35,7 +35,7 @@ SCENARIOS = [
     ("Plan Mode 行为", "分析项目结构并给出重构建议", "plan"),
     (
         "多工具配合",
-        "读取 main.py 和 mewcode/agent/agent.py，对比导入部分，创建 analysis.md",
+        "读取 main.py 和 newcode/agent/agent.py，对比导入部分，创建 analysis.md",
         "normal",
     ),
     ("缓存命中与成本", "读取 main.py 的内容，然后总结", "normal"),
@@ -104,13 +104,13 @@ async def _run_scenario(index: int, mock: bool) -> None:
         env_segment = format_env(collect_env(cwd, __version__, "mock", "mock-model"))
         provider: object = MockProvider()
     else:
-        from mewcode.config.loader import load as load_config
-        from mewcode.config.loader import load_ccswitch
-        from mewcode.provider.base import new_provider
+        from newcode.config.loader import load as load_config
+        from newcode.config.loader import load_ccswitch
+        from newcode.provider.base import new_provider
 
         config = load_ccswitch()
         if config is None:
-            config = load_config(os.path.join(cwd, ".mewcode.yaml"))
+            config = load_config(os.path.join(cwd, ".newcode.yaml"))
         provider_config = next(p for p in config.providers if p.name == config.provider)
         provider = new_provider(provider_config)
         builder = PromptBuilder(
@@ -161,7 +161,7 @@ async def _run_scenario(index: int, mock: bool) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="eval_scenarios",
-        description="MewCode ch05 典型场景评估脚本（人工定性对比）",
+        description="NewCode ch05 典型场景评估脚本（人工定性对比）",
     )
     parser.add_argument(
         "--scenario", type=int, choices=range(1, 6), help="场景编号 1-5"

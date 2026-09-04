@@ -8,9 +8,9 @@ import json
 
 import pytest
 
-from mewcode.memory.manager import MemoryManager
-from mewcode.memory.models import TYPE_SCOPE, MemoryOperation
-from mewcode.memory.store import MemoryStore
+from newcode.memory.manager import MemoryManager
+from newcode.memory.models import TYPE_SCOPE, MemoryOperation
+from newcode.memory.store import MemoryStore
 
 
 @pytest.fixture

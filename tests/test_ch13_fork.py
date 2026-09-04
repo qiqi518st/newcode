@@ -9,9 +9,9 @@
 
 from __future__ import annotations
 
-from mewcode.conversation.manager import ConversationManager
-from mewcode.provider.base import ToolCall, ToolResult
-from mewcode.subagent.fork import (
+from newcode.conversation.manager import ConversationManager
+from newcode.provider.base import ToolCall, ToolResult
+from newcode.subagent.fork import (
     FORK_BOILERPLATE_TAG,
     build_forked_messages,
     is_fork_context,

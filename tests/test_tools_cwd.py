@@ -13,10 +13,10 @@ from pathlib import Path
 
 import pytest
 
-from mewcode.tools.cwd import cwd_from_ctx, with_cwd
-from mewcode.tools.file_ops import EditFileTool, ReadFileTool, WriteFileTool
-from mewcode.tools.search import ListFilesTool, SearchCodeTool
-from mewcode.tools.shell import ExecuteCommandTool
+from newcode.tools.cwd import cwd_from_ctx, with_cwd
+from newcode.tools.file_ops import EditFileTool, ReadFileTool, WriteFileTool
+from newcode.tools.search import ListFilesTool, SearchCodeTool
+from newcode.tools.shell import ExecuteCommandTool
 
 pytestmark = pytest.mark.anyio
 

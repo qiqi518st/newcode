@@ -12,8 +12,8 @@ from __future__ import annotations
 import pytest
 from rich.console import Console
 
-from mewcode.hooks.engine import Engine
-from mewcode.hooks.types import (
+from newcode.hooks.engine import Engine
+from newcode.hooks.types import (
     Action,
     ActionType,
     Event,
@@ -22,10 +22,10 @@ from mewcode.hooks.types import (
     PromptAction,
     ShellAction,
 )
-from mewcode.slash import CommandRegistry
-from mewcode.slash.commands import register_all
-from mewcode.slash.context import CommandContext
-from mewcode.tui.app import REPL, AppMode, RichUIController, SessionState
+from newcode.slash import CommandRegistry
+from newcode.slash.commands import register_all
+from newcode.slash.context import CommandContext
+from newcode.tui.app import REPL, AppMode, RichUIController, SessionState
 
 pytestmark = pytest.mark.anyio
 

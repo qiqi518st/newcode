@@ -14,13 +14,13 @@ from typing import ClassVar
 
 import pytest
 
-from mewcode.agent import Agent
-from mewcode.conversation.manager import ConversationManager
-from mewcode.permission.checker import PermissionChecker
-from mewcode.permission.modes import PermissionMode
-from mewcode.provider.base import StreamEvent, TokenUsage, ToolCall, ToolResult
-from mewcode.subagent.errors import MaxTurnsReached
-from mewcode.tools.registry import Registry
+from newcode.agent import Agent
+from newcode.conversation.manager import ConversationManager
+from newcode.permission.checker import PermissionChecker
+from newcode.permission.modes import PermissionMode
+from newcode.provider.base import StreamEvent, TokenUsage, ToolCall, ToolResult
+from newcode.subagent.errors import MaxTurnsReached
+from newcode.tools.registry import Registry
 
 pytestmark = pytest.mark.anyio
 

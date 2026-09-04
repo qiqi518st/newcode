@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import pytest
 
-from mewcode.slash.commands.worktree import build
-from mewcode.slash.ui import WorktreeSummary
+from newcode.slash.commands.worktree import build
+from newcode.slash.ui import WorktreeSummary
 
 pytestmark = pytest.mark.anyio
 

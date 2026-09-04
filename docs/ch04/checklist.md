@@ -1,30 +1,30 @@
-# MewCode Agent Loop — 验收清单 (checklist.md)
+# NewCode Agent Loop — 验收清单 (checklist.md)
 
 > 每一项通过运行代码或观察行为来验证，聚焦系统行为。
 
 ## 实现完整性
 
-- [ ] `TokenUsage`、`TurnEnd`、`StopReason` 已定义且可导入（验证：`python -c "from mewcode.agent.events import TokenUsage, TurnEnd, StopReason"` 无报错）
+- [ ] `TokenUsage`、`TurnEnd`、`StopReason` 已定义且可导入（验证：`python -c "from newcode.agent.events import TokenUsage, TurnEnd, StopReason"` 无报错）
 - [ ] `EventType` 包含 `TOKEN_USAGE`、`TURN_START`、`TURN_END`（验证：同上，检查枚举值）
-- [ ] `Tool` Protocol 包含 `read_only` 属性（验证：`python -c "from mewcode.tools.base import Tool; print(hasattr(Tool, 'read_only'))"` 输出 True）
+- [ ] `Tool` Protocol 包含 `read_only` 属性（验证：`python -c "from newcode.tools.base import Tool; print(hasattr(Tool, 'read_only'))"` 输出 True）
 - [ ] 六个工具 `read_only` 属性值正确：3 个 True（read_file, list_files, search_code），3 个 False（write_file, edit_file, execute_command）（验证：遍历 Registry.default() 检查）
 - [ ] `Registry.read_only_definitions()` 返回 3 个工具定义（验证：调用后检查长度为 3）
 - [ ] `Registry.is_read_only(name)` 正确查询（验证：`True` for read_file, `False` for write_file, `False` for 不存在工具）
-- [ ] `StreamEvent` 包含 `usage` 字段（验证：`python -c "from mewcode.provider.base import StreamEvent; print(hasattr(StreamEvent, 'usage'))"` 输出 True）
+- [ ] `StreamEvent` 包含 `usage` 字段（验证：`python -c "from newcode.provider.base import StreamEvent; print(hasattr(StreamEvent, 'usage'))"` 输出 True）
 - [ ] `Provider.stream()` 签名包含 `system_suffix` 形参（验证：检查方法签名）
 - [ ] Anthropic 适配器流结束后 `StreamEvent.usage` 非空（验证：需要真实 API key 的集成测试，或 mock 验证）
 - [ ] OpenAI 适配器请求包含 `stream_options={"include_usage": True}`（验证：mock 检查请求参数）
 - [ ] `ConversationManager.last_role()` 返回正确角色（验证：空列表返回 None，有消息返回最后一条的 role）
 - [ ] `ConversationManager.add_assistant_with_tool_calls()` 正确写入多 tool_calls（验证：写入后 `last_role() == "assistant"`，消息包含多个 tool_calls）
 - [ ] `ConversationManager.add_cancelled_tool_result()` 补入「已取消」结果（验证：写入后配对完整）
-- [ ] `PLAN_MODE_REMINDER` 和 `EXECUTE_DIRECTIVE` 已定义（验证：`python -c "from mewcode.prompt.resources import PLAN_MODE_REMINDER, EXECUTE_DIRECTIVE"` 无报错）
+- [ ] `PLAN_MODE_REMINDER` 和 `EXECUTE_DIRECTIVE` 已定义（验证：`python -c "from newcode.prompt.resources import PLAN_MODE_REMINDER, EXECUTE_DIRECTIVE"` 无报错）
 - [ ] `SYSTEM_PROMPT` 包含 Agent 循环行为约定（验证：检查字符串包含"持续工作"等关键词）
 - [ ] `Config` 包含 `plan_file` 和 `default_mode` 字段（验证：构造 Config 时传入这两个字段不报错）
-- [ ] `ToolScheduler` 已实现（验证：`python -c "from mewcode.agent.scheduler import ToolScheduler"` 无报错）
+- [ ] `ToolScheduler` 已实现（验证：`python -c "from newcode.agent.scheduler import ToolScheduler"` 无报错）
 - [ ] `Agent.run()` 支持 `mode` 和 `plan_content` 参数（验证：检查方法签名）
 - [ ] `Agent` 有 `cancel()` 方法（验证：`hasattr(agent, 'cancel')`）
 - [ ] `Agent.__init__.py` 导出所有新类型（验证：可导入 StopReason, TokenUsage, TurnEnd, ToolScheduler）
-- [ ] `main.py` 支持 `-p`/`--plan` 参数（验证：`python -m mewcode --help` 显示）
+- [ ] `main.py` 支持 `-p`/`--plan` 参数（验证：`python -m newcode --help` 显示）
 
 ## 集成
 
@@ -41,13 +41,13 @@
 
 ## 编译与测试
 
-- [ ] `python -m mewcode --version` 正常输出
+- [ ] `python -m newcode --version` 正常输出
 - [ ] 所有单元测试通过（`pytest tests/ -v`）
-- [ ] 无 import 循环依赖（验证：`python -c "import mewcode"` 无报错）
+- [ ] 无 import 循环依赖（验证：`python -c "import newcode"` 无报错）
 
 ## 端到端场景
 
-- [ ] **场景 1 — ReAct 多轮循环：** 用户输入"读取 main.py 和 mewcode/agent/agent.py，对比两个文件的导入部分，然后创建 analysis.md"，Agent 自动进行多轮工具调用（list_files 或 read_file × 2 → write_file），无需用户逐轮确认。TUI 中可见多轮工具调用行，Turn 计数器递增。
+- [ ] **场景 1 — ReAct 多轮循环：** 用户输入"读取 main.py 和 newcode/agent/agent.py，对比两个文件的导入部分，然后创建 analysis.md"，Agent 自动进行多轮工具调用（list_files 或 read_file × 2 → write_file），无需用户逐轮确认。TUI 中可见多轮工具调用行，Turn 计数器递增。
 
 - [ ] **场景 2 — 自然终止：** 用户输入"1+1 等于几"，模型直接回答文本无工具调用，Agent 自然终止。`DONE(NATURAL)` 事件产出。
 
@@ -75,7 +75,7 @@
 
 - [ ] **场景 14 — Plan Mode 执行：** 用户 review `plan.md` 后输入 `/do`，Agent 读取计划内容，恢复全工具集，执行计划中的操作。
 
-- [ ] **场景 15 — 单次调用模式 Agent Loop：** `mewcode -c "读取所有 py 文件并统计行数"` 完整走通多轮工具调用，终端输出工具行和最终回复后退出。
+- [ ] **场景 15 — 单次调用模式 Agent Loop：** `newcode -c "读取所有 py 文件并统计行数"` 完整走通多轮工具调用，终端输出工具行和最终回复后退出。
 
 - [ ] **场景 16 — 跨协议一致：** 使用 Anthropic 和 OpenAI 分别测试相同多工具任务，Agent Loop 行为一致（循环轮数、事件类型、终止条件均相同）。
 

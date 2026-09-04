@@ -3,8 +3,8 @@
 防 bug：分组拆开 tool_use/tool_result 对、丢弃数计算错误、空列表异常。
 """
 
-from mewcode.context.dropper import MessageGroupDropper
-from mewcode.provider.base import Message
+from newcode.context.dropper import MessageGroupDropper
+from newcode.provider.base import Message
 
 
 def _conv():

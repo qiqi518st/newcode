@@ -8,8 +8,8 @@
 
 from __future__ import annotations
 
-from mewcode.team.notices import team_update_message
-from mewcode.team.notify import build_team_notification
+from newcode.team.notices import team_update_message
+from newcode.team.notify import build_team_notification
 
 
 def test_build_team_notification_has_usage():

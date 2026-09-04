@@ -1,4 +1,4 @@
-# MewCode ch10 - SlashCommand 框架 Plan
+# NewCode ch10 - SlashCommand 框架 Plan
 
 ## 架构概览
 
@@ -22,23 +22,23 @@ REPL.run() ──► 分流器（/ 前缀 + 空输入早返回 + 状态机门）
                                           └─ KindPrompt：注入 user 消息 → Agent.run 触发回合
 ```
 
-核心思路：**命令框架（mewcode/slash/）与 UI 完全解耦**。TUI 只负责把回车输入交给分流器、把 UIController 实现注入；命令注册中心持有元数据与 handler，handler 通过 UIController 抽象操作界面，不 import prompt_toolkit / rich。
+核心思路：**命令框架（newcode/slash/）与 UI 完全解耦**。TUI 只负责把回车输入交给分流器、把 UIController 实现注入；命令注册中心持有元数据与 handler，handler 通过 UIController 抽象操作界面，不 import prompt_toolkit / rich。
 
 ## 组件划分
 
 | 模块 | 文件 | 职责 |
 |---|---|---|
-| 命令注册中心 | mewcode/slash/registry.py | CommandKind、CommandDef、CommandRegistry（RLock、启动期冲突检测、lookup/list/complete） |
-| 命令解析器 | mewcode/slash/parser.py | parse_command(text) → (name, args) 或 None；大小写不敏感 |
-| 命令上下文 | mewcode/slash/context.py | CommandContext 打包全部依赖 |
-| UI 抽象 | mewcode/slash/ui.py | UIController 抽象接口（Protocol/ABC） |
-| 内置命令 | mewcode/slash/commands/*.py | 各命令实现（见文件组织） |
-| 命令装配 | mewcode/slash/commands/__init__.py | register_all(registry) |
-| TUI 接入 | mewcode/tui/app.py | 分流器、Tab 补全 completer、状态栏、RichUIController 实现 |
-| 装配 | mewcode/main.py | 构造 registry、register_all、组装 CommandContext、注入 REPL |
-| 权限 API | mewcode/permission/checker.py | 新增 count_rules / add_rule / reset_rules（/permission_* 需要） |
-| 会话 API | mewcode/session/runtime.py（复用） | /session_* 复用现有 SessionRuntime / SessionArchive |
-| 记忆 API | mewcode/memory/store.py（复用） | /memory_* 复用现有 MemoryStore.list_notes / apply / clear |
+| 命令注册中心 | newcode/slash/registry.py | CommandKind、CommandDef、CommandRegistry（RLock、启动期冲突检测、lookup/list/complete） |
+| 命令解析器 | newcode/slash/parser.py | parse_command(text) → (name, args) 或 None；大小写不敏感 |
+| 命令上下文 | newcode/slash/context.py | CommandContext 打包全部依赖 |
+| UI 抽象 | newcode/slash/ui.py | UIController 抽象接口（Protocol/ABC） |
+| 内置命令 | newcode/slash/commands/*.py | 各命令实现（见文件组织） |
+| 命令装配 | newcode/slash/commands/__init__.py | register_all(registry) |
+| TUI 接入 | newcode/tui/app.py | 分流器、Tab 补全 completer、状态栏、RichUIController 实现 |
+| 装配 | newcode/main.py | 构造 registry、register_all、组装 CommandContext、注入 REPL |
+| 权限 API | newcode/permission/checker.py | 新增 count_rules / add_rule / reset_rules（/permission_* 需要） |
+| 会话 API | newcode/session/runtime.py（复用） | /session_* 复用现有 SessionRuntime / SessionArchive |
+| 记忆 API | newcode/memory/store.py（复用） | /memory_* 复用现有 MemoryStore.list_notes / apply / clear |
 
 ## 核心数据结构
 
@@ -123,23 +123,23 @@ class UIController(Protocol):
 
 ## 模块设计
 
-### mewcode/slash/registry.py
+### newcode/slash/registry.py
 - `register`：写锁下检查 name 与所有 alias 是否已存在于 `_commands` 索引；冲突抛 `RuntimeError`（消息含具体冲突名字）。
 - `get`：读锁下按 name/alias 查找，`name.lower()` 归一化实现大小写不敏感。
 - `list`：读锁下按 name 字典序返回；`include_hidden=False` 时过滤 hidden。
 - `complete`：读锁下对 prefix 前缀匹配 name，排除 hidden；返回按字典序。
 - RLock 保证 Skill 系统动态注册与查找并发安全（读写锁）。
 
-### mewcode/slash/parser.py
+### newcode/slash/parser.py
 纯函数。`strip()` 后空串 → None；不以 `/` 开头 → None；否则 `split(maxsplit=1)` 拆 name/args，name 转小写。不解析参数结构（spec F7）。
 
-### mewcode/slash/context.py
+### newcode/slash/context.py
 `CommandContext` dataclass。在 main.py 组装一次，注入 registry / ui / agent / 各管理器。
 
-### mewcode/slash/ui.py
+### newcode/slash/ui.py
 `UIController` Protocol 定义抽象接口（F6.2 最小暴露）。同时提供 `NopUI` 测试桩：所有写入方法 no-op、所有查询返回零值，供 handler 单测与集成测试复用（避免逐命令手写 mock，N11 可测试性）。TUI 侧实现 `RichUIController`（在 app.py 内，包一层 console.print / mode 切换 / token 统计 / 退出 / 会话操作）。
 
-### mewcode/slash/commands/
+### newcode/slash/commands/
 每个命令一个文件，每个文件导出 `build(registry_deps) -> list[CommandDef]`。`register_all()` 遍历收集。
 
 | 文件 | 命令 |
@@ -156,7 +156,7 @@ class UIController(Protocol):
 | review.py | /review |
 | legacy.py | /exit、/quit、/resume、/delete-plan |
 
-### mewcode/tui/app.py 接入
+### newcode/tui/app.py 接入
 - 新增 `RichUIController` 类实现 UIController（包住现有 console/mode/token/exit/session/compact 逻辑）。
 - 新增 `REPL.dispatch_slash(text) -> bool`：命中并处理完成返回 `True`，非命令返回 `False`（上层走 AgentLoop）。内部——`CommandParser.parse` → `registry.get`；命中 → 状态机门（KindUI/KindPrompt 仅 idle，非 idle 提示"请等待当前任务完成"）→ `try/except` 包裹 `await handler(ctx, args)`（异常 → `ui.show_message(f"命令执行失败: {exc}", style="red")` 上屏，不崩 REPL）；未命中且 `/` 开头 → 引导 /help；空输入 → 早返回 `False`。
 - `REPL.run()`：回车后先调用 `dispatch_slash(text)`，返回 `False` 才走 AgentLoop 原路径。
@@ -164,7 +164,7 @@ class UIController(Protocol):
 - `_toolbar` 从注册表派生高频命令提示（仅 /help 可硬编码，N5）。
 - 移除 /exit-plan 分支；现有 if/elif 命令分支迁移到命令文件。
 
-### mewcode/main.py 接线
+### newcode/main.py 接线
 1. 构造 `registry = CommandRegistry()`
 2. `register_all(registry)`（从 commands 包收集）
 3. 组装 `CommandContext(registry, ui=RichUIController(...), agent, conversation, plan_manager, session_runtime, session_archive, memory_manager, permission, version, cwd)`
@@ -172,7 +172,7 @@ class UIController(Protocol):
 5. 启动期冲突检测：`register_all` 抛异常时捕获 → 打印冲突名字 → `sys.exit(1)`（N4/F1.3）
 6. 顺带把 session_runtime / session_archive 传入 REPL（ch09 遗留缺口，本 spec F8.6/F8.21 依赖）
 
-### mewcode/permission/checker.py 新增
+### newcode/permission/checker.py 新增
 - `count_rules() -> int`：统计三层规则文件（local/project/user）规则总数
 - `add_rule(pattern, effect) -> None`：写入本地规则（镜像现有 `persist_local_allow` 的写回路径）
 - `reset_rules() -> int`：清空本地规则，返回删除条数
@@ -203,7 +203,7 @@ handler 各司其职：
 ## 文件组织
 
 ```
-mewcode/slash/
+newcode/slash/
 ├── __init__.py          # 导出 CommandRegistry、CommandKind、CommandDef、parse_command、CommandContext
 ├── registry.py          # CommandKind / CommandDef / CommandRegistry
 ├── parser.py            # parse_command
@@ -223,10 +223,10 @@ mewcode/slash/
     ├── review.py
     └── legacy.py        # /exit /quit /resume /delete-plan
 
-mewcode/context/manager.py      # 修改：新增 reset_for_new_session()（清 L1 替换账本 + 自动闸 + 锚点，/clear 用）
-mewcode/permission/checker.py   # 修改：count_rules / add_rule / reset_rules
-mewcode/tui/app.py              # 修改：分流器 / completer / 状态栏 / RichUIController
-mewcode/main.py                 # 修改：装配接线 + 启动冲突检测 panic
+newcode/context/manager.py      # 修改：新增 reset_for_new_session()（清 L1 替换账本 + 自动闸 + 锚点，/clear 用）
+newcode/permission/checker.py   # 修改：count_rules / add_rule / reset_rules
+newcode/tui/app.py              # 修改：分流器 / completer / 状态栏 / RichUIController
+newcode/main.py                 # 修改：装配接线 + 启动冲突检测 panic
 
 tests/
 ├── test_ch10_registry.py       # 注册中心单测（冲突检测/查找/列举/补全/并发）
@@ -241,7 +241,7 @@ tests/
 
 | 决策点 | 选择 | 理由 |
 |---|---|---|
-| 包位置 | 独立 mewcode/slash/ | Skill 动态注册复用、跨 UI 解耦（用户拍板） |
+| 包位置 | 独立 newcode/slash/ | Skill 动态注册复用、跨 UI 解耦（用户拍板） |
 | /do 语义 | 保留执行计划（local-ui） | 用户拍板 |
 | /memory /permission /session | 只读基础命令 + /xxx_* 扁平衍生命令 | 用户拍板（与模板对齐） |
 | /review | 不读 diff，注入固定文本（KindPrompt） | 用户拍板（与模板对齐） |

@@ -1,4 +1,4 @@
-# MewCode ch10 - SlashCommand 框架 Checklist
+# NewCode ch10 - SlashCommand 框架 Checklist
 
 > 每一项通过运行代码或观察行为来验证，聚焦系统行为。
 > 本版依据修订后的 spec / plan / task.md（含新增 T13 端到端冒烟、registry 防御拷贝、/help 对齐与两条 dispatch 断言）重新生成。
@@ -28,11 +28,11 @@
 
 ## 编译与测试
 
-- [ ] 项目编译无错误（验证：`python -c "import mewcode"`）
+- [ ] 项目编译无错误（验证：`python -c "import newcode"`）
 - [ ] 全部单元测试通过（验证：`pytest tests/ -v` 全绿）
 - [ ] 存量测试适配后通过：test_tui_resume / test_tui_compact / test_tui_wiring（验证：AC10/N8，迁移后仍绿）
 - [ ] 新增两条 dispatch 断言通过：`/Help` 与 `/help` 行为一致（AC3）；`/help` 输出含全部已注册命令名（AC1）（验证：test_ch10_tui.py 对应用例）
-- [ ] ruff check 通过（验证：`ruff check mewcode tests`）
+- [ ] ruff check 通过（验证：`ruff check newcode tests`）
 - [ ] docs/ 未被 ruff/测试/git 操作改动（验证：git status 检查 docs/）
 
 ## 端到端场景

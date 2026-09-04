@@ -15,16 +15,16 @@ from types import SimpleNamespace
 
 import pytest
 
-import mewcode.team.manager as manager_mod
-from mewcode.agent.team_hook import (
+import newcode.team.manager as manager_mod
+from newcode.agent.team_hook import (
     TeammateContext,
     TeamSpawnRequest,
     set_current_teammate,
 )
-from mewcode.subagent.types import AgentDefinition
-from mewcode.team.manager import Manager
-from mewcode.team.spawn import TeamHookImpl
-from mewcode.team.types import BackendType
+from newcode.subagent.types import AgentDefinition
+from newcode.team.manager import Manager
+from newcode.team.spawn import TeamHookImpl
+from newcode.team.types import BackendType
 
 
 class FakeWT:

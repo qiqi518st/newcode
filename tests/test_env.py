@@ -1,6 +1,6 @@
 """环境信息采集与格式化测试（ch05，spec F3 / N12）"""
 
-from mewcode.prompt.env import EnvContext, collect_env, format_env
+from newcode.prompt.env import EnvContext, collect_env, format_env
 
 
 class TestCollectEnv:
@@ -8,7 +8,7 @@ class TestCollectEnv:
 
     def test_collects_all_fields(self, monkeypatch):
         monkeypatch.setattr(
-            "mewcode.prompt.env._collect_git",
+            "newcode.prompt.env._collect_git",
             lambda cwd: ("master", True),
         )
         env = collect_env("/proj", "0.5.0", "ccswitch", "claude-sonnet-4")
@@ -27,7 +27,7 @@ class TestCollectEnv:
         def boom(cwd):
             raise OSError("git not found")
 
-        monkeypatch.setattr("mewcode.prompt.env._collect_git", boom)
+        monkeypatch.setattr("newcode.prompt.env._collect_git", boom)
         env = collect_env("/proj", "0.5.0", "p", "m")
         assert env.git_branch is None
         assert env.git_dirty is None
@@ -40,7 +40,7 @@ class TestCollectEnv:
             stdout = "fatal: not a git repository"
 
         monkeypatch.setattr(
-            "mewcode.prompt.env.subprocess.run",
+            "newcode.prompt.env.subprocess.run",
             lambda *a, **k: FakeProc(),
         )
         env = collect_env("/proj", "0.5.0", "p", "m")

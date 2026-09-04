@@ -1,4 +1,4 @@
-# MewCode ch07 — MCP 对接数据库的权限管理 Tasks
+# NewCode ch07 — MCP 对接数据库的权限管理 Tasks
 
 > 约定：本项目为 Python，Git Bash 下验证命令先 `export PYTHONIOENCODING=utf-8`。
 > 异步测试沿用 repo 约定 `@pytest.mark.anyio`。
@@ -9,16 +9,16 @@
 
 | 操作 | 文件 | 职责 |
 |------|------|------|
-| 新 | `mewcode/permission/mcp_blocklist.py` | 高危 SQL 名单（自由 SQL 文本 + 结构化 where 空判定） |
-| 新 | `mewcode/permission/resource_scope.py` | ResourceScope / SQL 规范化 / 表引用提取 / check_resource |
-| 改 | `mewcode/permission/rules.py` | RuleLayers.dynamic 内存层 + match 顺序 |
-| 改 | `mewcode/permission/checker.py` | L1/L2 扩展 + inject_rules/clear_dynamic_rules + mcp_* 构造参数 |
-| 改 | `mewcode/mcp/config.py` | ServerConfig.permissions（MCPServerPermissions） |
-| 新 | `mewcode/mcp/privilege.py` | PrivilegeSnapshot/fetch_snapshot/translate_to_rules/translate_to_scopes/PrivilegeGuard |
-| 改 | `mewcode/mcp/conn.py` | _auth_failed 认证失败标记 + 抑制重试 |
-| 改 | `mewcode/tools/registry.py` | to_definitions(disabled) 过滤 |
-| 改 | `mewcode/main.py` | 装配 guard/scopes/disabled/边界摘要/失败钩子 |
-| 改 | `mewcode/mcp/__init__.py` | 导出 PrivilegeGuard |
+| 新 | `newcode/permission/mcp_blocklist.py` | 高危 SQL 名单（自由 SQL 文本 + 结构化 where 空判定） |
+| 新 | `newcode/permission/resource_scope.py` | ResourceScope / SQL 规范化 / 表引用提取 / check_resource |
+| 改 | `newcode/permission/rules.py` | RuleLayers.dynamic 内存层 + match 顺序 |
+| 改 | `newcode/permission/checker.py` | L1/L2 扩展 + inject_rules/clear_dynamic_rules + mcp_* 构造参数 |
+| 改 | `newcode/mcp/config.py` | ServerConfig.permissions（MCPServerPermissions） |
+| 新 | `newcode/mcp/privilege.py` | PrivilegeSnapshot/fetch_snapshot/translate_to_rules/translate_to_scopes/PrivilegeGuard |
+| 改 | `newcode/mcp/conn.py` | _auth_failed 认证失败标记 + 抑制重试 |
+| 改 | `newcode/tools/registry.py` | to_definitions(disabled) 过滤 |
+| 改 | `newcode/main.py` | 装配 guard/scopes/disabled/边界摘要/失败钩子 |
+| 改 | `newcode/mcp/__init__.py` | 导出 PrivilegeGuard |
 | 新 | `tests/test_mcp_blocklist.py` | 高危 SQL 各分支 + where 空判定 |
 | 新 | `tests/test_resource_scope.py` | SQL 规范化 + 表引用提取 + check_resource |
 | 新 | `tests/test_mcp_privilege.py` | 快照/翻译/注入/刷新/认证抑制/LLM 可见性 |
@@ -27,7 +27,7 @@
 
 ## T1: 高危 SQL 名单（mcp_blocklist.py）
 
-**文件：** `mewcode/permission/mcp_blocklist.py`、`tests/test_mcp_blocklist.py`
+**文件：** `newcode/permission/mcp_blocklist.py`、`tests/test_mcp_blocklist.py`
 **依赖：** 无
 **步骤：**
 1. 定义 `DANGEROUS_SQL_PATTERNS: list[re.Pattern]`（自由 SQL 文本）：
@@ -50,7 +50,7 @@
 
 ## T2: 资源边界（resource_scope.py）
 
-**文件：** `mewcode/permission/resource_scope.py`、`tests/test_resource_scope.py`
+**文件：** `newcode/permission/resource_scope.py`、`tests/test_resource_scope.py`
 **依赖：** 无
 **步骤：**
 1. `ResourceScope` dataclass：`dbs: set[str]`、`tables: dict[str, set[str]]`。
@@ -74,7 +74,7 @@
 
 ## T3: 规则引擎 dynamic 内存层（rules.py）
 
-**文件：** `mewcode/permission/rules.py`
+**文件：** `newcode/permission/rules.py`
 **依赖：** 无
 **步骤：**
 1. `RuleLayers.__init__` 加 `self.dynamic: RuleSet = RuleSet()`。
@@ -87,10 +87,10 @@
 
 ## T4: checker 注入 API + L1/L2 扩展（checker.py）
 
-**文件：** `mewcode/permission/checker.py`、`tests/test_mcp_privilege.py`（L1/L2 用例）
+**文件：** `newcode/permission/checker.py`、`tests/test_mcp_privilege.py`（L1/L2 用例）
 **依赖：** T1、T2、T3
 **步骤：**
-1. `PermissionChecker.__init__` 增加可选参数：`mcp_sql_args: dict[str,str]`、`mcp_danger_args: dict[str,str]`、`mcp_table_args: dict[str,str]`、`mcp_resource_scopes: dict[str, ResourceScope]`（默认空 dict；**permission 不 import mewcode.mcp**）。
+1. `PermissionChecker.__init__` 增加可选参数：`mcp_sql_args: dict[str,str]`、`mcp_danger_args: dict[str,str]`、`mcp_table_args: dict[str,str]`、`mcp_resource_scopes: dict[str, ResourceScope]`（默认空 dict；**permission 不 import newcode.mcp**）。
 2. 公开方法 `inject_rules(rules: list[Rule])`：`self._layers.dynamic.allow.extend/deny.extend(rules)`（实时生效，engine 每次实时读 layers）。
 3. 公开方法 `clear_dynamic_rules()`：清空 `_layers.dynamic.allow/deny`（供刷新先清再注入）。
 4. **L1 扩展**（在既有 bash 黑名单分支之后、BYPASS 判断之前，`checker.py:196` 前）：`tool_call.tool_name` 以 `mcp__` 开头且 `server_name in mcp_sql_args or mcp_danger_args` 时：
@@ -109,7 +109,7 @@
 
 ## T5: 配置 schema 扩展（mcp/config.py）
 
-**文件：** `mewcode/mcp/config.py`、`tests/test_mcp_config.py`（追加）
+**文件：** `newcode/mcp/config.py`、`tests/test_mcp_config.py`（追加）
 **依赖：** 无
 **步骤：**
 1. 定义 `MCPServerPermissions` dataclass（probe_tool/sql_arg/table_arg/where_arg/privilege_map，全默认）。
@@ -122,7 +122,7 @@
 
 ## T6: 权限快照与 Guard（mcp/privilege.py）
 
-**文件：** `mewcode/mcp/privilege.py`、`tests/test_mcp_privilege.py`
+**文件：** `newcode/mcp/privilege.py`、`tests/test_mcp_privilege.py`
 **依赖：** T4、T5
 **步骤：**
 1. `PrivilegeSnapshot` dataclass（grants/dbs/tables/default_db/read_only）。
@@ -146,7 +146,7 @@
 
 ## T7: 认证失败抑制（mcp/conn.py）
 
-**文件：** `mewcode/mcp/conn.py`、`tests/test_mcp_conn.py`（追加）
+**文件：** `newcode/mcp/conn.py`、`tests/test_mcp_conn.py`（追加）
 **依赖：** 无
 **步骤：**
 1. `MCPConnection` 加 `self._auth_failed = False`。
@@ -160,7 +160,7 @@
 
 ## T8: LLM 可见性 + 装配（registry.py + main.py + __init__.py）
 
-**文件：** `mewcode/tools/registry.py`、`mewcode/main.py`、`mewcode/mcp/__init__.py`
+**文件：** `newcode/tools/registry.py`、`newcode/main.py`、`newcode/mcp/__init__.py`
 **依赖：** T5、T6、T7
 **步骤：**
 1. `registry.to_definitions(disabled: set[str] | None = None)`：过滤 `tool.name in disabled` 的工具（`read_only_definitions` 同样加参或共用过滤逻辑）。
@@ -171,9 +171,9 @@
    - agent 组装：`registry.to_definitions(disabled=guard.disabled_tools)`
    - 边界摘要（guard 产出的 read_only/限库文案）拼进 `env_segment`（仅在启用预检的 server 时追加，不落盘）
    - `McpTool.execute` 失败路径接 `guard.on_call_failed(server_name)`（在 conn 层通过 manager 暴露 server_name 与失败事件，或 wrapper 捕获后回调）
-3. `mewcode/mcp/__init__.py` 导出 `PrivilegeGuard` / `PrivilegeSnapshot`。
+3. `newcode/mcp/__init__.py` 导出 `PrivilegeGuard` / `PrivilegeSnapshot`。
 
-**验证：** `ruff format --check && ruff check && python -c "from mewcode.mcp import PrivilegeGuard"` ok；全量 `python -m pytest -q` 全过。
+**验证：** `ruff format --check && ruff check && python -c "from newcode.mcp import PrivilegeGuard"` ok；全量 `python -m pytest -q` 全过。
 
 ---
 
@@ -182,8 +182,8 @@
 **文件：** —
 **依赖：** T1–T8
 **步骤：**
-1. `ruff format mewcode/ tests/` 后 `ruff format --check .`（全仓基线 27 个 pre-existing 告警仍存在，ch07 文件零违规——与 ch07 主体一致）。
-2. `ruff check mewcode/mcp/ mewcode/permission/ mewcode/tools/registry.py mewcode/main.py`（ch07+ch08 相关文件零告警）。
+1. `ruff format newcode/ tests/` 后 `ruff format --check .`（全仓基线 27 个 pre-existing 告警仍存在，ch07 文件零违规——与 ch07 主体一致）。
+2. `ruff check newcode/mcp/ newcode/permission/ newcode/tools/registry.py newcode/main.py`（ch07+ch08 相关文件零告警）。
 3. `python -m pytest -q` 全过。
 4. docs 保护自检：`git status docs/` 仅显示 ch07 既有文档 + 新建 `docs/ch07/mcp-db-permission/` 四份 + `mcp-servers.example.yaml`，无对既有文档的修改。
 

@@ -11,8 +11,8 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
-from mewcode.session.runtime import SessionRuntime
-from mewcode.tui.app import REPL, SessionState
+from newcode.session.runtime import SessionRuntime
+from newcode.tui.app import REPL, SessionState
 
 
 class FakeTeamMgr:
@@ -48,7 +48,7 @@ def test_consume_lead_mail_injects_raw_reminder(tmp_path, monkeypatch):
     # 防的 bug：队员 idle 消息不被消费（F11.3）
     async def main():
         repl = _repl(tmp_path)
-        import mewcode.tui.tasks as tasks_mod
+        import newcode.tui.tasks as tasks_mod
 
         iterations = {"n": 0}
 

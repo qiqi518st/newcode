@@ -1,8 +1,8 @@
-# MewCode ch13 - 多 Agent 分发架构 Plan
+# NewCode ch13 - 多 Agent 分发架构 Plan
 
 ## 架构概览
 
-ch13 的核心是一个新的 `mewcode/subagent/` 包 + `mewcode/tools/` 的扩展，把「子 Agent 的启动、过滤、运行、后台管理」从零散的既有代码（skills fork、hook 占位）收拢成一套统一底座，主 Agent 只通过一组工具与之交互。
+ch13 的核心是一个新的 `newcode/subagent/` 包 + `newcode/tools/` 的扩展，把「子 Agent 的启动、过滤、运行、后台管理」从零散的既有代码（skills fork、hook 占位）收拢成一套统一底座，主 Agent 只通过一组工具与之交互。
 
 ```
                 ┌────────────────────────── 主对话（TUI / main） ──────────────────────────┐
@@ -172,13 +172,13 @@ def apply_agent_tool_filter(p: FilterParams) -> list[str]:
 - `Catalog.list() -> list[AgentDefinition]`（按 name 排序；供 Agent 工具 description 渲染）
 - `Catalog.fork_definition() -> AgentDefinition`——返回 Fork 路径伪定义（`name="__fork__"`、`body=""`（继承父系统提示）、`background=True`、`permission_mode=DEFAULT`、`dont_ask=False`、`tools/disallowed_tools` 空）：定义式与 Fork 走同一 `resolve`/构造路径
 
-**加载顺序（spec F2.2）：** ① 项目级 `<root>/.mewcode/agents/*.md` → ② 用户级 `~/.mewcode/agents/*.md` → ③ 内置 `mewcode/subagent/builtin/*.md`（`importlib.resources.files`）→ ④ 插件级（本期跳过，SourcePlugin 占位）。
+**加载顺序（spec F2.2）：** ① 项目级 `<root>/.newcode/agents/*.md` → ② 用户级 `~/.newcode/agents/*.md` → ③ 内置 `newcode/subagent/builtin/*.md`（`importlib.resources.files`）→ ④ 插件级（本期跳过，SourcePlugin 占位）。
 **合并规则：** 按 1→4 顺序扫描，后扫到的同名字典写入即被高优先级覆盖（高优先级层先写，低优先级只写入 key 尚未存在的）；verifier 在 `agents_cfg.enable_verifier=False` 时跳过内置 verifier.md（spec F2.5）。
 **失败策略：** 内置级解析失败 → raise（代码 bug，N4 fail-fast）；用户/项目级单文件失败 → stderr 定位（文件+字段）并跳过，其余正常加载。
 
 ### subagent/config.py —— agents: 配置段
 
-**职责：** 读取 `.mewcode/config.yaml` 的 `agents:` 段（local > project > user 三层合并，局部优先），解析为 `AgentConfig`。
+**职责：** 读取 `.newcode/config.yaml` 的 `agents:` 段（local > project > user 三层合并，局部优先），解析为 `AgentConfig`。
 **对外接口：** `load_agent_config(project_root) -> AgentConfig`
 **实现：** 复用 hook loader 的目录探测方式；YAML `agents:` 键缺失 → 全缺省（spec F11.1/F11.2）；`model_tiers` 某 tier 缺配置 → 解析为 `inherit` 并记 warning。
 
@@ -411,7 +411,7 @@ AgentTool.execute → launcher.make_sub_agent → permission=parent_permission.f
 ## 文件组织
 
 ```
-mewcode/
+newcode/
 ├── subagent/                      ★ 新包（统一底座）
 │   ├── __init__.py                # 导出 AgentDefinition/Source/Catalog/TaskManager/...
 │   ├── types.py                   # AgentDefinition / Source / DefinitionParseError / 文案常量

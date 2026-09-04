@@ -4,7 +4,7 @@
 enforce_budget 按激活顺序淘汰最旧（F8.1）、get 缺失返回 None（容器语义）。
 """
 
-from mewcode.skills.active import ActiveSkills
+from newcode.skills.active import ActiveSkills
 
 
 def test_activate_deactivate_clear():

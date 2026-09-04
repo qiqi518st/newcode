@@ -12,23 +12,23 @@ build/
 venv/
 .env
 
-# MewCode config (contains real API keys)
-.mewcode.yaml
+# NewCode config (contains real API keys)
+.newcode.yaml
 
-# MewCode 权限本地规则（个人本地，不随仓库分发）
-.mewcode/permissions.local.yaml
-.mewcode/permissions.yaml
+# NewCode 权限本地规则（个人本地，不随仓库分发）
+.newcode/permissions.local.yaml
+.newcode/permissions.yaml
 
-# MewCode Hook 本地配置（个人本地，不随仓库分发，ch12 F6.1）
-.mewcode/config.local.yaml
+# NewCode Hook 本地配置（个人本地，不随仓库分发，ch12 F6.1）
+.newcode/config.local.yaml
 
-# MewCode 上下文管理落盘目录（会话级，运行时数据，不入库）
-.mewcode/sessions/
+# NewCode 上下文管理落盘目录（会话级，运行时数据，不入库）
+.newcode/sessions/
 
-# MewCode 本地监控数据（运行时写入，不入库）
-.mewcode/monitor/
+# NewCode 本地监控数据（运行时写入，不入库）
+.newcode/monitor/
 
-# Plan files (runtime data in project root, NOT mewcode/plans code package)
+# Plan files (runtime data in project root, NOT newcode/plans code package)
 /plans/
 
 # CC Switch docs (downloaded reference files)
@@ -46,8 +46,11 @@ docs_bak/
 
 # Claude local settings
 .claude/settings.local.json
-# MewCode 本地技能（个人配置，不入库）
-.mewcode/skills/
+# NewCode 本地技能（个人配置，不入库）
+.newcode/skills/
+
+# NewCode 本地 Agent 定义（个人配置，不入库）
+.newcode/agents/
 
 # Scratch / test output
 /tmp/
@@ -56,5 +59,5 @@ docs_bak/
 uv.lock
 
 # ch14: Worktree 隔离副本（运行时数据，不入库）
-.mewcode/worktrees/
-.mewcode/worktree_session.json
+.newcode/worktrees/
+.newcode/worktree_session.json

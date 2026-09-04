@@ -1,18 +1,18 @@
-# MewCode ch14 - Git Worktree 文件系统隔离 Spec
+# NewCode ch14 - Git Worktree 文件系统隔离 Spec
 
 ## 背景
 
-ch13 给 MewCode 装上了 SubAgent 系统：子 Agent 在隔离的上下文中执行，已实现**消息隔离**、**权限隔离**、**文件读缓存隔离**、**token 计数隔离**。但**文件系统仍然共享**——主 Agent 和后台子 Agent（以及下一章 Agent Team 队员）会在同一时刻并发读写同一份工作目录的文件，出现读到对方写了一半的文件、互相覆盖修改等并行冲突——本质就是经典的并行开发文件冲突，和两个程序员同时改同一份文件一样。
+ch13 给 NewCode 装上了 SubAgent 系统：子 Agent 在隔离的上下文中执行，已实现**消息隔离**、**权限隔离**、**文件读缓存隔离**、**token 计数隔离**。但**文件系统仍然共享**——主 Agent 和后台子 Agent（以及下一章 Agent Team 队员）会在同一时刻并发读写同一份工作目录的文件，出现读到对方写了一半的文件、互相覆盖修改等并行冲突——本质就是经典的并行开发文件冲突，和两个程序员同时改同一份文件一样。
 
 Git 分支只能做**时间维度**的隔离（切换分支时工作目录被覆盖，同一时刻只有一个工作目录），不能解决并行问题；切分支还会刷被切文件的 mtime，触发依赖追踪型构建工具的链式重编。
 
-需要的是**空间维度**的隔离：同一仓库同时挂多个工作目录、共享版本库、各自一个分支——这就是 Git Worktree（Git 2.5+）的能力。本章在 mewcode 中封装一层 Worktree 管理逻辑，把这块拼图补给 SubAgent，让后台 / 并行场景安全可用。
+需要的是**空间维度**的隔离：同一仓库同时挂多个工作目录、共享版本库、各自一个分支——这就是 Git Worktree（Git 2.5+）的能力。本章在 newcode 中封装一层 Worktree 管理逻辑，把这块拼图补给 SubAgent，让后台 / 并行场景安全可用。
 
 现有相关基础设施（已核实）：
-- ch13 SubAgent frontmatter 解析（`mewcode/subagent/parser.py`）——解析 name/description/tools/disallowedTools/model/permissionMode/maxTurns/background 等字段，本章新增 `isolation`
-- ch13 `mewcode/tools/agent_tool.py` 的 `AgentTool.execute` 已是子 Agent 启动入口，本章在此插桩 isolation 分支
+- ch13 SubAgent frontmatter 解析（`newcode/subagent/parser.py`）——解析 name/description/tools/disallowedTools/model/permissionMode/maxTurns/background 等字段，本章新增 `isolation`
+- ch13 `newcode/tools/agent_tool.py` 的 `AgentTool.execute` 已是子 Agent 启动入口，本章在此插桩 isolation 分支
 - ch08 文件读缓存（FileTracker）以绝对路径为 key
-- `mewcode/slash/` 已有 slash 命令注册系统（CommandKind: LOCAL / UI / PROMPT）
+- `newcode/slash/` 已有 slash 命令注册系统（CommandKind: LOCAL / UI / PROMPT）
 - 工具接口 `execute(arguments)` 无显式 cwd；全库无 `os.chdir`、无 contextvars（ctx 机制需**新建**）；`execute_command`/`list_files`/`search_code` 已支持可选 `cwd` 参数可作为改造模板
 - 进程 cwd 是唯一工作区概念（main.py 捕获一次注入各子系统）；context/session、memory 已按绝对路径 workspace 隔离
 
@@ -22,7 +22,7 @@ Git 分支只能做**时间维度**的隔离（切换分支时工作目录被覆
 
 - G1：提供 `WorktreeManager` 封装完整生命周期——创建、快速恢复、进入、退出、删除；并发场景用单一 `asyncio.Lock` 保护内部状态
 - G2：slug 严格安全校验——每段 `^[a-zA-Z0-9._-]+$`、总长 ≤64、拒绝整段 `.`/`..`、允许 `/` 嵌套，防 LLM 输入触发路径遍历
-- G3：目录统一落在仓库内 `.mewcode/worktrees/<flat_slug>/`，分支名 `worktree-<flat_slug>`，嵌套 `/`→`+` 避免 Git D/F 冲突
+- G3：目录统一落在仓库内 `.newcode/worktrees/<flat_slug>/`，分支名 `worktree-<flat_slug>`，嵌套 `/`→`+` 避免 Git D/F 冲突
 - G4：创建后四类环境初始化——A 复制本地配置、B 配置子目录 git hooks、C 软链大目录、D 按 `.worktreeinclude` 补被忽略但运行需要的文件；均 best-effort，失败只警告不中断
 - G5：快速恢复——目录已存在时仅读 `.git` 指针 + `HEAD` + `refs/` 文件系统还原 commit SHA，不调任何 git 子进程
 - G6：进入 Worktree **不 chdir**——WorktreePath 记入 WorktreeSession 并经 ctx 传给工具调用；execute_command/read_file/write_file/edit_file/list_files/search_code 从 ctx 取 cwd；进程级 cwd 不变
@@ -30,7 +30,7 @@ Git 分支只能做**时间维度**的隔离（切换分支时工作目录被覆
 - G8：退出变更保护——`action=remove` 且未显式 `discard_changes` 时，检测到未提交修改或本地多于 base 的 commit 一律拒绝删除
 - G9：自动清理——子 Agent 退出时无变更则 remove；有变更则保留，并把路径/分支名追加到子 Agent 结果文本给主 Agent review
 - G10：后台过期清理——按命名模式（`agent-a[0-9a-f]{7}` / `wf-` 前缀）识别临时 Worktree + 时间过滤 + fail-closed 变更检查（未推送 commit 也保留）
-- G11：WorktreeSession 持久化到 `.mewcode/worktree_session.json`，启动读取校验，退出覆写 `null` 不删文件
+- G11：WorktreeSession 持久化到 `.newcode/worktree_session.json`，启动读取校验，退出覆写 `null` 不删文件
 - G12：`subagent.Definition` 新增 `isolation` 字段（`""` / `"worktree"`）；启动器检测到后自动 `create → 注入 notice → set ctx cwd → run_to_completion → auto_cleanup`
 - G13：`/worktree` slash 命令（create / list / enter / exit [--remove] [--discard] / remove [--discard]）；手动创建的 Worktree 不走自动清理
 - G14：与既有章节协同——工具列表不变（ctx 注入不改 schema）、prompt cache 不抖动、存量测试不破坏
@@ -40,16 +40,16 @@ Git 分支只能做**时间维度**的隔离（切换分支时工作目录被覆
 ### F1 Slug 校验与命名
 
 - F1.1 `worktree.validate_slug(name)`：name 非空、总长 ≤64；按 `/` 切段，每段匹配 `^[a-zA-Z0-9._-]+$` 且不是 `.`/`..`；不允许连续 `//`、首末 `/`；失败抛 `ValueError` 带具体原因
-- F1.2 目录统一放 `.mewcode/worktrees/<flat_slug>/`（flat_slug = slug 的 `/`→`+`）；分支名 `worktree-<flat_slug>`，如 slug `team-refactor/alice` → 目录 `team-refactor+alice`、分支 `worktree-team-refactor+alice`
+- F1.2 目录统一放 `.newcode/worktrees/<flat_slug>/`（flat_slug = slug 的 `/`→`+`）；分支名 `worktree-<flat_slug>`，如 slug `team-refactor/alice` → 目录 `team-refactor+alice`、分支 `worktree-team-refactor+alice`
 - F1.3 创建者标记：自动创建（子 Agent）目录名 `agent-a<7位随机hex>`（sweep 兼容 `wf-` 前缀）；手动 `/worktree create` 不得使用这些前缀（避免误入异常清理）
-- F1.4 `.gitignore`：worktree 目录按设计被忽略——项目根 `.gitignore` 应含 `.mewcode/worktrees/` 与 `.mewcode/worktree_session.json`；mewcode 启动时检查根 `.gitignore` 是否含这两行，缺失**只 stderr 警告不修改**（尊重用户配置）
+- F1.4 `.gitignore`：worktree 目录按设计被忽略——项目根 `.gitignore` 应含 `.newcode/worktrees/` 与 `.newcode/worktree_session.json`；newcode 启动时检查根 `.gitignore` 是否含这两行，缺失**只 stderr 警告不修改**（尊重用户配置）
 
 ### F2 WorktreeManager 与核心数据结构
 
 - F2.1 `Worktree`（dataclass）：`name`（原始 slug）、`path`（绝对路径）、`branch`（`worktree-<flat_slug>`）、`based_on`（创建时 base 引用）、`head_commit`（创建时 SHA）、`created`（datetime）、`manual`（bool，影响 auto_cleanup 跳过）
 - F2.2 `WorktreeSession`（dataclass）：`original_cwd`、`worktree_path`、`worktree_name`、`original_branch`、`original_head_commit`、`session_id`（UUID）、`hook_based`（预留）
-- F2.3 `Manager`：`repo_root`、`worktree_dir`（`<repo_root>/.mewcode/worktrees`）、`session_file`（`<repo_root>/.mewcode/worktree_session.json`）、`lock: asyncio.Lock`、`active: dict[str, Worktree]`、`current_session: WorktreeSession | None`
-- F2.4 `Manager(repo_root)` 构造：校验 repo_root 是 git 仓库根（`git rev-parse --show-toplevel`），失败抛异常、mewcode 启动降级「Worktree 功能未启用」；创建 worktree_dir；从 session_file 反序列化 current_session（缺失/非法 JSON → stderr 警告并清空、=None；worktree_path 不存在 → 警告并清空）；扫描 worktree_dir 子目录还原 active（纯文件系统读）
+- F2.3 `Manager`：`repo_root`、`worktree_dir`（`<repo_root>/.newcode/worktrees`）、`session_file`（`<repo_root>/.newcode/worktree_session.json`）、`lock: asyncio.Lock`、`active: dict[str, Worktree]`、`current_session: WorktreeSession | None`
+- F2.4 `Manager(repo_root)` 构造：校验 repo_root 是 git 仓库根（`git rev-parse --show-toplevel`），失败抛异常、newcode 启动降级「Worktree 功能未启用」；创建 worktree_dir；从 session_file 反序列化 current_session（缺失/非法 JSON → stderr 警告并清空、=None；worktree_path 不存在 → 警告并清空）；扫描 worktree_dir 子目录还原 active（纯文件系统读）
 
 ### F3 创建流程
 
@@ -66,7 +66,7 @@ Git 分支只能做**时间维度**的隔离（切换分支时工作目录被覆
 
 ### F4 环境初始化（创建后设置，best-effort 失败只警告）
 
-- F4.1 **A 复制本地配置**：从 `<repo_root>/.mewcode/` 复制 `config.local.yaml`、`permissions*.yaml`、`agents/`、`skills/` 等到 Worktree 同位置（目标已存在跳过、源缺失跳过）
+- F4.1 **A 复制本地配置**：从 `<repo_root>/.newcode/` 复制 `config.local.yaml`、`permissions*.yaml`、`agents/`、`skills/` 等到 Worktree 同位置（目标已存在跳过、源缺失跳过）
 - F4.2 **B git hooks**：检测主仓库 `core.hooksPath` 与 `.husky/`，有则 `git -C <wt> config core.hooksPath <绝对路径>`；无则跳过
 - F4.3 **C 软链大目录**：默认 `["node_modules", ".venv", "vendor"]`，主仓库存在且 Worktree 不存在则 `os.symlink`
 - F4.4 **D `.worktreeinclude`**：读项目根 `.worktreeinclude`（每行 glob 模式），用 `git -C <repo_root> ls-files --others --ignored --exclude-standard --directory` 列出被忽略文件，匹配后复制到 Worktree 对应路径
@@ -88,7 +88,7 @@ Git 分支只能做**时间维度**的隔离（切换分支时工作目录被覆
   2. **第二层** 目录 mtime > cutoff 跳过；`current_session.worktree_path` 跳过
   3. **第三层** `_has_worktree_changes` 为 True 跳过（fail-closed）；额外 `git -C <dir> rev-list --max-count=1 HEAD --not --remotes` 非空跳过（未推送 commit 保留）
   - 通过三层的调 `remove(name, ExitOptions(discard_changes=True))`，记入 removed
-- F6.5 mewcode 启动时 `asyncio.create_task(sweep_stale(now - expire_minutes))` 异步后台执行，不阻塞启动；后续按 `cleanup_interval_minutes` 周期执行
+- F6.5 newcode 启动时 `asyncio.create_task(sweep_stale(now - expire_minutes))` 异步后台执行，不阻塞启动；后续按 `cleanup_interval_minutes` 周期执行
 
 ### F7 explicit cwd 工具改造
 
@@ -144,7 +144,7 @@ Git 分支只能做**时间维度**的隔离（切换分支时工作目录被覆
 
 ### F11 配置
 
-- F11.1 `.mewcode/config.yaml` 新增 `worktrees:` 段（三层合并 local > project > user，缺省全可用，段缺失不报错）：
+- F11.1 `.newcode/config.yaml` 新增 `worktrees:` 段（三层合并 local > project > user，缺省全可用，段缺失不报错）：
   ```yaml
   worktrees:
     enable: true                # 总开关；false 时 isolation: worktree 角色退化为不隔离（F11.2）
@@ -183,16 +183,16 @@ Git 分支只能做**时间维度**的隔离（切换分支时工作目录被覆
 - Worktree 生命周期 hook 事件（ch12 hook 系统本期不扩展）
 - 插件来源的 Worktree 配置
 - Windows 平台特殊支持（symlink 行为不保证；本期以 Linux/macOS 为主）
-- 跨 mewcode 进程实例共享（同一仓库同一时刻单 mewcode 实例操作 worktree session）
+- 跨 newcode 进程实例共享（同一仓库同一时刻单 newcode 实例操作 worktree session）
 - Worktree git 操作的 retry / exponential backoff（一次性 `sleep(0.1)` 解竞态即可）
 
 ## 验收标准
 
 - AC1（F1.1）：`validate_slug` 对 `"feature/a"` 通过；对 `"../etc"` / `".."` / `"a//b"` / `"a/b "` / `""` 拒绝并带原因
-- AC2（F1.2/F3.1）：`create("alice", "HEAD", manual=True)` → `.mewcode/worktrees/alice/` 落地，分支 `worktree-alice`
-- AC3（F1.2/F3.1）：`create("team/alice", ...)` → `.mewcode/worktrees/team+alice/`，分支 `worktree-team+alice`
+- AC2（F1.2/F3.1）：`create("alice", "HEAD", manual=True)` → `.newcode/worktrees/alice/` 落地，分支 `worktree-alice`
+- AC3（F1.2/F3.1）：`create("team/alice", ...)` → `.newcode/worktrees/team+alice/`，分支 `worktree-team+alice`
 - AC4（F3.1/F5.1）：目录已存在的合法 worktree 再 create → 快速恢复，不调 `git worktree add`（断言无 git 子进程启动）
-- AC5（F4.1）：主仓库存在 `.mewcode/config.local.yaml` → worktree 内同位置出现该文件
+- AC5（F4.1）：主仓库存在 `.newcode/config.local.yaml` → worktree 内同位置出现该文件
 - AC6（F4.2）：主仓库有 `.husky/` 或 `core.hooksPath` → worktree 的 `.git/config` 含 `core.hooksPath`
 - AC7（F4.3）：主仓库有 `node_modules/` → worktree 内是 symlink（`Path.is_symlink()` 为 True）
 - AC8（F4.4）：主仓库有 `.worktreeinclude` 含 `*.env` 且存在被忽略的 `.env` → worktree 内出现 `.env`
@@ -207,12 +207,12 @@ Git 分支只能做**时间维度**的隔离（切换分支时工作目录被覆
 - AC17（F9.1/F9.2）：`/worktree create alice` 成功落地，`/worktree list` 输出含 alice
 - AC18（F9.4）：`/worktree exit --remove` 遇未提交修改报错；加 `--discard` 后删除成功
 - AC19（F6.4）：`sweep_stale` 只删名字匹配 `agent-a[0-9a-f]{7}`/`wf-`、跳过当前 session、跳过有变更/未推送 commit 的目录
-- AC20（F10）：session 持久化到 `.mewcode/worktree_session.json`；worktree 目录被外部删除后启动清空 + stderr 警告
-- AC21（F1.4）：根 `.gitignore` 缺 `.mewcode/worktrees/` 与 `.mewcode/worktree_session.json` 两行时，启动 stderr 警告、**不修改** .gitignore
+- AC20（F10）：session 持久化到 `.newcode/worktree_session.json`；worktree 目录被外部删除后启动清空 + stderr 警告
+- AC21（F1.4）：根 `.gitignore` 缺 `.newcode/worktrees/` 与 `.newcode/worktree_session.json` 两行时，启动 stderr 警告、**不修改** .gitignore
 - AC22（F7.1/F7.4）：cwd ContextVar 机制从无到有（新建）；主 Agent 工具 schema 不变
 - AC23（F11.2）：`worktrees.enable=false` → `isolation: worktree` 角色退化为不隔离，不建目录
 - AC24（N11）：非 git 仓库 / 无 commit / git 缺失 → worktree 命令返回结构化错误，主流程不崩
-- AC25（N6/N9/N10）：项目可启动（`python -m mewcode`）、全量存量测试通过（ch13 行为零回归）、`ruff check` 通过
+- AC25（N6/N9/N10）：项目可启动（`python -m newcode`）、全量存量测试通过（ch13 行为零回归）、`ruff check` 通过
 
 ## 端到端场景（验收参考）
 

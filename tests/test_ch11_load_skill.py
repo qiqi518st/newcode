@@ -8,9 +8,9 @@
 import asyncio
 from pathlib import Path
 
-from mewcode.skills import ActiveSkills, Catalog
-from mewcode.tools.load_skill import LoadSkillTool
-from mewcode.tools.registry import Registry
+from newcode.skills import ActiveSkills, Catalog
+from newcode.tools.load_skill import LoadSkillTool
+from newcode.tools.registry import Registry
 
 
 def _catalog_with(tmp_path: Path) -> Catalog:

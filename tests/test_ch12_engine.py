@@ -15,8 +15,8 @@ import asyncio
 
 import pytest
 
-from mewcode.hooks.engine import Engine
-from mewcode.hooks.types import (
+from newcode.hooks.engine import Engine
+from newcode.hooks.types import (
     Action,
     ActionType,
     Event,
@@ -78,9 +78,9 @@ class TestDispatch:
 
     async def test_condition_filters(self):
         """条件不匹配则跳过该 hook（F4.6）。"""
-        from mewcode.hooks.conditions import AtomCondition, Condition
-        from mewcode.hooks.types import CombineMode
-        from mewcode.permission.matcher import matcher_from_spec
+        from newcode.hooks.conditions import AtomCondition, Condition
+        from newcode.hooks.types import CombineMode
+        from newcode.permission.matcher import matcher_from_spec
 
         rec = _RecordingExecutor()
         hook = _hook("a", Event.PRE_TOOL_USE)

@@ -1,9 +1,9 @@
-# MewCode ch12 - Hook 生命周期挂钩系统 Plan
+# NewCode ch12 - Hook 生命周期挂钩系统 Plan
 
 ## 技术栈
 
 - 语言：Python 3.10+（项目 requires-python，非模板的 3.12）
-- TUI：prompt_toolkit + Rich（MewCode 实际底座，**不是** Textual——模板 TUI 结构仅思想借鉴）
+- TUI：prompt_toolkit + Rich（NewCode 实际底座，**不是** Textual——模板 TUI 结构仅思想借鉴）
 - 配置：YAML（`yaml.safe_load`）
 - HTTP 客户端：`httpx`（原生 async，已随 mcp 传递依赖存在 0.28.1）
 - 异步进程：`asyncio.create_subprocess_shell` + `asyncio.wait_for` 超时
@@ -14,8 +14,8 @@
 
 Hook 系统由两个层次构成，分层清晰、单向依赖：
 
-1. **权限匹配器升级层（`mewcode/permission/` 包内改造）**——把 Pattern 形态从字符串升级到结构化 `Matcher` Protocol：新增 exact / not / regex 三种实现，glob 保留作为缺省类型。对外仅暴露语法升级和 stderr 错误回退，运行时 Allow/Deny 语义不变（spec F1，前置基础）。
-2. **Hook 主体层（新建 `mewcode/hooks/` 包）**——加载 YAML 规则、事件分派引擎、四类动作执行器；通过 18 个事件 emit 点接入 agent / tui / main。
+1. **权限匹配器升级层（`newcode/permission/` 包内改造）**——把 Pattern 形态从字符串升级到结构化 `Matcher` Protocol：新增 exact / not / regex 三种实现，glob 保留作为缺省类型。对外仅暴露语法升级和 stderr 错误回退，运行时 Allow/Deny 语义不变（spec F1，前置基础）。
+2. **Hook 主体层（新建 `newcode/hooks/` 包）**——加载 YAML 规则、事件分派引擎、四类动作执行器；通过 18 个事件 emit 点接入 agent / tui / main。
 
 核心设计：**Hook 引擎是"被注入的观察者"。** Agent / REPL / main 在事件节点调用 `Engine.dispatch()`，引擎同步（或后台）执行匹配的 Hook，返回拦截判定与待注入 prompt；**Hook 永远不反向感知调用方**，错误一律内部消化（stderr 日志），保证错误隔离与无侵入（N1/N10）。
 
@@ -26,7 +26,7 @@ Hook 系统由两个层次构成，分层清晰、单向依赖：
                          │ 构造注入 / 事件分派
                          ▼
 ┌──────────────────────────────────────────────────────┐
-│               mewcode/hooks/ 包（Hook 引擎）          │
+│               newcode/hooks/ 包（Hook 引擎）          │
 │  loader.py    三层配置加载 + 合并 + 校验(fail-soft)   │
 │  engine.py    Engine：统一 dispatch + once 集合       │
 │  conditions.py  eval_condition / get_by_path          │
@@ -36,7 +36,7 @@ Hook 系统由两个层次构成，分层清晰、单向依赖：
                          │ 复用（共享匹配器）
                          ▼
 ┌──────────────────────────────────────────────────────┐
-│      mewcode/permission/matcher.py（前置基础 F1）      │
+│      newcode/permission/matcher.py（前置基础 F1）      │
 │   Matcher Protocol：Exact/Glob/Regex/Not 四实现       │
 │   权限规则(rules.py) 与 Hook 条件共用                 │
 └──────────────────────────────────────────────────────┘
@@ -44,7 +44,7 @@ Hook 系统由两个层次构成，分层清晰、单向依赖：
 
 ## 核心数据结构与接口
 
-### mewcode/permission/matcher.py —— 共享匹配器（前置基础 F1）
+### newcode/permission/matcher.py —— 共享匹配器（前置基础 F1）
 
 ```python
 from __future__ import annotations
@@ -106,11 +106,11 @@ def evaluate(spec: Matcher, target: str) -> bool:
 
 技术说明：`match_command`（fnmatch 整串）与 `match_path`（`**` 递归，现 `_match_parts`）当前在 `permission/rules.py`。为避免 matcher 反向依赖 rules，把 glob 求值逻辑移入 `matcher.py`；`rules.py` 从 matcher import 并保留 `match_pattern` 名称 re-export（兼容已有调用）。
 
-### mewcode/permission/rules.py（修改）
+### newcode/permission/rules.py（修改）
 
 `Rule` 由 `pattern: str` 改为 `matcher: Matcher | None`（None = 该工具全匹配，等价 `Bash(*)`）+ 保留 `raw: str` 原文供错误日志。`Rule.parse` 在正则提取 `(tool_name, pattern)` 后调 `compile_matcher(pattern, is_command=(tool_name=="Bash"))`；`Rule.match_target` 改用 `evaluate(matcher, target)`。`build_rule_set` 解析失败由静默跳过改为 stderr 打印 `rule "<raw>" parse failed: <原因>` 并跳过（F1.4）。向后兼容（F1.5）：`Bash(git *)` 无前缀 → GlobMatcher → 行为与现状一致，现有 ch08 测试不改。
 
-### mewcode/hooks/types.py —— Hook 规则与上下文
+### newcode/hooks/types.py —— Hook 规则与上下文
 
 ```python
 class Event(str, enum.Enum):
@@ -214,7 +214,7 @@ class ExecutionResult:
     err: Exception | None = None        # hook 自身失败（不拦截）
 ```
 
-### mewcode/hooks/conditions.py
+### newcode/hooks/conditions.py
 
 ```python
 def eval_condition(cond: Condition | None, payload: Payload) -> bool:
@@ -228,7 +228,7 @@ def get_by_path(payload: Payload, path: str) -> str:
     json.dumps(sort_keys=True)。"""
 ```
 
-### mewcode/hooks/engine.py
+### newcode/hooks/engine.py
 
 ```python
 class Engine:
@@ -270,7 +270,7 @@ class Engine:
         """shutdown 收尾：记录未完成后台任务，不强制等待（F9.5）"""
 ```
 
-### mewcode/hooks/executor.py
+### newcode/hooks/executor.py
 
 ```python
 def render_template(text: str, payload: Payload) -> str:
@@ -310,13 +310,13 @@ class Executor:
         # 不 blocked 不 err
 ```
 
-### mewcode/hooks/loader.py
+### newcode/hooks/loader.py
 
 ```python
 # 文件位置（F6.1，三层）：本地 > 项目 > 用户
-HOOK_FILE_LOCAL = ".mewcode/config.local.yaml"     # 与权限 permissions.local.yaml 命名对齐
-HOOK_FILE_PROJECT = ".mewcode/config.yaml"
-HOOK_FILE_USER = os.path.expanduser("~/.mewcode/config.yaml")
+HOOK_FILE_LOCAL = ".newcode/config.local.yaml"     # 与权限 permissions.local.yaml 命名对齐
+HOOK_FILE_PROJECT = ".newcode/config.yaml"
+HOOK_FILE_USER = os.path.expanduser("~/.newcode/config.yaml")
 
 def load(project_root: str | Path) -> Engine:
     """本地 -> 项目 -> 用户 依次加载（F6.2 追加合并，优先级高者在前）。
@@ -327,7 +327,7 @@ def load(project_root: str | Path) -> Engine:
     `hook "<name>" (in <file>): <原因>, skipped` 并跳过，其余正常加载（N3）。"""
 ```
 
-### mewcode/session/runtime.py（修改）
+### newcode/session/runtime.py（修改）
 
 `SessionRuntime` 增加：
 - `pending_reminders: list[str]` + `_reminders_lock`（threading.Lock）
@@ -431,7 +431,7 @@ agent.run(user_input)
 ## 文件组织
 
 ```
-mewcode/
+newcode/
 ├── permission/
 │   ├── matcher.py            — 新建：Matcher Protocol + Exact/Glob/Regex/Not 四实现 +
 │   │                           compile_matcher / matcher_from_spec / evaluate / match_path
@@ -491,7 +491,7 @@ tests/                                  # 扁平布局 + ch12 前缀（项目惯
 | turn_end 触发 | 仅 NATURAL / MAX_TURNS | spec F3.1「取消、出错路径不触发」；模板 STOP 语义支撑 |
 | once 集合 | Engine 持有 `_once_fired: set[str]` + `reset_for_new_session` | 模板借鉴：重置方法放 Engine 上，REPL clear/resume/new 调用 |
 | 字段名 `asyncio_mode` | YAML 写 `async`，Loader 映射到 `Rule.asyncio_mode` | 模板借鉴：避免与 Python 关键字冲突，dataclass 字段名合法 |
-| 本地配置路径 | `.mewcode/config.local.yaml`（对齐权限 `permissions.local.yaml`） | 修正 spec F6.1 原文 `mewcode/config.local.yaml`（源码包目录语义混乱）；待用户确认后同步 spec |
+| 本地配置路径 | `.newcode/config.local.yaml`（对齐权限 `permissions.local.yaml`） | 修正 spec F6.1 原文 `newcode/config.local.yaml`（源码包目录语义混乱）；待用户确认后同步 spec |
 | 空引擎开销 | `hooks=None` 时所有调用短路（`if self._hooks is not None`） | N10 无侵入，与 active_skills 同模式 |
 | 事件 payload mode | main.py 注入 `get_mode`（读 permission.mode.value） | hooks 不反向 import permission/session |
 | 测试框架 | pytest-asyncio / tmp_path / pytest-httpserver | 模板借鉴：http 桩、临时目录、async 测试 |

@@ -6,8 +6,8 @@
 
 import pytest
 
-from mewcode.skills.script_tool import ScriptTool
-from mewcode.skills.types import ToolSchema
+from newcode.skills.script_tool import ScriptTool
+from newcode.skills.types import ToolSchema
 
 pytestmark = pytest.mark.anyio
 

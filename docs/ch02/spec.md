@@ -1,8 +1,8 @@
-# MewCode TUI 多轮对话 — 需求规格 (spec.md)
+# NewCode TUI 多轮对话 — 需求规格 (spec.md)
 
 ## 背景
 
-MewCode 是一个终端 AI 编程助手（类似 Claude Code），
+NewCode 是一个终端 AI 编程助手（类似 Claude Code），
 
 第一版聚焦纯对话体验，打通"人 ↔ LLM"的最小闭环, 不做工具调用、文件操作、记忆等 Agent 能力。让用户能在终端里与大模型进行流畅的多轮对话。
 
@@ -43,7 +43,7 @@ MewCode 是一个终端 AI 编程助手（类似 Claude Code），
 
 - F1: **TUI 多轮对话** — 启动后进入 Claude Code 风格 REPL，输入输出交织，流式逐字打印，`> ` 提示符, 该轮回复结束后，将其整段以 markdown  形式重新渲染美化（代码块、列表、强调等）后定型展示。
 
-- F2: **单次调用模式** — `mewcode -c "问题"` 直接输出回复后退出，不进入 TUI
+- F2: **单次调用模式** — `newcode -c "问题"` 直接输出回复后退出，不进入 TUI
 
 - F3: **流式输出 ** — 以流式方式接收回复，实时解析出正文文本增量并向界面输送。对扩展思考产生的思考  增量正确识别但不渲染（接收即丢弃），不得混入正文。
 
@@ -55,7 +55,7 @@ MewCode 是一个终端 AI 编程助手（类似 Claude Code），
 
 - F7: **System Prompt 可定制** — 默认内置 system prompt，用户可通过配置文件覆盖
 
-- F8: **YAML 配置管理** — 配置文件 `.mewcode.yaml`（项目根目录），不存在则提示创建并退出
+- F8: **YAML 配置管理** — 配置文件 `.newcode.yaml`（项目根目录），不存在则提示创建并退出
 
 - F9: **双 Provider 支持** — 支持 Anthropic 协议和 OpenAI 协议，通过配置切换
 
@@ -177,16 +177,16 @@ F13 : 优雅降级 -> 错误处理, 标题更明确
 
 ## 验收标准
 
-- AC1: 启动 `mewcode`，终端显示完整界面布局：顶部 ASCII 小狗横幅 + 应用名与版本号 + 当前工作目录，底部带边框的输入框含 `❯`
+- AC1: 启动 `newcode`，终端显示完整界面布局：顶部 ASCII 小狗横幅 + 应用名与版本号 + 当前工作目录，底部带边框的输入框含 `❯`
   提示符与占位文字，底部状态栏显示活动 provider 名称和模型名
-- AC2: `mewcode -c "你好"` 输出回复后立即退出，不进入 TUI
+- AC2: `newcode -c "你好"` 输出回复后立即退出，不进入 TUI
 - AC3: 输入问题后，AI 回复逐 token 实时出现在对话区，用户无需等待即可看到内容生成过程
 - AC4: 配置 `thinking: true` 的 Anthropic provider 回复复杂问题时，thinking 增量被正确丢弃，对话区中不出现思考内容，正文完整无混入
 - AC5: 对话超过配置的 `max_turns` 轮后，AI 不再引用最早的消息
 - AC6: 在输入框中按 `Alt+Enter` 插入换行，输入框内出现多行文本；按 `Enter` 提交后，输入框清空并进入等待状态，期间不接受新的输入，直至本轮回复结束
 - AC7: `/exit`、`/quit`、`Ctrl+C`、`Ctrl+D` 四种方式均能正常退出，退出后终端状态恢复正常
 - AC8: 配置文件中设置 `system_prompt: "请用 JSON 格式回复"` 后，AI 回复为合法 JSON
-- AC9: `.mewcode.yaml` 不存在时，提示用户创建配置文件并退出
+- AC9: `.newcode.yaml` 不存在时，提示用户创建配置文件并退出
 - AC10: 修改 `provider` 字段从 `anthropic` 协议切到 `openai` 协议后，调用不同 API 后端，对话体验保持一致
 - AC11: 新增一个 provider 类型只需实现统一接口，无需修改核心逻辑
 - AC12: 代码块、加粗、列表等 Markdown 语法在终端中正确渲染；本轮回复结束后，整段回复以 Markdown 形式重新渲染美化后定型展示

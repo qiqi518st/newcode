@@ -5,19 +5,19 @@
 
 import pytest
 
-from mewcode.context.constants import RECENT_COUNT_FLOOR, RECENT_TOKEN_FLOOR
-from mewcode.context.files import FileTracker
-from mewcode.context.recovery import RecoveryBuilder
-from mewcode.context.summarize import (
+from newcode.context.constants import RECENT_COUNT_FLOOR, RECENT_TOKEN_FLOOR
+from newcode.context.files import FileTracker
+from newcode.context.recovery import RecoveryBuilder
+from newcode.context.summarize import (
     SummarizeConfig,
     Summarizer,
     _join_after_summary,
     extract_summary,
     pick_recent_tail,
 )
-from mewcode.context.tokens import estimate_messages
-from mewcode.llm import PromptTooLongError
-from mewcode.provider.base import Message, StreamEvent
+from newcode.context.tokens import estimate_messages
+from newcode.llm import PromptTooLongError
+from newcode.provider.base import Message, StreamEvent
 
 
 class MockProvider:

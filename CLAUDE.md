@@ -15,13 +15,13 @@ export PYTHONIOENCODING=utf-8 && export LC_ALL=C.UTF-8 && python ...
 
 ## Spec 文档生成流程
 
-当用户描述对 MewCode 新增功能的初步想法时，要用「生成spec文档的模板工作流」，生成的三份文档放在工作目录的跟目录的docs目录下
+当用户描述对 NewCode 新增功能的初步想法时，要用「生成spec文档的模板工作流」，生成的三份文档放在工作目录的跟目录的docs目录下
 
 ## 生成spec文档的模板工作流
 
 ~~~Markdown
 ---
-name: mew-spec
+name: new-spec
 description: "Spec 驱动开发：通过协作式需求澄清，依次生成 spec.md → plan.md → task.md → checklist.md，然后指导开发和验收。在开始任何功能、模块或章节开发前使用。"
 ---
 
@@ -447,7 +447,7 @@ T4（可并行）→ T5 → T6
 ## 文档保护（docs/ 不可变）
 
 - **测试/验证过程中禁止修改 docs/ 下的任何文件。** 跑完批量命令（ruff format、ruff check、git 操作等）后，先确认 docs/ 未被改动；一旦发现改动，立即停下报告，不得静默保留。
-- **例外**：mew-spec 流程的四份文档（spec.md / plan.md / task.md / checklist.md）走该流程生成，逐份经用户审批，不在禁止范围内。
+- **例外**：new-spec 流程的四份文档（spec.md / plan.md / task.md / checklist.md）走该流程生成，逐份经用户审批，不在禁止范围内。
 - 除此之外，任何对 docs/ 的修改（哪怕看似无害）必须先征求用户同意，禁止自动修改。
 
 ---
@@ -530,7 +530,7 @@ T4（可并行）→ T5 → T6
 
 ## 版本号管理
 
-MewCode 采用语义化版本号，**主版本号与章节对应**：
+NewCode 采用语义化版本号，**主版本号与章节对应**：
 
 | 章节 | 版本号 | 说明 |
 |------|--------|------|
@@ -543,7 +543,7 @@ MewCode 采用语义化版本号，**主版本号与章节对应**：
 
 1. **每完成一章进入下一章时，先更新版本号**，再开始新章节开发。
 2. 需要同时修改两处：
-   - `mewcode/__init__.py` 中的 `__version__`
+   - `newcode/__init__.py` 中的 `__version__`
    - `pyproject.toml` 中的 `version`
 3. **patch 位（第三位）留给 hotfix**：同一章节内的 bug 修复只升 patch（如 0.3.0 → 0.3.1）。
 4. 版本号变更应作为独立提交，提交信息形如 `chore: bump version to 0.3.0`。
@@ -551,6 +551,6 @@ MewCode 采用语义化版本号，**主版本号与章节对应**：
 ### 自检
 
 开始新章节前检查：
-- [ ] `mewcode/__init__.py` 的版本号已更新
+- [ ] `newcode/__init__.py` 的版本号已更新
 - [ ] `pyproject.toml` 的版本号已更新
 - [ ] 两处版本号一致

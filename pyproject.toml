@@ -1,5 +1,5 @@
 [project]
-name = "mewcode"
+name = "newcode"
 version = "0.15.1"
 requires-python = ">=3.10"
 dependencies = [
@@ -12,8 +12,8 @@ dependencies = [
 ]
 
 [project.scripts]
-mewcode = "mewcode.main:main"
-mewcode-monitor = "mewcode.monitor.app:main"
+newcode = "newcode.main:main"
+newcode-monitor = "newcode.monitor.app:main"
 
 [build-system]
 requires = ["hatchling"]

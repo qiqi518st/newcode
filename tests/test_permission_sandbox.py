@@ -12,7 +12,7 @@ import sys
 
 import pytest
 
-from mewcode.permission.sandbox import check_path, resolve_root
+from newcode.permission.sandbox import check_path, resolve_root
 
 
 def _make_symlink(link: str, target: str) -> bool:
@@ -106,7 +106,7 @@ class TestCheckPath:
         # 真 escape 目标必然落在 /tmp，会撞白名单；白名单行为由 test_n14 单独测）
         import tempfile
 
-        import mewcode.permission.sandbox as sandbox_mod
+        import newcode.permission.sandbox as sandbox_mod
 
         monkeypatch.setattr(sandbox_mod, "TEMP_DIR_WHITELIST", ())
         with tempfile.TemporaryDirectory() as outside:

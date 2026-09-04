@@ -1,4 +1,4 @@
-# MewCode 工具系统 — 验收检查 (checklist.md)
+# NewCode 工具系统 — 验收检查 (checklist.md)
 
 > 基于已批准的 spec.md + plan.md + task.md。每一项通过运行代码或观察行为来验证，聚焦系统行为。
 
@@ -7,13 +7,13 @@
 ## 实现完整性
 
 - [ ] **Tool 协议与六个工具已实现**（验证：`python -m pytest tests/test_tools.py -v`，全部通过）
-- [ ] **Registry 预装六个工具并可导出 API 格式**（验证：`python -c "from mewcode.tools import Registry; r=Registry.default(); print(len(r.to_definitions()))"` 输出 `6`）
+- [ ] **Registry 预装六个工具并可导出 API 格式**（验证：`python -c "from newcode.tools import Registry; r=Registry.default(); print(len(r.to_definitions()))"` 输出 `6`）
 - [ ] **Agent 单轮闭环编排已实现**（验证：`python -m pytest tests/test_agent.py -v`，纯文本和工具调用两条路径均通过）
 - [ ] **Anthropic Provider 支持 tool_use 流式解析与回灌**（验证：`python -m pytest tests/test_provider_tools.py -v`，Anthropic 分片解析用例通过）
 - [ ] **OpenAI Provider 支持 function_call 流式解析与回灌**（验证：`python -m pytest tests/test_provider_tools.py -v`，OpenAI 分片解析用例通过）
 - [ ] **ConversationManager 支持 tool 角色消息**（验证：`python -m pytest tests/test_conversation_tools.py -v`）
 - [ ] **TUI 消费 AgentEvent 流并渲染工具行**（验证：启动 TUI 输入问题，观察到工具行以 `●` 前缀展示）
-- [ ] **单次调用模式支持工具闭环**（验证：`mewcode -c "读取 README.md"` 完整输出工具行和最终回复后退出）
+- [ ] **单次调用模式支持工具闭环**（验证：`newcode -c "读取 README.md"` 完整输出工具行和最终回复后退出）
 
 ---
 
@@ -46,16 +46,16 @@
 - [ ] **工具结果正确回灌 Conversation**（验证：`test_agent.py` 断言 conversation 消息序列为 user → assistant(tool_call) → tool → assistant(text)）
 - [ ] **Provider 正确将工具定义注入 API 请求**（验证：mock SDK 调用，断言 `tools` 参数非空且含 6 个工具定义）
 - [ ] **Anthropic 与 OpenAI 回灌格式不同但行为一致**（验证：分别用两个 provider 运行同一问题，TUI 展示、对话历史、最终回复均一致）
-- [ ] **TUI 和单次调用共用 Agent 逻辑**（验证：同一问题在 TUI 和 `mewcode -c` 下均走通闭环，无代码重复）
+- [ ] **TUI 和单次调用共用 Agent 逻辑**（验证：同一问题在 TUI 和 `newcode -c` 下均走通闭环，无代码重复）
 - [ ] **新增工具无需改 Provider 或 TUI**（验证：新建一个 mock 工具实现 Tool 协议并注册到 Registry，TUI 和 Provider 无修改即可识别和调用）
 
 ---
 
 ## 编译与测试
 
-- [ ] 项目编译无错误（验证：`python -m compileall mewcode/`）
+- [ ] 项目编译无错误（验证：`python -m compileall newcode/`）
 - [ ] 所有单元测试通过（验证：`python -m pytest tests/ -v`，全部 green）
-- [ ] lint 检查通过（验证：`ruff check mewcode/` 或 `flake8 mewcode/`）
+- [ ] lint 检查通过（验证：`ruff check newcode/` 或 `flake8 newcode/`）
 
 ---
 
@@ -88,7 +88,7 @@
     4. 程序不退出，用户可继续输入修正后的请求
 
 - [ ] **场景 4：单次调用模式走通工具**
-  - 用户操作：终端运行 `mewcode -c "读取 README.md 前 3 行"`
+  - 用户操作：终端运行 `newcode -c "读取 README.md 前 3 行"`
   - 可观测结果：终端输出工具行 `● Read(path="README.md")` 和结果摘要，随后输出最终回复（含 README.md 前 3 行内容），程序退出
 
 - [ ] **场景 5：跨协议一致体验**

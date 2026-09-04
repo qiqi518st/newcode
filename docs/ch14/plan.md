@@ -1,10 +1,10 @@
-# MewCode ch14 - Git Worktree 文件系统隔离 Plan
+# NewCode ch14 - Git Worktree 文件系统隔离 Plan
 
 ## 架构概览
 
 五个模块，职责边界清晰：
 
-1. **`mewcode/worktree/` 新包**（叶子包，不依赖 agent/工具，无循环）——Worktree 管理核心，按功能拆文件：
+1. **`newcode/worktree/` 新包**（叶子包，不依赖 agent/工具，无循环）——Worktree 管理核心，按功能拆文件：
    - `slug.py`：slug 安全校验（F1.1）
    - `types.py`：Worktree / WorktreeSession / 枚举 / 选项 / 报告 / 异常（F2.1/F2.2）
    - `git.py`：git 子进程封装（`asyncio.create_subprocess_exec`）+ 快速恢复 fs 读（唯一 git 出入口）
@@ -15,7 +15,7 @@
    - `manager.py`：Manager 聚合（构造/扫描/访问器/run 周期循环）
    - `config.py`：`worktrees:` 配置段三层合并（F11.1，镜像 `subagent/config.py`）
    - `notice.py`：`build_worktree_notice`（F8.3）
-2. **`mewcode/tools/cwd.py`（新建）**——explicit cwd 传递通道：`ContextVar` + `with_cwd` / `cwd_from_ctx` / `resolve_path`（F7.1，**机制新建**）
+2. **`newcode/tools/cwd.py`（新建）**——explicit cwd 传递通道：`ContextVar` + `with_cwd` / `cwd_from_ctx` / `resolve_path`（F7.1，**机制新建**）
 3. **工具改造**——`file_ops.py` / `search.py` / `shell.py` 用 ctx cwd 解析相对路径，**沙箱根跟随 ctx cwd**（F7.2）；`agent.py:607` FileTracker 一并修正
 4. **SubAgent 集成**——`subagent/types.py` + `parser.py` 加 `isolation` 字段；`tools/agent_tool.py` 加 worktree 分支，逻辑放 `tools/agent_worktree.py`（F8）
 5. **装配与命令**——`main.py` 装配 + `--resume`；`slash/commands/worktree.py` 五子命令（经 `WorktreeAccessor` 协议访问，不反向依赖 worktree 包）；TUI `active_cwd` 注入（F9/F10）
@@ -27,7 +27,7 @@
 @dataclass
 class Worktree:
     name: str            # 原始 slug（可含 /）
-    path: str            # 绝对路径 <repo_root>/.mewcode/worktrees/<flat_slug>
+    path: str            # 绝对路径 <repo_root>/.newcode/worktrees/<flat_slug>
     branch: str          # worktree-<flat_slug>
     based_on: str        # 创建时 base 引用（"HEAD" 或 SHA）
     head_commit: str     # 创建时 commit SHA
@@ -94,8 +94,8 @@ def resolve_path(p: str) -> str:        # 绝对原样；空→base；相对 = (
 ```python
 class Manager:
     def __init__(self, repo_root: str, cfg: WorktreesConfig) -> None: ...
-    # worktree_dir: <repo_root>/.mewcode/worktrees
-    # session_file: <repo_root>/.mewcode/worktree_session.json
+    # worktree_dir: <repo_root>/.newcode/worktrees
+    # session_file: <repo_root>/.newcode/worktree_session.json
     # symlink_dirs: 默认 ["node_modules", ".venv", "vendor"]
     # lock: asyncio.Lock
     # active: dict[str, Worktree]
@@ -133,7 +133,7 @@ def random_agent_name() -> str:   # "agent-a" + secrets.token_hex(4)[:7]（临�
 - `Manager.create(name, base_ref="HEAD", manual=False)`：
   1. `validate_slug`；2. `async with self._lock:` 查 `active[name]` 撞名抛 `WorktreeExistsError`；3. 构建 flat_slug/path/branch；4. 快速恢复：path 存在 → `_resolve_head_sha_from_fs` 还原 → 入 active 返回；5. `_run_git(repo_root, "worktree", "add", "-B", branch, path, base_ref)`（`-B` 重置，孤儿分支不失败）；失败清残留 + 抛 `WorktreeGitError`；6. `_perform_post_creation_setup`（F4，异常只 stderr 警告）；7. 读 head_sha 装填；8. 入 active 返回
 - `_perform_post_creation_setup(repo_root, wt_path, symlink_dirs)`（F4，best-effort）：
-  - A 复制 `.mewcode/config.local.yaml`、`config.yaml`、`permissions*.yaml`、`agents/`、`skills/`（跳过 worktrees/、sessions/、memory/、monitor/；目标存在/源缺失跳过）
+  - A 复制 `.newcode/config.local.yaml`、`config.yaml`、`permissions*.yaml`、`agents/`、`skills/`（跳过 worktrees/、sessions/、memory/、monitor/；目标存在/源缺失跳过）
   - B 读主仓库 `core.hooksPath` 或检测 `.husky/` → `_run_git(wt_path, "config", "core.hooksPath", abs)`
   - C `symlink_dirs` 默认 `[node_modules, .venv, vendor]`，主存在且 wt 缺 → `os.symlink`（Linux/macOS；Windows 失败跳过）
   - D 读根 `.worktreeinclude`（每行 glob）→ `ls_files_ignored_others` 匹配 → 复制；文件缺失/无匹配跳过
@@ -216,7 +216,7 @@ def random_agent_name() -> str:   # "agent-a" + secrets.token_hex(4)[:7]（临�
 - `finally:` 取消 sweep_task（镜像 task_manager 处理）
 
 ### 配置（F11）
-- `worktree/config.py`：`WorktreesConfig` + `load_worktree_config`（三层 `~/.mewcode/config.yaml` → `<project>/.mewcode/config.yaml` → `<project>/.mewcode/config.local.yaml` 追加合并，镜像 `subagent/config.py`）
+- `worktree/config.py`：`WorktreesConfig` + `load_worktree_config`（三层 `~/.newcode/config.yaml` → `<project>/.newcode/config.yaml` → `<project>/.newcode/config.local.yaml` 追加合并，镜像 `subagent/config.py`）
 
 ## 模块交互（数据流）
 
@@ -251,7 +251,7 @@ def random_agent_name() -> str:   # "agent-a" + secrets.token_hex(4)[:7]（临�
 ## 文件组织
 
 ```
-mewcode/worktree/            # 新建包（叶子，无循环依赖）
+newcode/worktree/            # 新建包（叶子，无循环依赖）
 ├── __init__.py              # 导出 Manager / validate_slug / 异常 / with_cwd?（cwd 在 tools）
 ├── slug.py                  # validate_slug / flat_slug / branch_name / is_auto_name / random_agent_name
 ├── types.py                 # Worktree / ExitAction / ExitOptions / ExitReport / AutoCleanupReport / 异常
@@ -263,23 +263,23 @@ mewcode/worktree/            # 新建包（叶子，无循环依赖）
 ├── manager.py               # Manager（构造/扫描/访问器/run 周期循环）
 ├── config.py                # WorktreesConfig / load_worktree_config
 └── notice.py                # build_worktree_notice
-mewcode/tools/
+newcode/tools/
 ├── cwd.py                   # 新建：ContextVar / with_cwd / cwd_from_ctx / resolve_path
 ├── file_ops.py              # 改：_check_path 沙箱根用 ctx cwd
 ├── search.py                # 改：cwd 缺省取 ctx cwd
 ├── shell.py                 # 改：cwd 缺省取 ctx cwd
 ├── agent_tool.py            # 改：isolation 分支（调 agent_worktree）
 └── agent_worktree.py        # 新建：_execute_with_worktree（import build_worktree_notice from worktree.notice）
-mewcode/subagent/
+newcode/subagent/
 ├── types.py                 # 改：AgentDefinition.isolation
 └── parser.py                # 改：解析 isolation
-mewcode/agent/agent.py       # 改：FileTracker 用 resolve_path（:607）
-mewcode/slash/ui.py          # 改：UI 协议加 worktree_accessor / WorktreeSummary / WorktreeAccessor
-mewcode/slash/commands/worktree.py   # 新建：/worktree 五子命令
-mewcode/slash/commands/__init__.py   # 改：注册 worktree 模块
-mewcode/tui/app.py           # 改：REPL.worktree_mgr / active_cwd / run 注入 / get_cwd / worktree_accessor
-mewcode/tui/worktree_adapter.py      # 新建：WorktreeAccessor 实现（包装 Manager + 设 REPL.active_cwd）
-mewcode/main.py              # 改：--resume / wm 装配 / sweep 任务 / finally 清理
+newcode/agent/agent.py       # 改：FileTracker 用 resolve_path（:607）
+newcode/slash/ui.py          # 改：UI 协议加 worktree_accessor / WorktreeSummary / WorktreeAccessor
+newcode/slash/commands/worktree.py   # 新建：/worktree 五子命令
+newcode/slash/commands/__init__.py   # 改：注册 worktree 模块
+newcode/tui/app.py           # 改：REPL.worktree_mgr / active_cwd / run 注入 / get_cwd / worktree_accessor
+newcode/tui/worktree_adapter.py      # 新建：WorktreeAccessor 实现（包装 Manager + 设 REPL.active_cwd）
+newcode/main.py              # 改：--resume / wm 装配 / sweep 任务 / finally 清理
 tests/test_worktree_*.py 等  # 新建：见「验证」
 ```
 
@@ -289,7 +289,7 @@ tests/test_worktree_*.py 等  # 新建：见「验证」
 |--------|------|------|
 | cwd 传递机制 | `contextvars.ContextVar` + `with_cwd`（**新建**） | 不动 `execute(arguments)` 签名、不改 schema → 工具列表稳定、prompt cache 不抖（N1/F7.4）；async 单循环天然透传。（注：参考稿称「已有 conv/subagent_depth 范式」与实际不符，机制为新建） |
 | git 操作 | `asyncio.create_subprocess_exec`（`worktree/git.py`），不引 gitpython | 非阻塞事件循环；统一注入 env 与 stdin=DEVNULL；与项目 subprocess 风格一致 |
-| worktree 目录 | `.mewcode/worktrees/<flat_slug>`（扁平化） | 嵌套 `/`→`+` 避免 Git 分支 D/F 冲突；目录不嵌套、扫描清理简单 |
+| worktree 目录 | `.newcode/worktrees/<flat_slug>`（扁平化） | 嵌套 `/`→`+` 避免 Git 分支 D/F 冲突；目录不嵌套、扫描清理简单 |
 | 并发 | 状态变更持 `asyncio.Lock`，git 调用不持锁 + 一次性 `sleep(0.1)` | 项目跑在 asyncio 单循环，异步友好；避免长锁阻塞；100ms 解 lockfile 竞态（经验值） |
 | 隔离执行 | 强制前台，绕过 TaskManager，直接 `run_to_completion` | F8.4 本期最小实现；后台+隔离留后续章节 |
 | 变更保护 | 先查后强删：`_has_worktree_changes` fail-closed → `worktree remove --force` + `branch -D` | git 原生保护被预查替代，杜绝「脏删」「丢未推送 commit」（N8/F5.4） |
@@ -298,7 +298,7 @@ tests/test_worktree_*.py 等  # 新建：见「验证」
 | session 持久化 | 单文件 JSON 只存当前 session；注册表靠启动扫描重建；退出写 `null` | 贴合「同时只在一个 worktree」模型；免同步两份状态；N5 损坏不阻断 |
 | .gitignore | 启动检查根 .gitignore 缺两行**只警告不修改** | F1.4 已裁决采纳 F35；尊重用户配置（参考稿「追加」作废） |
 | 名字模式 | 生成 `agent-a<7hex>`（`secrets.token_hex(4)[:7]`）；sweep 认 `^agent-a[0-9a-f]{7}$` + `wf-` | 已裁决：兼容 Q2 与参考稿；标准库加密强随机 |
-| 配置 | `.mewcode/config.yaml` 的 `worktrees:` 段 | 三层合并镜像 `agents:`；`enable=false` 降级（F11.2） |
+| 配置 | `.newcode/config.yaml` 的 `worktrees:` 段 | 三层合并镜像 `agents:`；`enable=false` 降级（F11.2） |
 | slash 访问 worktree | `WorktreeAccessor` 协议在 slash/ui.py + tui 适配器 | slash 层不反向依赖 worktree 包（避免技术债）；适配器持 REPL 引用设 active_cwd |
 | TUI active_cwd | `str = ""`（空=进程 cwd） | 与既有 `self.cwd` 字符串字段并存，不引入新结构 |
 | os.chdir 使用场景 | 仅 `Manager.exit` 兜底一次 | 其他全部 explicit cwd；避免进程级 cwd 成为同步点（N4） |
@@ -312,7 +312,7 @@ tests/test_worktree_*.py 等  # 新建：见「验证」
   - `test_worktree_slug.py`：AC1 各正反例 + ValueError 原因
   - `test_worktree_git.py`：git helper（_run_git / _has_worktree_changes / _resolve_head_sha_from_fs）
   - `test_worktree_manager.py`：AC2/AC3 create → 目录+分支；AC4 快速恢复（mock git 断言零 git 子进程）；AC20 session 持久化 + 目录被删清空；AC21 .gitignore 只警告；AC24 非 git 降级
-  - `test_worktree_create.py`：AC5/AC6/AC7/AC8 四类初始化（临时仓库造 .mewcode/config.local.yaml / .husky / node_modules / .worktreeinclude）
+  - `test_worktree_create.py`：AC5/AC6/AC7/AC8 四类初始化（临时仓库造 .newcode/config.local.yaml / .husky / node_modules / .worktreeinclude）
   - `test_worktree_lifecycle.py`：AC9 enter 不 chdir；AC10/AC11 exit 变更保护与 discard；AC12 auto_cleanup manual/无变更
   - `test_worktree_sweep.py`：AC19 sweep_stale 三层
   - `test_worktree_config.py`：AC23 enable=false 降级
@@ -321,5 +321,5 @@ tests/test_worktree_*.py 等  # 新建：见「验证」
   - `test_agent_worktree.py` + `test_agent_tool.py`：AC15/AC16 isolation 分支，断言 create→notice→with_cwd→auto_cleanup 顺序与保留通知追加
   - `test_worktree_command.py`：AC17/AC18 /worktree 命令 handler + WorktreeAccessor（mock UI/Manager）
   - `test_worktree_tui.py`：主 Agent enter 后工具落 worktree
-- **AC25**：全量 `pytest` 通过（ch13 行为零回归）+ `ruff check` + `python -m mewcode` 可启动
+- **AC25**：全量 `pytest` 通过（ch13 行为零回归）+ `ruff check` + `python -m newcode` 可启动
 - **端到端**：临时 git 仓库实测 create/enter/exit/remove、自动清理、sweep、`--resume`（对应 spec 场景 1-7）

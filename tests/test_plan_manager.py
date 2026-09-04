@@ -7,7 +7,7 @@
 import json
 from datetime import datetime, timedelta, timezone
 
-from mewcode.plans import PlanManager, PlanMeta
+from newcode.plans import PlanManager, PlanMeta
 
 CONTENT_WITH_SLUG = "<!-- slug: my-plan -->\n# 我的计划\n- [ ] 步骤一\n- [ ] 步骤二\n"
 

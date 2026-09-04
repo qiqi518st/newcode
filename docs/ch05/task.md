@@ -1,25 +1,25 @@
-# MewCode 结构化 System Prompt 与 Prompt Cache — 任务拆解 (task.md)
+# NewCode 结构化 System Prompt 与 Prompt Cache — 任务拆解 (task.md)
 
 ## 文件清单
 
 | 操作 | 文件 | 职责 |
 |------|------|------|
-| 新建 | `mewcode/prompt/sections.py` | 七个固定模块 + 可选模块（含优先级） |
-| 新建 | `mewcode/prompt/builder.py` | Section、PromptBuilder、build() |
-| 新建 | `mewcode/prompt/assembler.py` | PromptPayload、assemble_payload（三通道分发） |
-| 新建 | `mewcode/prompt/env.py` | collect_env、format_env |
-| 新建 | `mewcode/prompt/reminders.py` | system_reminder、PLAN_MODE_FULL/LEAN、plan_mode_reminder |
-| 修改 | `mewcode/prompt/resources.py` | 迁出 SYSTEM_PROMPT/PLAN_MODE_REMINDER；保留 banner/EXECUTE_DIRECTIVE |
-| 修改 | `mewcode/provider/base.py` | TokenUsage 扩展缓存字段；Provider.stream 改收 PromptPayload |
-| 修改 | `mewcode/provider/anthropic.py` | PromptPayload 翻译 + cache_control + 缓存字段解析 |
-| 修改 | `mewcode/provider/openai.py` | PromptPayload 翻译 + cached_tokens 解析 |
-| 修改 | `mewcode/agent/agent.py` | 用 assembler 组装；按轮注入 reminders；删 system_suffix |
-| 修改 | `mewcode/conversation/manager.py` | 删 system_prompt 参数；get_context 返回纯历史 |
-| 修改 | `mewcode/tools/file_ops.py` | read/write/edit description 强化 |
-| 修改 | `mewcode/tools/search.py` | list/search description 强化 |
-| 修改 | `mewcode/tools/shell.py` | execute_command description 强化 |
-| 修改 | `mewcode/main.py` | 构建 PromptBuilder、collect_env、改 Agent/ConversationManager 构造 |
-| 修改 | `mewcode/__init__.py` | 版本 0.4.5 → 0.5.0 |
+| 新建 | `newcode/prompt/sections.py` | 七个固定模块 + 可选模块（含优先级） |
+| 新建 | `newcode/prompt/builder.py` | Section、PromptBuilder、build() |
+| 新建 | `newcode/prompt/assembler.py` | PromptPayload、assemble_payload（三通道分发） |
+| 新建 | `newcode/prompt/env.py` | collect_env、format_env |
+| 新建 | `newcode/prompt/reminders.py` | system_reminder、PLAN_MODE_FULL/LEAN、plan_mode_reminder |
+| 修改 | `newcode/prompt/resources.py` | 迁出 SYSTEM_PROMPT/PLAN_MODE_REMINDER；保留 banner/EXECUTE_DIRECTIVE |
+| 修改 | `newcode/provider/base.py` | TokenUsage 扩展缓存字段；Provider.stream 改收 PromptPayload |
+| 修改 | `newcode/provider/anthropic.py` | PromptPayload 翻译 + cache_control + 缓存字段解析 |
+| 修改 | `newcode/provider/openai.py` | PromptPayload 翻译 + cached_tokens 解析 |
+| 修改 | `newcode/agent/agent.py` | 用 assembler 组装；按轮注入 reminders；删 system_suffix |
+| 修改 | `newcode/conversation/manager.py` | 删 system_prompt 参数；get_context 返回纯历史 |
+| 修改 | `newcode/tools/file_ops.py` | read/write/edit description 强化 |
+| 修改 | `newcode/tools/search.py` | list/search description 强化 |
+| 修改 | `newcode/tools/shell.py` | execute_command description 强化 |
+| 修改 | `newcode/main.py` | 构建 PromptBuilder、collect_env、改 Agent/ConversationManager 构造 |
+| 修改 | `newcode/__init__.py` | 版本 0.4.5 → 0.5.0 |
 | 修改 | `pyproject.toml` | 版本 0.4.5 → 0.5.0 |
 | 新建 | `tests/test_builder.py` | 优先级拼装、可选模块追加 |
 | 新建 | `tests/test_assembler.py` | 三通道分发、缓存一致性校验 |
@@ -33,17 +33,17 @@
 
 ## T1: 版本号升级到 0.5.0
 
-**文件：** `mewcode/__init__.py`、`pyproject.toml`
+**文件：** `newcode/__init__.py`、`pyproject.toml`
 **依赖：** 无
 **步骤：**
-1. `mewcode/__init__.py` 的 `__version__` 改为 `"0.5.0"`
+1. `newcode/__init__.py` 的 `__version__` 改为 `"0.5.0"`
 2. `pyproject.toml` 的 `version` 改为 `0.5.0`
 
-**验证：** `python -c "import mewcode; print(mewcode.__version__)"` 输出 0.5.0
+**验证：** `python -c "import newcode; print(newcode.__version__)"` 输出 0.5.0
 
 ## T2: TokenUsage 扩展缓存字段
 
-**文件：** `mewcode/provider/base.py`
+**文件：** `newcode/provider/base.py`
 **依赖：** 无
 **步骤：**
 1. `TokenUsage` 增加字段 `cache_creation_input_tokens: int = 0` 和 `cache_read_input_tokens: int = 0`
@@ -53,7 +53,7 @@
 
 ## T3: 六个工具 description 强化
 
-**文件：** `mewcode/tools/file_ops.py`、`mewcode/tools/search.py`、`mewcode/tools/shell.py`
+**文件：** `newcode/tools/file_ops.py`、`newcode/tools/search.py`、`newcode/tools/shell.py`
 **依赖：** 无
 **步骤：**
 1. `ReadFileTool.description`：强调定位后用 read 精读；配合 search_code
@@ -68,7 +68,7 @@
 
 ## T4: sections.py 七个固定模块 + 可选模块
 
-**文件：** `mewcode/prompt/sections.py`（新建）
+**文件：** `newcode/prompt/sections.py`（新建）
 **依赖：** 无
 **步骤：**
 1. 定义 `fixed_sections()`，返回七个 `Section`（priority 1-7）：
@@ -81,7 +81,7 @@
 
 ## T5: builder.py Section + PromptBuilder
 
-**文件：** `mewcode/prompt/builder.py`（新建）
+**文件：** `newcode/prompt/builder.py`（新建）
 **依赖：** T4
 **步骤：**
 1. 定义 `@dataclass Section`：`name: str`、`content: str`、`priority: int`
@@ -103,7 +103,7 @@
 
 ## T7: reminders.py system-reminder + PlanMode 提醒
 
-**文件：** `mewcode/prompt/reminders.py`（新建）
+**文件：** `newcode/prompt/reminders.py`（新建）
 **依赖：** 无
 **步骤：**
 1. 定义 `system_reminder(content) -> Message`：`role="user"`，内容 `<system-reminder>{content}</system-reminder>`
@@ -126,7 +126,7 @@
 
 ## T9: env.py 环境信息采集与格式化
 
-**文件：** `mewcode/prompt/env.py`（新建）
+**文件：** `newcode/prompt/env.py`（新建）
 **依赖：** 无
 **步骤：**
 1. 定义 `@dataclass EnvContext`：cwd/platform/datetime/timezone/git_branch/git_dirty/version/provider/model（git 字段可为 None）
@@ -148,7 +148,7 @@
 
 ## T11: assembler.py PromptPayload + assemble_payload
 
-**文件：** `mewcode/prompt/assembler.py`（新建）
+**文件：** `newcode/prompt/assembler.py`（新建）
 **依赖：** T2、T5
 **步骤：**
 1. 定义 `@dataclass PromptPayload`：stable_prompt/env_segment/messages/reminders/tools
@@ -169,29 +169,29 @@
 
 ## T13: resources.py 清理
 
-**文件：** `mewcode/prompt/resources.py`
+**文件：** `newcode/prompt/resources.py`
 **依赖：** T4、T7
 **步骤：**
 1. 删除 `SYSTEM_PROMPT`（内容已拆入 sections.py）与 `PLAN_MODE_REMINDER`（内容移入 reminders.py）
 2. 保留 `EXECUTE_DIRECTIVE`、`render_banner`、`DOG_BANNER`
 3. 检查无残留 import 引用 `SYSTEM_PROMPT` / `PLAN_MODE_REMINDER`
 
-**验证：** `grep -rn "SYSTEM_PROMPT\|PLAN_MODE_REMINDER" mewcode/` 无引用；`python -c "from mewcode.prompt.resources import render_banner, EXECUTE_DIRECTIVE"` 成功
+**验证：** `grep -rn "SYSTEM_PROMPT\|PLAN_MODE_REMINDER" newcode/` 无引用；`python -c "from newcode.prompt.resources import render_banner, EXECUTE_DIRECTIVE"` 成功
 
 ## T14: Provider.stream 签名改收 PromptPayload
 
-**文件：** `mewcode/provider/base.py`
+**文件：** `newcode/provider/base.py`
 **依赖：** T11
 **步骤：**
 1. `Provider.stream(self, payload: PromptPayload)` 替换 `stream(msgs, tools, system_suffix)` 签名
 2. 更新协议文档字符串（说明 payload 结构、provider 负责协议翻译 + 缓存标记）
 3. 删除 `system_suffix` 形参
 
-**验证：** `python -c "from mewcode.provider.base import Provider; import inspect; print('stream' in dir(Provider))"` 通过；无 `system_suffix` 残留
+**验证：** `python -c "from newcode.provider.base import Provider; import inspect; print('stream' in dir(Provider))"` 通过；无 `system_suffix` 残留
 
 ## T15: anthropic.py PromptPayload 翻译 + cache_control + 缓存解析
 
-**文件：** `mewcode/provider/anthropic.py`
+**文件：** `newcode/provider/anthropic.py`
 **依赖：** T14
 **步骤：**
 1. 首条 user 消息 `content=[{type:text, text: stable_prompt, cache_control:{"type":"ephemeral"}}, {type:text, text: env_segment}]`（env 为空则单块）
@@ -203,7 +203,7 @@
 
 ## T16: openai.py PromptPayload 翻译 + cached_tokens 解析
 
-**文件：** `mewcode/provider/openai.py`
+**文件：** `newcode/provider/openai.py`
 **依赖：** T14
 **步骤：**
 1. 段1/段2 各为一条 user 消息（段1 在前），env 为空则只发段1
@@ -226,7 +226,7 @@
 
 ## T18: conversation/manager.py 去 system_prompt
 
-**文件：** `mewcode/conversation/manager.py`
+**文件：** `newcode/conversation/manager.py`
 **依赖：** 无
 **步骤：**
 1. `__init__(self, max_turns: int)`，删除 `system_prompt` 参数
@@ -237,7 +237,7 @@
 
 ## T19: agent.py 组装管线改造
 
-**文件：** `mewcode/agent/agent.py`
+**文件：** `newcode/agent/agent.py`
 **依赖：** T11、T18、T14
 **步骤：**
 1. 构造函数增 `stable_prompt: str`、`env_segment: str` 参数（或 PromptBuilder + env 组合对象）
@@ -249,7 +249,7 @@
 
 ## T20: agent.py PlanMode 按轮注入
 
-**文件：** `mewcode/agent/agent.py`
+**文件：** `newcode/agent/agent.py`
 **依赖：** T19、T7
 **步骤：**
 1. `run()` 每轮开头：`reminders = [plan_mode_reminder(turn)] if mode == "plan" else []`
@@ -282,7 +282,7 @@
 
 ## T23: main.py 接线
 
-**文件：** `mewcode/main.py`
+**文件：** `newcode/main.py`
 **依赖：** T19、T18、T5、T9
 **步骤：**
 1. `ConversationManager(config.max_turns)`（去 system_prompt 实参）
@@ -290,7 +290,7 @@
 3. `collect_env(cwd, __version__, provider.name, provider.model)` → `format_env()` 得 env_segment
 4. `Agent(builder_stable, env_segment, provider, conversation, registry)` 传入新构造
 
-**验证：** `python -c "import mewcode.main"` 无 import 错误；`mewcode --version` 输出 0.5.0
+**验证：** `python -c "import newcode.main"` 无 import 错误；`newcode --version` 输出 0.5.0
 
 ## T24: test_tui_wiring.py 适配
 
@@ -321,7 +321,7 @@
 **步骤：**
 1. `pytest tests/ -q` 全绿
 2. `ruff format --check . && ruff check .` 通过（N13）
-3. `python -c "import mewcode.main"` 无 import 错误
+3. `python -c "import newcode.main"` 无 import 错误
 4. 手工核对：组装器输出稳定前缀跨轮字节一致；Anthropic 请求含 cache_control；OpenAI 无缓存标记
 
 **验证：** 以上 4 项全部通过

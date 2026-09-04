@@ -1,20 +1,20 @@
-# MewCode ch15 收尾 - 团队清理引导与孤儿 Worktree 自动清扫 Tasks
+# NewCode ch15 收尾 - 团队清理引导与孤儿 Worktree 自动清扫 Tasks
 
 ## 文件清单
 
 | 操作 | 文件 | 职责 |
 |------|------|------|
-| 新建 | `mewcode/team/cleanup.py` | TEAM_CLEANUP_DISCIPLINE + guard_team_git_cleanup |
-| 修改 | `mewcode/tools/shell.py` | ExecuteCommandTool guard 注入 |
-| 修改 | `mewcode/team/manager.py` | sweep_orphan_worktrees + run(interval) |
-| 修改 | `mewcode/team/tools/team_delete.py` | 删队成功后补扫 |
-| 修改 | `mewcode/main.py` | 提示词 + guard 装配 + 启动/周期清扫 |
-| 修改 | `mewcode/__init__.py` + `pyproject.toml` | 版本 0.15.1 |
+| 新建 | `newcode/team/cleanup.py` | TEAM_CLEANUP_DISCIPLINE + guard_team_git_cleanup |
+| 修改 | `newcode/tools/shell.py` | ExecuteCommandTool guard 注入 |
+| 修改 | `newcode/team/manager.py` | sweep_orphan_worktrees + run(interval) |
+| 修改 | `newcode/team/tools/team_delete.py` | 删队成功后补扫 |
+| 修改 | `newcode/main.py` | 提示词 + guard 装配 + 启动/周期清扫 |
+| 修改 | `newcode/__init__.py` + `pyproject.toml` | 版本 0.15.1 |
 | 新建 | `tests/test_team_cleanup.py` | 守卫 + 清扫测试 |
 
 ## T1: team/cleanup.py（纪律常量 + 守卫）
 
-**文件：** `mewcode/team/cleanup.py`
+**文件：** `newcode/team/cleanup.py`
 **依赖：** 无
 **步骤：**
 1. `TEAM_CLEANUP_DISCIPLINE` 常量（F1.1，中文：必须用 TeamDelete 或 /team delete，禁止手动 git worktree/branch 清理团队）
@@ -28,7 +28,7 @@
 
 ## T2: tools/shell.py guard 注入
 
-**文件：** `mewcode/tools/shell.py`
+**文件：** `newcode/tools/shell.py`
 **依赖：** T1
 **步骤：**
 1. `ExecuteCommandTool.__init__` 加 `guard: Callable[[str], str | None] | None = None`
@@ -39,7 +39,7 @@
 
 ## T3: team/manager.py 孤儿清扫
 
-**文件：** `mewcode/team/manager.py`
+**文件：** `newcode/team/manager.py`
 **依赖：** 无
 **步骤：**
 1. `sweep_orphan_worktrees() -> list[str]`（F3.1-F3.3）：遍历 `wt_mgr.list()` 名字前缀 `team-` → 提取 sanitized（team- 后到第一个 /）→ `teams_root/<s>/config.json` 不存在 → `wt_mgr.remove(wt.name, ExitOptions(discard_changes=True))`（ch14 内部变更保护 fail-closed）→ 记录 removed；单目录失败 continue
@@ -49,7 +49,7 @@
 
 ## T4: team_delete.py 补扫
 
-**文件：** `mewcode/team/tools/team_delete.py`
+**文件：** `newcode/team/tools/team_delete.py`
 **依赖：** T3
 **步骤：**
 1. `execute` 成功删除后 `await self._mgr.sweep_orphan_worktrees()`（F3.4 删队后补扫）；失败仅 stderr 不阻断返回（N2）
@@ -58,7 +58,7 @@
 
 ## T5: main.py 装配
 
-**文件：** `mewcode/main.py`
+**文件：** `newcode/main.py`
 **依赖：** T1-T4
 **步骤：**
 1. 团队启用时：构造 Agent 前 `stable_prompt += "\n\n" + TEAM_CLEANUP_DISCIPLINE`（先纪律后 coordinator suffix）
@@ -66,16 +66,16 @@
 3. 启动时 `await team_mgr.sweep_orphan_worktrees()`（best-effort try/except）
 4. 起周期任务 `asyncio.create_task(team_mgr.run(worktrees_cfg.cleanup_interval_minutes*60))`；finally 取消（仿 sweep_task）
 
-**验证：** `python -m mewcode --version` 正常；启动不崩；团队未启用时行为不变
+**验证：** `python -m newcode --version` 正常；启动不崩；团队未启用时行为不变
 
 ## T6: 版本 bump 0.15.1
 
-**文件：** `mewcode/__init__.py`、`pyproject.toml`
+**文件：** `newcode/__init__.py`、`pyproject.toml`
 **依赖：** 无
 **步骤：**
 1. 两处 `0.15.0` → `0.15.1`
 
-**验证：** `grep -r "0.15.1" mewcode/__init__.py pyproject.toml` 两处一致
+**验证：** `grep -r "0.15.1" newcode/__init__.py pyproject.toml` 两处一致
 
 ## T7: 测试批 + 回归
 
@@ -90,7 +90,7 @@
 ```bash
 export PYTHONIOENCODING=utf-8 && .venv/bin/python -m pytest tests/ -q
 export PYTHONIOENCODING=utf-8 && .venv/bin/python -m ruff check .
-export PYTHONIOENCODING=utf-8 && .venv/bin/python -m mewcode --version
+export PYTHONIOENCODING=utf-8 && .venv/bin/python -m newcode --version
 ```
 
 ## 执行顺序

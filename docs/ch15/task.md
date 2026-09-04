@@ -1,69 +1,69 @@
-# MewCode ch15 - AgentTeam 与 Coordinator Mode Tasks
+# NewCode ch15 - AgentTeam 与 Coordinator Mode Tasks
 
 ## 文件清单
 
 | 操作 | 文件 | 职责 |
 |------|------|------|
-| 新建 | `mewcode/team/__init__.py` | 包导出 |
-| 新建 | `mewcode/team/types.py` | Team / TeammateInfo / BackendType / 异常家族 |
-| 新建 | `mewcode/team/persistence.py` | sanitize + config.json 原子写 + read_json |
-| 新建 | `mewcode/team/filelock.py` | 共享文件锁（mailbox/tasks 共用） |
-| 新建 | `mewcode/team/manager.py` | Manager（create/get/delete/scan/member_of/poll_lead_mailboxes/handle_task_done + 跨进程 reload） |
-| 新建 | `mewcode/team/spawn.py` | spawn_teammate（TeamHook 结构实现 + 闭包注入） |
-| 新建 | `mewcode/team/notices.py` | team-context / 附录 / incoming-messages / team-update 文案 |
-| 新建 | `mewcode/team/notify.py` | build_team_notification（含 usage） |
-| 新建 | `mewcode/team/cli_team_member.py` | run_team_member（--team-member 自治循环） |
-| 新建 | `mewcode/team/mailbox/__init__.py` | Box（read/write/mark_read/read_unread/write_broadcast） |
-| 新建 | `mewcode/team/mailbox/message.py` | Message / MessageType |
-| 新建 | `mewcode/team/registry/__init__.py` | AgentNameRegistry |
-| 新建 | `mewcode/team/tasks/__init__.py` | Task / Store |
-| 新建 | `mewcode/team/tasks/filter.py` | Filter / Patch / is_ready |
-| 新建 | `mewcode/team/backend/__init__.py` | Backend Protocol / SpawnRequest / new_backend |
-| 新建 | `mewcode/team/backend/detect.py` | detect() |
-| 新建 | `mewcode/team/backend/tmux.py` | TmuxBackend |
-| 新建 | `mewcode/team/backend/iterm2.py` | Iterm2Backend（骨架，待人工验证） |
-| 新建 | `mewcode/team/backend/inprocess.py` | InProcessBackend |
-| 新建 | `mewcode/team/tools/__init__.py` | 工具工厂导出 |
-| 新建 | `mewcode/team/tools/team_create.py` / `team_delete.py` | TeamCreate / TeamDelete |
-| 新建 | `mewcode/team/tools/task_create.py` / `task_get.py` / `task_list.py` / `task_update.py` | 任务四工具 |
-| 新建 | `mewcode/team/tools/send_message.py` | SendMessage（含续写检测） |
-| 新建 | `mewcode/team/tools/teammate_filter.py` | TEAMMATE_EXTRA_TOOLS 白名单 |
-| 新建 | `mewcode/coordinator/__init__.py` | is_enabled / allowed_tools / system_prompt_suffix |
-| 新建 | `mewcode/agent/team_hook.py` | TeamHook / TeamSpawnRequest / IncomingMessage / TeammateContext（闭包） |
-| 新建 | `mewcode/agent/team_mailbox.py` | 成员 Loop 头部邮箱注入 + Plan 审批切换 |
-| 修改 | `mewcode/agent/agent.py` | incoming 注入 / set_allowed_tools / raw reminders / 收窄强制 |
-| 修改 | `mewcode/agent/agent_tool.py` | team_name 参数 + team_hook 委托 |
-| 修改 | `mewcode/task/manager.py` | name_reg 委托（保留 _by_name 兜底）+ on_task_done 多回调 |
-| 修改 | `mewcode/session/runtime.py` | raw reminder 通道 + open_at |
-| 修改 | `mewcode/subagent/types.py` + `parser.py` | plan_mode_required 字段 |
-| 修改 | `mewcode/subagent/launcher.py` | make_sub_agent / build_sub_registry 扩展参数 |
-| 修改 | `mewcode/tools/filter.py` | TEAMMATE_EXTRA_TOOLS + ALL_AGENT_DISALLOWED_TOOLS |
-| 修改 | `mewcode/permission/sandbox.py` | /tmp + /private/tmp 白名单（N14） |
-| 修改 | `mewcode/config/`（新 `features.py` 或并入 loader） | FeaturesConfig（三层 features 段） |
-| 修改 | `mewcode/tui/app.py` | team_mgr / coordinator 标签 / lead mail 消费 / 自动续推 / 团队通知 |
-| 修改 | `mewcode/tui/tasks.py` | consume_lead_mail / wait_for_lead_mail |
-| 新建 | `mewcode/slash/commands/team.py` | /team 四子命令 |
-| 修改 | `mewcode/slash/commands/__init__.py` | COMMAND_MODULES 加 team |
-| 修改 | `mewcode/main.py` | 装配 + on_task_done 注册 + --team-member CLI + coordinator 激活 |
-| 修改 | `mewcode/__init__.py` + `pyproject.toml` | 版本 0.15.0 |
+| 新建 | `newcode/team/__init__.py` | 包导出 |
+| 新建 | `newcode/team/types.py` | Team / TeammateInfo / BackendType / 异常家族 |
+| 新建 | `newcode/team/persistence.py` | sanitize + config.json 原子写 + read_json |
+| 新建 | `newcode/team/filelock.py` | 共享文件锁（mailbox/tasks 共用） |
+| 新建 | `newcode/team/manager.py` | Manager（create/get/delete/scan/member_of/poll_lead_mailboxes/handle_task_done + 跨进程 reload） |
+| 新建 | `newcode/team/spawn.py` | spawn_teammate（TeamHook 结构实现 + 闭包注入） |
+| 新建 | `newcode/team/notices.py` | team-context / 附录 / incoming-messages / team-update 文案 |
+| 新建 | `newcode/team/notify.py` | build_team_notification（含 usage） |
+| 新建 | `newcode/team/cli_team_member.py` | run_team_member（--team-member 自治循环） |
+| 新建 | `newcode/team/mailbox/__init__.py` | Box（read/write/mark_read/read_unread/write_broadcast） |
+| 新建 | `newcode/team/mailbox/message.py` | Message / MessageType |
+| 新建 | `newcode/team/registry/__init__.py` | AgentNameRegistry |
+| 新建 | `newcode/team/tasks/__init__.py` | Task / Store |
+| 新建 | `newcode/team/tasks/filter.py` | Filter / Patch / is_ready |
+| 新建 | `newcode/team/backend/__init__.py` | Backend Protocol / SpawnRequest / new_backend |
+| 新建 | `newcode/team/backend/detect.py` | detect() |
+| 新建 | `newcode/team/backend/tmux.py` | TmuxBackend |
+| 新建 | `newcode/team/backend/iterm2.py` | Iterm2Backend（骨架，待人工验证） |
+| 新建 | `newcode/team/backend/inprocess.py` | InProcessBackend |
+| 新建 | `newcode/team/tools/__init__.py` | 工具工厂导出 |
+| 新建 | `newcode/team/tools/team_create.py` / `team_delete.py` | TeamCreate / TeamDelete |
+| 新建 | `newcode/team/tools/task_create.py` / `task_get.py` / `task_list.py` / `task_update.py` | 任务四工具 |
+| 新建 | `newcode/team/tools/send_message.py` | SendMessage（含续写检测） |
+| 新建 | `newcode/team/tools/teammate_filter.py` | TEAMMATE_EXTRA_TOOLS 白名单 |
+| 新建 | `newcode/coordinator/__init__.py` | is_enabled / allowed_tools / system_prompt_suffix |
+| 新建 | `newcode/agent/team_hook.py` | TeamHook / TeamSpawnRequest / IncomingMessage / TeammateContext（闭包） |
+| 新建 | `newcode/agent/team_mailbox.py` | 成员 Loop 头部邮箱注入 + Plan 审批切换 |
+| 修改 | `newcode/agent/agent.py` | incoming 注入 / set_allowed_tools / raw reminders / 收窄强制 |
+| 修改 | `newcode/agent/agent_tool.py` | team_name 参数 + team_hook 委托 |
+| 修改 | `newcode/task/manager.py` | name_reg 委托（保留 _by_name 兜底）+ on_task_done 多回调 |
+| 修改 | `newcode/session/runtime.py` | raw reminder 通道 + open_at |
+| 修改 | `newcode/subagent/types.py` + `parser.py` | plan_mode_required 字段 |
+| 修改 | `newcode/subagent/launcher.py` | make_sub_agent / build_sub_registry 扩展参数 |
+| 修改 | `newcode/tools/filter.py` | TEAMMATE_EXTRA_TOOLS + ALL_AGENT_DISALLOWED_TOOLS |
+| 修改 | `newcode/permission/sandbox.py` | /tmp + /private/tmp 白名单（N14） |
+| 修改 | `newcode/config/`（新 `features.py` 或并入 loader） | FeaturesConfig（三层 features 段） |
+| 修改 | `newcode/tui/app.py` | team_mgr / coordinator 标签 / lead mail 消费 / 自动续推 / 团队通知 |
+| 修改 | `newcode/tui/tasks.py` | consume_lead_mail / wait_for_lead_mail |
+| 新建 | `newcode/slash/commands/team.py` | /team 四子命令 |
+| 修改 | `newcode/slash/commands/__init__.py` | COMMAND_MODULES 加 team |
+| 修改 | `newcode/main.py` | 装配 + on_task_done 注册 + --team-member CLI + coordinator 激活 |
+| 修改 | `newcode/__init__.py` + `pyproject.toml` | 版本 0.15.0 |
 | 新建 | `tests/test_team_*.py`（11 个） | 团队全量测试批 |
 
 ## T1: team 包骨架 + 核心类型
 
-**文件：** `mewcode/team/__init__.py`、`mewcode/team/types.py`
+**文件：** `newcode/team/__init__.py`、`newcode/team/types.py`
 **依赖：** 无
 **步骤：**
-1. 建 `mewcode/team/` 包；`types.py` 定义 `Team`（name/sanitized_name/lead_agent_id/backend/description/created_at/members + 派生路径 config_dir/config_path/tasks_path/mailbox_dir（序列化跳过）+ `_lock: asyncio.Lock`）
+1. 建 `newcode/team/` 包；`types.py` 定义 `Team`（name/sanitized_name/lead_agent_id/backend/description/created_at/members + 派生路径 config_dir/config_path/tasks_path/mailbox_dir（序列化跳过）+ `_lock: asyncio.Lock`）
 2. 定义 `TeammateInfo`（name/agent_id/agent_type/model/worktree_path/branch/backend_type/pane_id/is_active(保留 None 语义)/plan_mode_required/session_dir）+ 手写 `to_dict`/`from_dict`
 3. 定义 `BackendType(StrEnum)`：`tmux`/`iterm2`/`in-process`
 4. 异常家族：`TeamError` → `TeamNotFoundError`/`TeamHasActiveMembersError`/`MemberExistsError`/`MemberNotFoundError`/`InProcessTeammateNoSpawnError`/`BackendUnavailableError`/`SendMessageValidationError`
 5. `__init__.py` 导出
 
-**验证：** `python -c "from mewcode.team import Team, TeammateInfo, BackendType"` 通过；`ruff check mewcode/team/types.py`
+**验证：** `python -c "from newcode.team import Team, TeammateInfo, BackendType"` 通过；`ruff check newcode/team/types.py`
 
 ## T2: persistence
 
-**文件：** `mewcode/team/persistence.py`
+**文件：** `newcode/team/persistence.py`
 **依赖：** T1
 **步骤：**
 1. `sanitize(name)`——只保留 `[a-zA-Z0-9._-]`，其余替换 `-`，首尾去 `-`，空串返回 `""`（用 `re.sub`）
@@ -75,7 +75,7 @@
 
 ## T3: 共享文件锁 team/filelock.py
 
-**文件：** `mewcode/team/filelock.py`
+**文件：** `newcode/team/filelock.py`
 **依赖：** 无
 **步骤：**
 1. `async def acquire(lock_path) -> AsyncContextManager[None]`——`os.open(O_CREAT|O_EXCL|O_WRONLY, 0o644)` 抢锁；失败 5-100ms 随机抖动重试 ≤10 次；持锁超 10s（`st_mtime`）视为 stale 删锁重试；退出 `os.unlink`
@@ -86,7 +86,7 @@
 
 ## T4: mailbox
 
-**文件：** `mewcode/team/mailbox/message.py`、`mewcode/team/mailbox/__init__.py`
+**文件：** `newcode/team/mailbox/message.py`、`newcode/team/mailbox/__init__.py`
 **依赖：** T3
 **步骤：**
 1. `message.py`：`MessageType(StrEnum)`（text/shutdown_request/shutdown_response/plan_approval_response）+ `Message` dataclass（`from_`/to/type/summary/content/payload/timestamp/read）+ to_dict/from_dict（`from_` ↔ json key `from`）
@@ -97,7 +97,7 @@
 
 ## T5: registry
 
-**文件：** `mewcode/team/registry/__init__.py`
+**文件：** `newcode/team/registry/__init__.py`
 **依赖：** 无
 **步骤：**
 1. `AgentNameRegistry`：`threading.Lock` + `by_name`/`by_id`
@@ -107,7 +107,7 @@
 
 ## T6: tasks Store
 
-**文件：** `mewcode/team/tasks/filter.py`、`mewcode/team/tasks/__init__.py`
+**文件：** `newcode/team/tasks/filter.py`、`newcode/team/tasks/__init__.py`
 **依赖：** T3
 **步骤：**
 1. `filter.py`：`Status(StrEnum)`（pending/in_progress/completed/blocked）；`Filter`（status 过滤）；`Patch`（title/description/status/assignee + add_blocks/remove_blocks/add_blocked_by/remove_blocked_by）；`is_ready(task, tasks)`（无未完成 blocker）
@@ -117,10 +117,10 @@
 
 ## T7: Manager 生命周期 + 成员操作 + 跨进程 reload
 
-**文件：** `mewcode/team/manager.py` + `mewcode/team/persistence.py`
+**文件：** `newcode/team/manager.py` + `newcode/team/persistence.py`
 **依赖：** T1-T6
 **步骤：**
-1. `Manager(home_dir, project_root, wt_mgr, task_mgr, reg)`：建 `~/.mewcode/teams/`（存在校验可写）；扫描子目录还原 `teams` dict（坏 JSON stderr 警告跳过，F17.2）
+1. `Manager(home_dir, project_root, wt_mgr, task_mgr, reg)`：建 `~/.newcode/teams/`（存在校验可写）；扫描子目录还原 `teams` dict（坏 JSON stderr 警告跳过，F17.2）
 2. `get(name)` / `list_()` / `member_of(agent_id)` / `is_teammate(agent_id)`
 3. `async create(name, description)`：sanitize → 同名后缀 `-2/-3` → 建 config_dir + mailbox/ → `detect()` → 写 config.json（Lead 成员 `name="lead", agent_id="lead", is_active=None`）→ 入 dict
 4. `async delete(name, force)`：持锁 → 非 force 有活跃成员抛 `TeamHasActiveMembersError` → 逐成员 `new_backend(...).kill`（未注入 backend deps 的测试场景跳过 kill，fallback 只清磁盘）→ 删 session/worktree（best-effort）→ `shutil.rmtree(config_dir)` → 移除
@@ -142,7 +142,7 @@
 
 ## T8: FeaturesConfig
 
-**文件：** `mewcode/config/`（新 `features.py`，镜像 worktree/config.py 三层模式）
+**文件：** `newcode/config/`（新 `features.py`，镜像 worktree/config.py 三层模式）
 **依赖：** 无
 **步骤：**
 1. 三层合并（local > project > user）读 `features:` 段
@@ -153,21 +153,21 @@
 
 ## T9: backend 抽象 + detect
 
-**文件：** `mewcode/team/backend/__init__.py`、`mewcode/team/backend/detect.py`
+**文件：** `newcode/team/backend/__init__.py`、`newcode/team/backend/detect.py`
 **依赖：** T1
 **步骤：**
 1. `backend/__init__.py`：`SpawnRequest` dataclass（含 `sub_agent`/`conv`/`task_mgr` 三个 Any 可选字段——backend 不反向依赖 agent）；`Backend` Protocol（`type()`/`spawn(req)->(pane_id,agent_id)`/`wake(pane_id,agent_id)`/`kill(pane_id,agent_id)`）；`new_backend(t, **deps)` 工厂（懒 import 各子模块）
 2. `detect.py`：`detect()`——`$TMUX` → tmux；`$TERM_PROGRAM==iTerm.app` 且 `it2` 可执行 → iterm2；`shutil.which("tmux")` → tmux；否则 in-process（F2.4，一次性决定）
 
-**验证：** `python -c "from mewcode.team.backend import Backend, SpawnRequest, new_backend"` 通过；detect 四分支 monkeypatch 单测
+**验证：** `python -c "from newcode.team.backend import Backend, SpawnRequest, new_backend"` 通过；detect 四分支 monkeypatch 单测
 
 ## T10: backend/tmux.py
 
-**文件：** `mewcode/team/backend/tmux.py`
+**文件：** `newcode/team/backend/tmux.py`
 **依赖：** T9
 **步骤：**
 1. `spawn(req)`：`$TMUX` 内 `tmux split-window -h -P -F "#{pane_id}" -- <cmd>`；`$TMUX` 外但 tmux 可用 `tmux new-session -d` detached（失败抛 `BackendUnavailableError`，不回落 in-process，F2.5）
-2. `cmd` 构造：`python -m mewcode --team-member --team <t> --member <m> --agent-id <预生成> --session-dir <sd> --worktree <wt> [--agent-type][--model][--plan-mode]`，用 `shlex.quote` 转义；`--agent-id` 必传（F3.2）
+2. `cmd` 构造：`python -m newcode --team-member --team <t> --member <m> --agent-id <预生成> --session-dir <sd> --worktree <wt> [--agent-type][--model][--plan-mode]`，用 `shlex.quote` 转义；`--agent-id` 必传（F3.2）
 3. `initial_prompt` **不走命令行**（由 spawn_teammate 在 spawn 前预写 mailbox，F2.6）
 4. `wake`：`tmux send-keys -t <pane_id> "" Enter`；`kill`：`tmux kill-pane -t <pane_id>` 忽略不存在
 5. `asyncio.create_subprocess_exec` 跑 tmux，捕获 stdout 作 pane_id
@@ -176,7 +176,7 @@
 
 ## T11: backend/iterm2.py（骨架）
 
-**文件：** `mewcode/team/backend/iterm2.py`
+**文件：** `newcode/team/backend/iterm2.py`
 **依赖：** T9
 **步骤：**
 1. 接口按 `it2 split --new-pane --command "<cmd>"` / `it2 send-text --pane <pane_id> ""` / `it2 close-pane --pane <pane_id>` 约定实现（cmd 同 T10 格式含 `--agent-id`）
@@ -186,7 +186,7 @@
 
 ## T12: backend/inprocess.py
 
-**文件：** `mewcode/team/backend/inprocess.py`
+**文件：** `newcode/team/backend/inprocess.py`
 **依赖：** T9
 **步骤：**
 1. `spawn(req)`：`task_mgr.launch(req.sub_agent, req.initial_prompt, name=req.member_name)` 返回 task_id 作 agent_id；`pane_id=""`（F5.1）
@@ -197,7 +197,7 @@
 
 ## T13: agent/team_hook.py
 
-**文件：** `mewcode/agent/team_hook.py`
+**文件：** `newcode/agent/team_hook.py`
 **依赖：** 无
 **步骤：**
 1. `TeamSpawnRequest` dataclass（team_name/prompt/subagent_type/model/name/plan_mode_required）
@@ -205,11 +205,11 @@
 3. `IncomingMessage` 轻量 dataclass（独立于 mailbox.Message，agent 包内定义）
 4. `TeammateContext` dataclass（agent 包持有）：team_name/member_name/agent_id + **闭包** `read_unread: Callable[[], Awaitable[tuple[list[int], list[IncomingMessage]]]]`、`mark_read: Callable[[list[int]], Awaitable[None]]`、`set_permission: Callable[[str], None] | None`（Plan 审批切换用）——由 team 包在 spawn 时注入，agent 包不 import team/mailbox（TD-12，闭包彻底解环）
 
-**验证：** `python -c "from mewcode.agent.team_hook import TeamHook, TeammateContext, TeamSpawnRequest"` 通过
+**验证：** `python -c "from newcode.agent.team_hook import TeamHook, TeammateContext, TeamSpawnRequest"` 通过
 
 ## T14: agent.py 改造
 
-**文件：** `mewcode/agent/agent.py`
+**文件：** `newcode/agent/agent.py`
 **依赖：** T13
 **步骤：**
 1. `__init__` 加 `teammate: TeammateContext | None = None`、`allowed_tools: list[str] | None = None`
@@ -222,7 +222,7 @@
 
 ## T15: agent/team_mailbox.py（成员注入 + Plan 审批切换）
 
-**文件：** `mewcode/agent/team_mailbox.py`
+**文件：** `newcode/agent/team_mailbox.py`
 **依赖：** T13
 **步骤：**
 1. `inject_incoming(agent, teammate)`：调 `teammate.read_unread()` → 有未读组 `<incoming-messages>` reminder（notices.py 文案）→ `teammate.mark_read(indices)` → 返回 reminder 列表
@@ -233,7 +233,7 @@
 
 ## T16: session/runtime.py
 
-**文件：** `mewcode/session/runtime.py`
+**文件：** `newcode/session/runtime.py`
 **依赖：** 无
 **步骤：**
 1. raw reminder 通道：`append_raw_reminders(list[str])` / `take_raw_reminders()`（线程安全，镜像 pending_reminders 模式）
@@ -243,7 +243,7 @@
 
 ## T17: subagent plan_mode_required
 
-**文件：** `mewcode/subagent/types.py`、`mewcode/subagent/parser.py`
+**文件：** `newcode/subagent/types.py`、`newcode/subagent/parser.py`
 **依赖：** 无
 **步骤：**
 1. `AgentDefinition` 加 `plan_mode_required: bool = False`
@@ -253,7 +253,7 @@
 
 ## T18: subagent/launcher.py 扩展
 
-**文件：** `mewcode/subagent/launcher.py`
+**文件：** `newcode/subagent/launcher.py`
 **依赖：** T17
 **步骤：**
 1. `build_sub_registry(role, is_background, extra_tools=())`：过滤后 `visible.extend(extra_tools)` 再 view（队员 collab 工具注入点，TD-7）
@@ -263,7 +263,7 @@
 
 ## T19: filter 扩展
 
-**文件：** `mewcode/tools/filter.py`
+**文件：** `newcode/tools/filter.py`
 **依赖：** 无
 **步骤：**
 1. `ALL_AGENT_DISALLOWED_TOOLS` 加 `TEAMMATE_EXTRA_TOOLS = frozenset({"task_create","task_get","task_list","task_update","send_message"})`——普通子 Agent 经过滤天然不可见（N2）
@@ -273,7 +273,7 @@
 
 ## T20: task/manager.py 改造
 
-**文件：** `mewcode/task/manager.py`
+**文件：** `newcode/task/manager.py`
 **依赖：** T5
 **步骤：**
 1. `TaskManager` 加 `name_reg: AgentNameRegistry | None = None` + `set_name_registry(reg)` setter；`get_by_name`/`continue_agent` 优先 `name_reg.resolve`，**保留本地 `_by_name` 兜底**（ch13 兼容）
@@ -284,7 +284,7 @@
 
 ## T21: team/spawn.py
 
-**文件：** `mewcode/team/spawn.py`
+**文件：** `newcode/team/spawn.py`
 **依赖：** T7-T20 + T10-T12
 **步骤：**
 1. `async spawn_teammate(mgr, team, req: TeamSpawnRequest) -> str`（结构实现 TeamHook.spawn_teammate）：
@@ -304,7 +304,7 @@
 
 ## T22: notices + notify
 
-**文件：** `mewcode/team/notices.py`、`mewcode/team/notify.py`
+**文件：** `newcode/team/notices.py`、`newcode/team/notify.py`
 **依赖：** T21
 **步骤：**
 1. `notices.py`：`build_team_context`（F10.10）、`teammate_prompt_appendix`（F10.9 固定文本）、`incoming_messages(msgs)`（F11.2 格式）、`team_update(msgs)`（F11.3，8000 截断、完整报告透传）
@@ -314,10 +314,10 @@
 
 ## T23: coordinator 包
 
-**文件：** `mewcode/coordinator/__init__.py`
+**文件：** `newcode/coordinator/__init__.py`
 **依赖：** T8
 **步骤：**
-1. `is_enabled(cfg)`：`cfg.enable and cfg.coordinator_mode and env_truthy(os.environ.get("MEWCODE_COORDINATOR_MODE",""))`；`env_truthy` 接受 `1/true/yes` 大小写不敏感
+1. `is_enabled(cfg)`：`cfg.enable and cfg.coordinator_mode and env_truthy(os.environ.get("NEWCODE_COORDINATOR_MODE",""))`；`env_truthy` 接受 `1/true/yes` 大小写不敏感
 2. `allowed_tools()`：`COORDINATOR_ALLOWED_TOOLS = [Agent, TeamCreate, TeamDelete, TaskCreate, TaskGet, TaskList, TaskUpdate, SendMessage, read_file, glob, grep, bash]`
 3. `system_prompt_suffix()`：四阶段（Research 队员并行 → Synthesis Lead 不委托理解 → Implementation 队员 → Verification 队员）+ **派完停手纪律**（派完禁止立刻自读探索/轮询凑时间，唯一该做发一行总结；允许自读仅限 Research 首次定位 / Synthesis 读队员报告 / Verification git diff 收敛）（F14.5/F14.6）
 
@@ -325,11 +325,11 @@
 
 ## T24: team/tools/ 七工具
 
-**文件：** `mewcode/team/tools/`（9 个 py）
+**文件：** `newcode/team/tools/`（9 个 py）
 **依赖：** T7-T9 + T5-T6
 **步骤：**
 1. `teammate_filter.py`：`TEAMMATE_EXTRA_TOOLS` 常量（与 filter.py 同源或 import）
-2. 各工具 `new_xxx_tool(mgr) -> Tool`（复用 `mewcode/tools/base.py`）：
+2. 各工具 `new_xxx_tool(mgr) -> Tool`（复用 `newcode/tools/base.py`）：
    - `task_create.py`（title 必填 + description/assignee/blocked_by）→ Store.create
    - `task_get.py` / `task_list.py`（status 过滤 + is_ready） / `task_update.py`（含 add/remove blocks 双向）
    - `send_message.py`：校验调用者在 Team 内 → resolve（`*` 广播）→ box.write → Pane `backend.wake` → **in-process 已停目标**：`set_member_active(True)` + mark_read 刚写消息 + 恢复 conv（`session.recover_session_async`）+ `task_mgr.continue_agent` + （TD-8 去重）→ 返回 `{delivered_to, timestamp}`；`plan_approval_response` 仅 Lead 可发、`shutdown_response` 仅发 Lead（F8.6）
@@ -341,7 +341,7 @@
 
 ## T25: agent_tool.py
 
-**文件：** `mewcode/tools/agent_tool.py`
+**文件：** `newcode/tools/agent_tool.py`
 **依赖：** T21 + T13
 **步骤：**
 1. `AgentTool.__init__` 加 `team_hook: TeamHook | None = None`；schema 加 `team_name` 字段（F24）
@@ -352,7 +352,7 @@
 
 ## T26: cli_team_member.py
 
-**文件：** `mewcode/team/cli_team_member.py`
+**文件：** `newcode/team/cli_team_member.py`
 **依赖：** T21-T22 + T16
 **步骤：**
 1. `run_team_member(args)`：`os.chdir(worktree)` → 加载配置 + provider（ccswitch 兜底）→ 构造 Manager（扫 teams 还原）→ 开 team → TeammateContext（闭包注入 Box）
@@ -366,7 +366,7 @@
 
 ## T27: main.py 装配
 
-**文件：** `mewcode/main.py`
+**文件：** `newcode/main.py`
 **依赖：** T24-T26 + T7 + T20
 **步骤：**
 1. argparse 加 `--team-member` + `--team/--member/--agent-id/--session-dir/--worktree/--agent-type/--model/--plan-mode`；`main()` 顶部检测 `--team-member` → **先 chdir(worktree) 再** `asyncio.run(run_team_member(args))` 返回
@@ -377,11 +377,11 @@
 6. coordinator 激活：构造 Agent 前 `stable_prompt += coordinator.system_prompt_suffix()`；构造后 `agent.set_allowed_tools(coordinator.allowed_tools())`；REPL 传 coordinator 标记
 7. REPL 注入 team_mgr；`register_all` 已含 team 模块
 
-**验证：** `python -m mewcode --version` 正常；`MEWCODE_COORDINATOR_MODE=1` + config 开 → 启动不崩、主 Agent 工具集收窄；无 config 不进入
+**验证：** `python -m newcode --version` 正常；`NEWCODE_COORDINATOR_MODE=1` + config 开 → 启动不崩、主 Agent 工具集收窄；无 config 不进入
 
 ## T28: TUI lead mail + 自动续推
 
-**文件：** `mewcode/tui/tasks.py`、`mewcode/tui/app.py`
+**文件：** `newcode/tui/tasks.py`、`newcode/tui/app.py`
 **依赖：** T27 + T7
 **步骤：**
 1. `tui/tasks.py`：`consume_lead_mail(repl)`——循环每 1s `team_mgr.poll_lead_mailboxes()` → 组 `<team-update>`（notices.team_update，8000 截断）→ `runtime.append_raw_reminders`（TD-3）→ `lead_mail_event.set()` → IDLE 时 `session.app.exit()` 打断 prompt（TD-5）；`wait_for_lead_mail(repl)`——等事件 → IDLE 走 `begin_autonomous_turn` → `event.clear()`
@@ -393,7 +393,7 @@
 
 ## T29: slash /team
 
-**文件：** `mewcode/slash/commands/team.py`、`mewcode/slash/commands/__init__.py`
+**文件：** `newcode/slash/commands/team.py`、`newcode/slash/commands/__init__.py`
 **依赖：** T27
 **步骤：**
 1. `/team list`（`<name>  <backend>  <member_count> 成员  [active/total] 活跃`）
@@ -406,12 +406,12 @@
 
 ## T30: 版本 bump
 
-**文件：** `mewcode/__init__.py`、`pyproject.toml`
+**文件：** `newcode/__init__.py`、`pyproject.toml`
 **依赖：** 无
 **步骤：**
 1. 两处 `0.14.0` → `0.15.0`
 
-**验证：** `grep -r "0.15.0" mewcode/__init__.py pyproject.toml` 两处一致
+**验证：** `grep -r "0.15.0" newcode/__init__.py pyproject.toml` 两处一致
 
 ## T31: 测试批 + 回归
 
@@ -427,7 +427,7 @@
 ```bash
 export PYTHONIOENCODING=utf-8 && export LC_ALL=C.UTF-8 && python -m pytest tests/ -q
 export PYTHONIOENCODING=utf-8 && export LC_ALL=C.UTF-8 && python -m ruff check .
-export PYTHONIOENCODING=utf-8 && export LC_ALL=C.UTF-8 && python -m mewcode --version
+export PYTHONIOENCODING=utf-8 && export LC_ALL=C.UTF-8 && python -m newcode --version
 ```
 
 ## 执行顺序

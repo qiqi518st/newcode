@@ -11,12 +11,12 @@ from pathlib import Path
 
 import pytest
 
-from mewcode.mcp.config import ServerConfig, load_mcp_servers
+from newcode.mcp.config import ServerConfig, load_mcp_servers
 
 
 @pytest.fixture
 def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """把 Path.home() 指到临时目录，隔离用户级 ~/.mewcode/config.yaml。"""
+    """把 Path.home() 指到临时目录，隔离用户级 ~/.newcode/config.yaml。"""
     fake = tmp_path / "home"
     fake.mkdir()
     monkeypatch.setattr(Path, "home", lambda: fake)
@@ -36,11 +36,11 @@ def _write(path: Path, content: str) -> None:
 
 
 def _user_yaml(home: Path) -> Path:
-    return home / ".mewcode" / "config.yaml"
+    return home / ".newcode" / "config.yaml"
 
 
 def _project_yaml(root: Path) -> Path:
-    return root / ".mewcode.yaml"
+    return root / ".newcode.yaml"
 
 
 # ── 两层合并 ──────────────────────────────────────────────
@@ -240,7 +240,7 @@ def test_example_yaml_parses(home: Path, root: Path, monkeypatch, capsys):
 
     monkeypatch.setenv("GITHUB_TOKEN", "gh-test")
     monkeypatch.setenv("EXAMPLE_TOKEN", "ex-test")
-    # 项目级配置指向示例文件（copy 到 root/.mewcode.yaml 位置由加载器读取）
+    # 项目级配置指向示例文件（copy 到 root/.newcode.yaml 位置由加载器读取）
     example = (
         Path(__file__).resolve().parent.parent
         / "docs"
@@ -248,7 +248,7 @@ def test_example_yaml_parses(home: Path, root: Path, monkeypatch, capsys):
         / "mcp-servers.example.yaml"
     )
     assert example.exists(), "示例文件必须存在"
-    # 直接以项目级身份加载：把示例写到 root/.mewcode.yaml
+    # 直接以项目级身份加载：把示例写到 root/.newcode.yaml
     _write(_project_yaml(root), example.read_text(encoding="utf-8"))
 
     servers = load_mcp_servers(str(root))

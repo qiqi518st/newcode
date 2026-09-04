@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from mewcode.subagent.parser import parse_definition
-from mewcode.subagent.types import DefinitionParseError, Source
+from newcode.subagent.parser import parse_definition
+from newcode.subagent.types import DefinitionParseError, Source
 
 
 def _write(tmp_path: Path, name: str, text: str) -> Path:

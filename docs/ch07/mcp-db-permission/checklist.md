@@ -1,13 +1,13 @@
-# MewCode ch07 — MCP 对接数据库的权限管理 Checklist
+# NewCode ch07 — MCP 对接数据库的权限管理 Checklist
 
 > 每一项通过运行代码或观察行为验证，聚焦系统行为。验证方式写在括号内。
 > 需真实 mysql-server + mysql-mcp-server 才能验证的行为列「待人工验证」，不混入「通过」。
-> 本文件是 mew-spec 流程产物，本身允许写入；除此之外测试/验证过程不改动 docs/。
+> 本文件是 new-spec 流程产物，本身允许写入；除此之外测试/验证过程不改动 docs/。
 
 ## 实现完整性
 
 - [ ] **配置声明可解析**：`mcp_servers` 内带 `permissions` 段（probe_tool/sql_arg/table_arg/where_arg/privilege_map）的 server 解析出权限预检配置；缺 `permissions` 的 server 行为同 ch07。（验证：`python -m pytest tests/test_mcp_config.py -q`，含 permissions 解析 + 缺省用例）【F1、AC1】
-- [ ] **模块可导入**：`from mewcode.mcp import PrivilegeGuard, PrivilegeSnapshot`、`from mewcode.permission import ...` 不报错。（验证：`python -c` import）【各 F】
+- [ ] **模块可导入**：`from newcode.mcp import PrivilegeGuard, PrivilegeSnapshot`、`from newcode.permission import ...` 不报错。（验证：`python -c` import）【各 F】
 
 ## 判定链路（L1 → L2 → L3）
 
@@ -19,7 +19,7 @@
 
 ## 动态规则生命周期
 
-- [ ] **不落盘**：注入 dynamic 层的规则只存内存；权限文件（.mewcode/permissions*.yaml）内容不变。（验证：`tests/test_mcp_privilege.py` 注入后 `git diff .mewcode/` 无权限文件改动；读取权限文件内容断言未变）【F6、AC6】
+- [ ] **不落盘**：注入 dynamic 层的规则只存内存；权限文件（.newcode/permissions*.yaml）内容不变。（验证：`tests/test_mcp_privilege.py` 注入后 `git diff .newcode/` 无权限文件改动；读取权限文件内容断言未变）【F6、AC6】
 - [ ] **按账号生成**：不同快照（只读 vs 全权限）生成不同 deny 规则集；启动时按当前连接账号快照生成。（验证：`tests/test_mcp_privilege.py` translate_to_rules 两快照断言）【F6、AC6】
 - [ ] **调用失败刷新**：远端拒绝（权限变更）→ 重查快照 → dynamic 规则更新（先清再注入，不残留旧规则、不影响其它 server）。（验证：`tests/test_mcp_privilege.py` on_call_failed 用例）【F6、AC6】
 
@@ -34,7 +34,7 @@
 
 ## 编译与测试
 
-- [ ] **ch07+本功能 ruff 干净**：`ruff check mewcode/mcp/ mewcode/permission/ mewcode/tools/registry.py mewcode/main.py` 零告警。（验证：命令退出码 0）【N7、AC10】
+- [ ] **ch07+本功能 ruff 干净**：`ruff check newcode/mcp/ newcode/permission/ newcode/tools/registry.py newcode/main.py` 零告警。（验证：命令退出码 0）【N7、AC10】
 - [ ] **全量测试通过**：`python -m pytest -q` 全过（含 ch01–ch07 既有 + 本功能新增）。（验证：退出码 0）【N5、AC9】
 - [ ] **既有不退化**：五层权限、MCP 连接/调用、内置工具既有测试全过；未声明预检的 server 行为与 ch07 一致。（验证：`python -m pytest tests/test_permission_*.py tests/test_mcp_*.py -q`）【N5、AC9】
 - [ ] **docs 保护自检**：`git status docs/` 仅显示 ch07 既有文档 + 新建 `docs/ch07/mcp-db-permission/` 四份 + 示例，无对既有文档修改。（验证：`git diff docs/` 空）【docs 保护】

@@ -5,10 +5,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from mewcode.prompt.assembler import PromptPayload
-from mewcode.provider.anthropic import AnthropicProvider
-from mewcode.provider.base import Message, ToolCall, api_model
-from mewcode.provider.openai import OpenAIProvider
+from newcode.prompt.assembler import PromptPayload
+from newcode.provider.anthropic import AnthropicProvider
+from newcode.provider.base import Message, ToolCall, api_model
+from newcode.provider.openai import OpenAIProvider
 
 
 class TestAnthropicToolParsing:

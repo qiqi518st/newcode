@@ -1,34 +1,34 @@
-# MewCode Agent Loop — 任务拆解 (task.md)
+# NewCode Agent Loop — 任务拆解 (task.md)
 
 ## 文件清单
 
 | 操作 | 文件 | 职责 |
 |------|------|------|
-| 修改 | `mewcode/agent/events.py` | 新增 EventType、TokenUsage、TurnEnd、StopReason |
-| 修改 | `mewcode/agent/__init__.py` | 导出新类型 |
-| 新建 | `mewcode/agent/scheduler.py` | ToolScheduler 保序分批并发执行 |
-| 重写 | `mewcode/agent/agent.py` | ReAct 循环引擎替代单轮闭环 |
-| 修改 | `mewcode/provider/base.py` | StreamEvent 增 usage；Provider 增 system_suffix |
-| 修改 | `mewcode/provider/anthropic.py` | 流结束上抛 usage；system_suffix 拼接 |
-| 修改 | `mewcode/provider/openai.py` | stream_options include_usage；usage 上抛；system_suffix |
-| 修改 | `mewcode/tools/base.py` | Tool Protocol 增 read_only |
-| 修改 | `mewcode/tools/registry.py` | 增 read_only_definitions()、is_read_only() |
-| 修改 | `mewcode/tools/file_ops.py` | 三个工具 read_only 属性 |
-| 修改 | `mewcode/tools/shell.py` | ExecuteCommandTool read_only 属性 |
-| 修改 | `mewcode/tools/search.py` | 两个工具 read_only 属性 |
-| 修改 | `mewcode/conversation/manager.py` | 增 last_role() 和批量写入、取消补位方法 |
-| 修改 | `mewcode/prompt/resources.py` | 增 PLAN_MODE_REMINDER、EXECUTE_DIRECTIVE；SYSTEM_PROMPT 增补 |
-| 修改 | `mewcode/config/schema.py` | Config 增 plan_file、default_mode |
-| 修改 | `mewcode/config/loader.py` | 解析新配置字段 |
-| 修改 | `mewcode/tui/app.py` | 识别 /plan /do；ESC/Ctrl+C 拆分；新事件消费；状态栏/动态区 |
-| 修改 | `mewcode/main.py` | -p/--plan CLI；_oneshot 新事件处理 |
+| 修改 | `newcode/agent/events.py` | 新增 EventType、TokenUsage、TurnEnd、StopReason |
+| 修改 | `newcode/agent/__init__.py` | 导出新类型 |
+| 新建 | `newcode/agent/scheduler.py` | ToolScheduler 保序分批并发执行 |
+| 重写 | `newcode/agent/agent.py` | ReAct 循环引擎替代单轮闭环 |
+| 修改 | `newcode/provider/base.py` | StreamEvent 增 usage；Provider 增 system_suffix |
+| 修改 | `newcode/provider/anthropic.py` | 流结束上抛 usage；system_suffix 拼接 |
+| 修改 | `newcode/provider/openai.py` | stream_options include_usage；usage 上抛；system_suffix |
+| 修改 | `newcode/tools/base.py` | Tool Protocol 增 read_only |
+| 修改 | `newcode/tools/registry.py` | 增 read_only_definitions()、is_read_only() |
+| 修改 | `newcode/tools/file_ops.py` | 三个工具 read_only 属性 |
+| 修改 | `newcode/tools/shell.py` | ExecuteCommandTool read_only 属性 |
+| 修改 | `newcode/tools/search.py` | 两个工具 read_only 属性 |
+| 修改 | `newcode/conversation/manager.py` | 增 last_role() 和批量写入、取消补位方法 |
+| 修改 | `newcode/prompt/resources.py` | 增 PLAN_MODE_REMINDER、EXECUTE_DIRECTIVE；SYSTEM_PROMPT 增补 |
+| 修改 | `newcode/config/schema.py` | Config 增 plan_file、default_mode |
+| 修改 | `newcode/config/loader.py` | 解析新配置字段 |
+| 修改 | `newcode/tui/app.py` | 识别 /plan /do；ESC/Ctrl+C 拆分；新事件消费；状态栏/动态区 |
+| 修改 | `newcode/main.py` | -p/--plan CLI；_oneshot 新事件处理 |
 | 修改 | `tests/*.py` | 更新现有测试，新增 Agent Loop / ToolScheduler / 取消 / Plan Mode 测试 |
 
 ---
 
 ## T1: 扩展事件系统
 
-**文件：** `mewcode/agent/events.py`
+**文件：** `newcode/agent/events.py`
 **依赖：** 无
 
 **步骤：**
@@ -38,13 +38,13 @@
 4. 在 `EventType` 枚举中新增 `TOKEN_USAGE`、`TURN_START`、`TURN_END`
 5. 扩展 `Event.payload` 类型标注为 `str | ToolCall | ToolResult | TokenUsage | TurnEnd | StopReason | Exception`
 
-**验证：** `python -c "from mewcode.agent.events import TokenUsage, TurnEnd, StopReason, EventType; print(EventType.TOKEN_USAGE)"` 无报错
+**验证：** `python -c "from newcode.agent.events import TokenUsage, TurnEnd, StopReason, EventType; print(EventType.TOKEN_USAGE)"` 无报错
 
 ---
 
 ## T2: Tool 协议扩展 + 六个工具实现
 
-**文件：** `mewcode/tools/base.py`、`mewcode/tools/file_ops.py`、`mewcode/tools/shell.py`、`mewcode/tools/search.py`
+**文件：** `newcode/tools/base.py`、`newcode/tools/file_ops.py`、`newcode/tools/shell.py`、`newcode/tools/search.py`
 **依赖：** 无
 
 **步骤：**
@@ -53,13 +53,13 @@
 3. 在 `shell.py`：`ExecuteCommandTool.read_only = False`
 4. 在 `search.py`：`ListFilesTool.read_only = True`，`SearchCodeTool.read_only = True`
 
-**验证：** `python -c "from mewcode.tools import Registry; r = Registry.default(); print([(t.name, t.read_only) for t in [r.get(n) for n in ['read_file','write_file','list_files','execute_command']]])"` 输出正确的 read_only 值
+**验证：** `python -c "from newcode.tools import Registry; r = Registry.default(); print([(t.name, t.read_only) for t in [r.get(n) for n in ['read_file','write_file','list_files','execute_command']]])"` 输出正确的 read_only 值
 
 ---
 
 ## T3: Registry 扩展
 
-**文件：** `mewcode/tools/registry.py`
+**文件：** `newcode/tools/registry.py`
 **依赖：** T2
 
 **步骤：**
@@ -78,7 +78,7 @@ assert r.is_read_only("write_file") is False
 
 ## T4: Provider 基类扩展
 
-**文件：** `mewcode/provider/base.py`
+**文件：** `newcode/provider/base.py`
 **依赖：** T1
 
 **步骤：**
@@ -86,13 +86,13 @@ assert r.is_read_only("write_file") is False
 2. 在 `Provider` Protocol 的 `stream()` 方法签名中新增 `system_suffix: str = ""` 形参
 3. 更新 `new_provider()` 无影响（仅签名变更，调用方暂不传 system_suffix）
 
-**验证：** `python -c "from mewcode.provider.base import StreamEvent, Provider; print('ok')"` 无报错
+**验证：** `python -c "from newcode.provider.base import StreamEvent, Provider; print('ok')"` 无报错
 
 ---
 
 ## T5: Anthropic Provider 适配器扩展
 
-**文件：** `mewcode/provider/anthropic.py`
+**文件：** `newcode/provider/anthropic.py`
 **依赖：** T4
 
 **步骤：**
@@ -107,7 +107,7 @@ assert r.is_read_only("write_file") is False
 
 ## T6: OpenAI Provider 适配器扩展
 
-**文件：** `mewcode/provider/openai.py`
+**文件：** `newcode/provider/openai.py`
 **依赖：** T4
 
 **步骤：**
@@ -122,7 +122,7 @@ assert r.is_read_only("write_file") is False
 
 ## T7: ConversationManager 扩展
 
-**文件：** `mewcode/conversation/manager.py`
+**文件：** `newcode/conversation/manager.py`
 **依赖：** T1
 
 **步骤：**
@@ -137,8 +137,8 @@ assert r.is_read_only("write_file") is False
 
 **验证：**
 ```python
-from mewcode.conversation.manager import ConversationManager
-from mewcode.provider.base import ToolCall, ToolResult
+from newcode.conversation.manager import ConversationManager
+from newcode.provider.base import ToolCall, ToolResult
 
 cm = ConversationManager("test", 10)
 cm.add_user("hi")
@@ -154,7 +154,7 @@ assert cm.last_role() == "tool"
 
 ## T8: Prompt 扩展
 
-**文件：** `mewcode/prompt/resources.py`
+**文件：** `newcode/prompt/resources.py`
 **依赖：** 无
 
 **步骤：**
@@ -162,29 +162,29 @@ assert cm.last_role() == "tool"
 2. 新增 `EXECUTE_DIRECTIVE` 模板字符串：包含 `{plan}` 占位符，指示模型按照计划执行
 3. 在 `SYSTEM_PROMPT` 中增补 Agent 循环行为约定："持续工作直到任务完成。你可以连续调用多个工具，无需等待用户确认。如果一次需要多个信息，可以同时调用多个只读工具。"
 
-**验证：** `python -c "from mewcode.prompt.resources import PLAN_MODE_REMINDER, EXECUTE_DIRECTIVE; print('ok')"` 无报错
+**验证：** `python -c "from newcode.prompt.resources import PLAN_MODE_REMINDER, EXECUTE_DIRECTIVE; print('ok')"` 无报错
 
 ---
 
 ## T9: Config 扩展
 
-**文件：** `mewcode/config/schema.py`、`mewcode/config/loader.py`
+**文件：** `newcode/config/schema.py`、`newcode/config/loader.py`
 **依赖：** 无
 
 **步骤：**
 1. 在 `schema.py` 的 `Config` dataclass 中新增：
    - `plan_file: str = "plan.md"`
    - `default_mode: str = "normal"`
-2. 在 `loader.py` 的 `load()` 函数中解析 `.mewcode.yaml` 的 `plan_file` 和 `default_mode` 字段（可选，有默认值）
+2. 在 `loader.py` 的 `load()` 函数中解析 `.newcode.yaml` 的 `plan_file` 和 `default_mode` 字段（可选，有默认值）
 3. 可选：`load_ccswitch()` 也支持 `default_mode`（CC Switch 配置中如有 `defaultMode` 字段则读取）
 
-**验证：** 创建临时 `.mewcode.yaml` 含 `plan_file: "my_plan.md"` 和 `default_mode: "plan"`，加载后 `config.plan_file == "my_plan.md"` 且 `config.default_mode == "plan"`
+**验证：** 创建临时 `.newcode.yaml` 含 `plan_file: "my_plan.md"` 和 `default_mode: "plan"`，加载后 `config.plan_file == "my_plan.md"` 且 `config.default_mode == "plan"`
 
 ---
 
 ## T10: ToolScheduler 实现
 
-**文件：** `mewcode/agent/scheduler.py`（新建）
+**文件：** `newcode/agent/scheduler.py`（新建）
 **依赖：** T2、T3
 
 **步骤：**
@@ -204,9 +204,9 @@ assert cm.last_role() == "tool"
 **验证：**
 ```python
 import asyncio
-from mewcode.tools import Registry
-from mewcode.agent.scheduler import ToolScheduler
-from mewcode.provider.base import ToolCall
+from newcode.tools import Registry
+from newcode.agent.scheduler import ToolScheduler
+from newcode.provider.base import ToolCall
 
 
 async def test():
@@ -229,7 +229,7 @@ asyncio.run(test())
 
 ## T11: Agent 循环引擎重写
 
-**文件：** `mewcode/agent/agent.py`
+**文件：** `newcode/agent/agent.py`
 **依赖：** T1、T3、T4、T7、T10
 
 **步骤：**
@@ -256,25 +256,25 @@ asyncio.run(test())
    - 达到上限：yield DONE(MAX_TURNS)
 4. **保持向后兼容：** `run(user_input)` 默认 mode="normal"，行为与 ch03 语义一致（只是现在可以循环多轮）
 
-**验证：** 现有测试 `tests/test_agent.py` 通过（如有），`python -c "from mewcode.agent import Agent; print('ok')"` 无报错
+**验证：** 现有测试 `tests/test_agent.py` 通过（如有），`python -c "from newcode.agent import Agent; print('ok')"` 无报错
 
 ---
 
 ## T12: Agent 包导出更新
 
-**文件：** `mewcode/agent/__init__.py`
+**文件：** `newcode/agent/__init__.py`
 **依赖：** T1、T10、T11
 
 **步骤：**
 1. 更新导出列表：`Agent`、`Event`、`EventType`、`StopReason`、`TokenUsage`、`TurnEnd`、`ToolScheduler`
 
-**验证：** `python -c "from mewcode.agent import Agent, Event, EventType, StopReason, TokenUsage, TurnEnd, ToolScheduler; print('ok')"` 无报错
+**验证：** `python -c "from newcode.agent import Agent, Event, EventType, StopReason, TokenUsage, TurnEnd, ToolScheduler; print('ok')"` 无报错
 
 ---
 
 ## T13: TUI 扩展
 
-**文件：** `mewcode/tui/app.py`
+**文件：** `newcode/tui/app.py`
 **依赖：** T11、T12
 
 **步骤：**
@@ -295,13 +295,13 @@ asyncio.run(test())
 4. **状态栏：** 在 `bottom_toolbar` 中展示模式标识（`[plan]`/`[normal]`）和累计 token 用量
 5. **动态区：** 流式态显示当前迭代轮次
 
-**验证：** `python -c "from mewcode.tui.app import REPL; print('ok')"` 无报错；现有 TUI 测试通过
+**验证：** `python -c "from newcode.tui.app import REPL; print('ok')"` 无报错；现有 TUI 测试通过
 
 ---
 
 ## T14: main.py 扩展
 
-**文件：** `mewcode/main.py`
+**文件：** `newcode/main.py`
 **依赖：** T11、T12
 
 **步骤：**
@@ -312,7 +312,7 @@ asyncio.run(test())
    - `DONE`：打印终止原因（非 NATURAL 时）
 3. TUI 模式启动时，根据 `config.default_mode` 设置初始模式
 
-**验证：** `python -m mewcode --version` 正常输出；`python -m mewcode --help` 显示 `-p` 参数
+**验证：** `python -m newcode --version` 正常输出；`python -m newcode --help` 显示 `-p` 参数
 
 ---
 

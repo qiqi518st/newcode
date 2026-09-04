@@ -1,4 +1,4 @@
-# MewCode ch07 — MCP 客户端 任务拆解 (task.md)
+# NewCode ch07 — MCP 客户端 任务拆解 (task.md)
 
 > 约定：本项目为 Python，所有验证命令在 Git Bash 下需先 `export PYTHONIOENCODING=utf-8`（见 CLAUDE.md）。
 > **异步测试标记跟 repo 现有约定**：仓库已有测试一律用 `@pytest.mark.anyio`（非 `@pytest.mark.asyncio` / `pytest-asyncio`），见 `tests/test_agent.py`、`tests/test_tools.py`。ch07 新测试必须沿用 `@pytest.mark.anyio`。
@@ -9,16 +9,16 @@
 
 | 操作 | 文件 | 职责 |
 |------|------|------|
-| 新建 | `mewcode/mcp/__init__.py` | 子包门面，导出公共符号 |
-| 新建 | `mewcode/mcp/config.py` | `ServerConfig`、`load_mcp_servers`、配置加载/合并/展开/校验 |
-| 新建 | `mewcode/mcp/wrapper.py` | `McpTool`、`CallerSession` Protocol、`make_tool`、`_VALID_NAME`、模块级 `_non_text_warn_once` |
-| 新建 | `mewcode/mcp/conn.py` | `MCPConnection`（SDK 会话封装、call_tool 翻译）、`MCPStartupError`、模块级 `call_timeout` |
-| 新建 | `mewcode/mcp/manager.py` | `MCPManager`（并发启动/收集/排序/关闭）、模块级 `connect_timeout`/`close_timeout` |
-| 修改 | `mewcode/permission/rules.py` | `_RULE_PARSE_RE` 放宽；`RuleSet.match` 工具名 `*` 通配 |
-| 修改 | `mewcode/permission/checker.py` | `persist_local_allow` 对 `mcp__` 工具落盘裸工具名 |
-| 修改 | `mewcode/main.py` | `_amain` 单 loop；接入 MCP 起停 + finally close |
+| 新建 | `newcode/mcp/__init__.py` | 子包门面，导出公共符号 |
+| 新建 | `newcode/mcp/config.py` | `ServerConfig`、`load_mcp_servers`、配置加载/合并/展开/校验 |
+| 新建 | `newcode/mcp/wrapper.py` | `McpTool`、`CallerSession` Protocol、`make_tool`、`_VALID_NAME`、模块级 `_non_text_warn_once` |
+| 新建 | `newcode/mcp/conn.py` | `MCPConnection`（SDK 会话封装、call_tool 翻译）、`MCPStartupError`、模块级 `call_timeout` |
+| 新建 | `newcode/mcp/manager.py` | `MCPManager`（并发启动/收集/排序/关闭）、模块级 `connect_timeout`/`close_timeout` |
+| 修改 | `newcode/permission/rules.py` | `_RULE_PARSE_RE` 放宽；`RuleSet.match` 工具名 `*` 通配 |
+| 修改 | `newcode/permission/checker.py` | `persist_local_allow` 对 `mcp__` 工具落盘裸工具名 |
+| 修改 | `newcode/main.py` | `_amain` 单 loop；接入 MCP 起停 + finally close |
 | 修改 | `pyproject.toml` | `dependencies` 加 `mcp>=1.0`；`version` 升 `0.7.0` |
-| 修改 | `mewcode/__init__.py` | `__version__` 升 `0.7.0` |
+| 修改 | `newcode/__init__.py` | `__version__` 升 `0.7.0` |
 | 新建 | `docs/ch07/mcp-servers.example.yaml` | 配置示例（含 stdio / http 各类，用 `${VAR}`），被反向测试覆盖 |
 | 新建 | `tests/test_mcp_config.py` | 两层合并/字段校验/变量展开/降级 + **示例文件反向解析** 单测 |
 | 新建 | `tests/test_mcp_wrapper.py` | 命名拼接/禁用字符/只读性/描述兜底/execute 转发（stub caller） |
@@ -31,18 +31,18 @@
 
 ## T0: Ch07 版本与依赖就绪
 
-**文件：** `pyproject.toml`、`mewcode/__init__.py`
+**文件：** `pyproject.toml`、`newcode/__init__.py`
 **依赖：** 无
 **步骤：**
-1. `mewcode/__init__.py`：`__version__` 从 `"0.6.0"` 改为 `"0.7.0"`。
+1. `newcode/__init__.py`：`__version__` 从 `"0.6.0"` 改为 `"0.7.0"`。
 2. `pyproject.toml`：`[project] version` 从 `"0.6.0"` 改为 `"0.7.0"`；`dependencies` 列表追加 `"mcp>=1.0"`。
 3. 重装：`pip install -e .[dev]`。
 4. 核对本地 `mcp` SDK 关键导出路径以便后续正确 import——执行 `python -c "import mcp, mcp.types, mcp.client.stdio, mcp.client.streamable_http as h; print('ok')"`，对照确认 `ClientSession`、`StdioServerParameters`、`Implementation`（均 `mcp`/`mcp.types`）与 `stdio_client`（`mcp.client.stdio`）、`streamable_http_client`（`mcp.client.streamable_http`，**注意是下划线连字、非 `streamablehttp_client`**）、`TextContent`/`Tool`/`CallToolResult`/`ToolAnnotations`（`mcp.types`）的实际来源；SDK 2.0 字段全 snake_case：`Tool.input_schema`、`CallToolResult.is_error`、`ToolAnnotations.read_only_hint`，`call_tool` 返回 `CallToolResult | InputRequiredResult | Result` 联合，`streamable_http_client` **无 headers 参数**（经 `httpx.AsyncClient(headers=...)` 注入）、传输皆 yield 2 元组。把结论记在首个用到它们的实现的注释里。
 
 **验证：**
-- `python -c "import mewcode; print(mewcode.__version__)"` → `0.7.0`
+- `python -c "import newcode; print(newcode.__version__)"` → `0.7.0`
 - `python -c "import mcp; print('ok')"` → `ok`
-- `grep -n '0.6.0' pyproject.toml mewcode/__init__.py` → 无命中
+- `grep -n '0.6.0' pyproject.toml newcode/__init__.py` → 无命中
 
 **提交：** 版本号变更**独立提交** `chore: bump version to 0.7.0`（CLAUDE.md「版本号变更应作为独立提交」硬规则）；依赖追加另起提交 `chore(ch07): add mcp sdk dependency`。
 
@@ -50,7 +50,7 @@
 
 ## T1: 配置加载与合并（config.py）
 
-**文件：** `mewcode/mcp/config.py`、`tests/test_mcp_config.py`
+**文件：** `newcode/mcp/config.py`、`tests/test_mcp_config.py`
 **依赖：** 无
 **步骤：**
 1. 定义 `@dataclass ServerConfig`：`name: str`、`type: Literal["stdio","http"]`、`command: str=""`、`args: list[str]`（默认工厂）、`env: dict[str,str]`（默认工厂）、`url: str=""`、`headers: dict[str,str]`（默认工厂）。
@@ -60,21 +60,21 @@
 5. `_apply_expansion(name, raw) -> None`：对 `raw.env`、`raw.headers` 每个值跑 `_expand_value`，就地替换；同 server 同未定义变量限一次告警（局部 set 去重），stderr `[mcp] warn: undefined env var ${X} referenced by server <name>`。**仅作用于 env/headers 的值**。
 6. `_merge_servers(user, project) -> dict[str, _RawServer]`：`{**user, **project}`（项目级完整覆盖同名 server）。
 7. `_validate_server(name, raw) -> ServerConfig | None`：`type` 非 `stdio`/`http`→None+告警；`stdio` 缺非空 `command`→None+告警；`http` 缺非空 `url`→None+告警；其余字段类型兜底（`args` 非 list→`[]`，`env`/`headers` 非 dict→`{}`）后构造 `ServerConfig(name=name, ...)`。告警 `[mcp] warn: skip server <name>: <reason>`。
-8. `load_mcp_servers(root: str) -> dict[str, ServerConfig]`：用户级 `Path.home()/".mewcode"/"config.yaml"`（`Path.home()` 抛错时 try/except 跳过用户层）、项目级 `Path(root)/".mewcode.yaml"`；各自 `_load_file`→对可用 server `_apply_expansion`→`_merge_servers`→逐个 `_validate_server` 组装结果 dict。**全程不抛**。
+8. `load_mcp_servers(root: str) -> dict[str, ServerConfig]`：用户级 `Path.home()/".newcode"/"config.yaml"`（`Path.home()` 抛错时 try/except 跳过用户层）、项目级 `Path(root)/".newcode.yaml"`；各自 `_load_file`→对可用 server `_apply_expansion`→`_merge_servers`→逐个 `_validate_server` 组装结果 dict。**全程不抛**。
 9. 写 `tests/test_mcp_config.py`（用 `@pytest.mark.anyio` 测 async 部分、普通函数测 sync 部分）：
    ①两层合并、项目级覆盖用户级同名（断言字段为项目级值）；②文件缺失→空；③非法 YAML→跳过该层+不抛+`capsys` 见告警；④`${VAR}` 已定义（`monkeypatch.setenv`）→展开为环境值；未定义→空串+告警；⑤`command`/`args` 中含 `${VAR}`→不展开（保留字面量）；⑥type 缺失/非法、stdio 缺 command、http 缺 url→各自被跳过，其它 server 不受影响。断言行为而非库内部。
 
 **验证：**
-- `ruff format --check mewcode/mcp/config.py tests/test_mcp_config.py` 无 diff
-- `ruff check mewcode/mcp/config.py tests/test_mcp_config.py` 无告警
+- `ruff format --check newcode/mcp/config.py tests/test_mcp_config.py` 无 diff
+- `ruff check newcode/mcp/config.py tests/test_mcp_config.py` 无告警
 - `python -m pytest tests/test_mcp_config.py -q` 全过
 
 ---
 
 ## T2: 工具适配器（wrapper.py）
 
-**文件：** `mewcode/mcp/wrapper.py`、`tests/test_mcp_wrapper.py`
-**依赖：** 无（仅依赖 `mewcode.provider.base.ToolResult`；`CallerSession` 为本地 Protocol，不依赖 conn）
+**文件：** `newcode/mcp/wrapper.py`、`tests/test_mcp_wrapper.py`
+**依赖：** 无（仅依赖 `newcode.provider.base.ToolResult`；`CallerSession` 为本地 Protocol，不依赖 conn）
 **步骤：**
 1. 定义 `CallerSession(Protocol)`：`async def call_tool(self, name: str, arguments: dict) -> ToolResult: ...`。
 2. 模块级 `_VALID_NAME = re.compile(r"^[A-Za-z0-9_-]+$")`。
@@ -84,15 +84,15 @@
 6. 写 `tests/test_mcp_wrapper.py`（`@pytest.mark.anyio`）：①命名拼接；②含非法字符（如 `mcp__s__a/b`）→`make_tool` 返回 None；③`readOnlyHint=True`→read_only True，缺失/False→False；④描述空→兜底文案；⑤inputSchema 空→`{"type":"object"}`；⑥execute 转发到 stub caller（最小 `class StubSession:` 实现 `CallerSession`）并返回其 ToolResult。⑦非 text 块的去重：直接验证 `_non_text_warn_once` 行为由 conn 测试覆盖（见 T3）——wrapper 测试只验 execute 转发。每个测试 docstring 注明防的 bug。
 
 **验证：**
-- `ruff format --check mewcode/mcp/wrapper.py tests/test_mcp_wrapper.py` 无 diff
-- `ruff check mewcode/mcp/wrapper.py tests/test_mcp_wrapper.py` 无告警
+- `ruff format --check newcode/mcp/wrapper.py tests/test_mcp_wrapper.py` 无 diff
+- `ruff check newcode/mcp/wrapper.py tests/test_mcp_wrapper.py` 无告警
 - `python -m pytest tests/test_mcp_wrapper.py -q` 全过
 
 ---
 
 ## T3: SDK 会话封装与调用翻译（conn.py）
 
-**文件：** `mewcode/mcp/conn.py`、`tests/test_mcp_conn.py`
+**文件：** `newcode/mcp/conn.py`、`tests/test_mcp_conn.py`
 **依赖：** T0（`mcp` 可 import）、T2（`make_tool`）
 **步骤：**
 1. 实现前用 `python -c` 核对 `streamablehttp_client`/`stdio_client`/`ClientSession`/`Implementation`/`TextContent` 真实 import 路径（T0 步骤 4 结论落地）。
@@ -104,7 +104,7 @@
    - stdio：`StdioServerParameters(command=server.command, args=server.args, env={**os.environ, **server.env})` → `stdio_client(params)`；
    - http（SDK 2.0 无 headers 参数）：`http_client = create_mcp_http_client(headers=dict(server.headers)) if server.headers else None`（有则先 `stack.enter_async_context(http_client)`）→ `streamable_http_client(server.url, http_client=http_client)`；
    `transport = await stack.enter_async_context(ctx)`；`read_stream, write_stream = transport`（**stdio / http 都是 2 元组**）；
-   `session = await stack.enter_async_context(ClientSession(read_stream, write_stream, client_info=Implementation(name="mewcode", version=self._client_version)))`；
+   `session = await stack.enter_async_context(ClientSession(read_stream, write_stream, client_info=Implementation(name="newcode", version=self._client_version)))`；
    `await session.initialize()`；`listed = await session.list_tools()`；`self._session = session`；`self._tools = [t for t in (make_tool(self.server.name, self, remote) for remote in listed.tools) if t is not None]`；`self._ready.set()`；`await self._stop.wait()`（停在此处保持上下文存活，直到 close 取消本 task）。
    `except asyncio.CancelledError: raise`（close 取消时，`async with` 在本 task 内退栈——**规避 anyio cancel scope 跨 task 退出 RuntimeError**，spec N7）；`except BaseException as e: self._connect_error=e; self._ready.set()`（栈已在本 task 内自动退出）。
 7. 实现 `call_tool(self, tool_name, arguments) -> ToolResult`：`try: result = await asyncio.wait_for(self._session.call_tool(tool_name, arguments=arguments or {}), call_timeout)`；
@@ -116,21 +116,21 @@
 8. 实现 `_teardown_holder(self) -> None`：`self._stop.set()`；`self._holder.cancel()`；`try: await self._holder` `except (CancelledError, Exception): pass`（吞掉 holder 退出异常）；`finally: self._holder=None`。
 9. 实现 `close(self)`：幂等（`if self._closed: return; self._closed=True`）；`await self._teardown_holder()`（取消 holder 触发上下文在 holder 自身 task 内退出）。自身不加超时（MCPManager.close 单层 5s 兜底已覆盖）。
 10. 写 `tests/test_mcp_conn.py`（`@pytest.mark.anyio`）：
-    **call_tool 各分支**——构造 fake `_session`（最小 stub 实现 `.call_tool` 返回预设 result，含 `.content` 列表与 `.is_error`），白盒 set `conn._session`，测：①多个 `TextContent`→按序拼进 `output`、`is_error=False`；②远端 `is_error=True`→文本进 `error`、`status="error"`；③非 text 块→被丢弃、不混进 output + stderr 告警（同 `full_name` 多次只告警一次，验证 `_non_text_warn_once`）；④`call_tool` 抛异常→`ToolResult(status="error", error=...)` 不抛；⑤超时——monkeypatch 把 `mewcode.mcp.conn.call_timeout` 临时改 0.2 + fake `call_tool` 内 `await asyncio.Event().wait()` 挂起→走超时分支，restore；⑥非 `CallToolResult` 返回→「非预期结果类型」错误；⑦未连接调用→「未连接」错误而非 AttributeError。
+    **call_tool 各分支**——构造 fake `_session`（最小 stub 实现 `.call_tool` 返回预设 result，含 `.content` 列表与 `.is_error`），白盒 set `conn._session`，测：①多个 `TextContent`→按序拼进 `output`、`is_error=False`；②远端 `is_error=True`→文本进 `error`、`status="error"`；③非 text 块→被丢弃、不混进 output + stderr 告警（同 `full_name` 多次只告警一次，验证 `_non_text_warn_once`）；④`call_tool` 抛异常→`ToolResult(status="error", error=...)` 不抛；⑤超时——monkeypatch 把 `newcode.mcp.conn.call_timeout` 临时改 0.2 + fake `call_tool` 内 `await asyncio.Event().wait()` 挂起→走超时分支，restore；⑥非 `CallToolResult` 返回→「非预期结果类型」错误；⑦未连接调用→「未连接」错误而非 AttributeError。
     **connect_and_list 包装路径**——monkeypatch `conn_mod.stdio_client` 返回 fake transport ctx（`__aenter__` 返回 `(obj,obj)`）+ monkeypatch `conn_mod.ClientSession` 返回包装 fake session（实现 `initialize`/`list_tools`）的 ctx；断言返回的 `McpTool` 列表名字前缀正确（`mcp__<server>__...`）、禁用字符工具被跳过、`c._session` 已置位。
     **connect_and_list 失败收尾**——fake session 的 `initialize` 抛错→`MCPStartupError` 且 `c._session is None`、`c._closed is True`、`close()` 幂等不抛（spec N7）。真 transport 连接留 T10 人工验证。测试 docstring 注明防的 bug。
 
 **验证：**
-- `ruff format --check mewcode/mcp/conn.py tests/test_mcp_conn.py` 无 diff
-- `ruff check mewcode/mcp/conn.py tests/test_mcp_conn.py` 无告警
+- `ruff format --check newcode/mcp/conn.py tests/test_mcp_conn.py` 无 diff
+- `ruff check newcode/mcp/conn.py tests/test_mcp_conn.py` 无告警
 - `python -m pytest tests/test_mcp_conn.py -q` 全过
-- `python -c "from mewcode.mcp.conn import MCPConnection, MCPStartupError; print('ok')"` → `ok`
+- `python -c "from newcode.mcp.conn import MCPConnection, MCPStartupError; print('ok')"` → `ok`
 
 ---
 
 ## T4: 生命周期管理器（manager.py）
 
-**文件：** `mewcode/mcp/manager.py`、`tests/test_mcp_manager.py`
+**文件：** `newcode/mcp/manager.py`、`tests/test_mcp_manager.py`
 **依赖：** T2（`McpTool`）、T3（`MCPConnection`、`call_timeout`）
 **步骤：**
 1. 模块级 `connect_timeout: float = 30.0`、`close_timeout: float = 5.0`（`call_timeout` 从 conn import 复用）。
@@ -152,32 +152,32 @@
    # docstring 注明防的 bug（如「某 server 超时拖死整个 start_all」「close 卡死阻塞退出」）。
 
 **验证：**
-- `ruff format --check mewcode/mcp/manager.py tests/test_mcp_manager.py` 无 diff
-- `ruff check mewcode/mcp/manager.py tests/test_mcp_manager.py` 无告警
+- `ruff format --check newcode/mcp/manager.py tests/test_mcp_manager.py` 无 diff
+- `ruff check newcode/mcp/manager.py tests/test_mcp_manager.py` 无告警
 - `python -m pytest tests/test_mcp_manager.py -q` 全过
-- `python -c "from mewcode.mcp.manager import MCPManager, connect_timeout; print('ok')"` → `ok`
+- `python -c "from newcode.mcp.manager import MCPManager, connect_timeout; print('ok')"` → `ok`
 
 ---
 
 ## T5: 子包门面（__init__.py）
 
-**文件：** `mewcode/mcp/__init__.py`
+**文件：** `newcode/mcp/__init__.py`
 **依赖：** T1、T2、T3、T4
 **步骤：**
 1. 导出 `MCPManager`、`MCPConnection`、`McpTool`、`CallerSession`、`ServerConfig`、`load_mcp_servers`，并设 `__all__`。
 2. 子包 docstring 一句：说明 MCP 客户端职责与「仅依赖 tools/provider/sdk，不依赖 agent/tui/permission」。
 
 **验证：**
-- `ruff format --check mewcode/mcp/__init__.py` 无 diff
-- `ruff check mewcode/mcp/__init__.py` 无告警
-- `python -c "from mewcode.mcp import MCPManager, MCPConnection, McpTool, CallerSession, ServerConfig, load_mcp_servers; print('ok')"` → `ok`
+- `ruff format --check newcode/mcp/__init__.py` 无 diff
+- `ruff check newcode/mcp/__init__.py` 无告警
+- `python -c "from newcode.mcp import MCPManager, MCPConnection, McpTool, CallerSession, ServerConfig, load_mcp_servers; print('ok')"` → `ok`
 - `python -m pytest tests/test_mcp_config.py tests/test_mcp_wrapper.py tests/test_mcp_conn.py tests/test_mcp_manager.py -q` 全过（子包全量回归）
 
 ---
 
 ## T6: 权限规则泛化——正则放宽 + 工具名通配（rules.py）
 
-**文件：** `mewcode/permission/rules.py`、`tests/test_permission_rules.py`
+**文件：** `newcode/permission/rules.py`、`tests/test_permission_rules.py`
 **依赖：** 无（与 T1–T5 可并行）
 **步骤：**
 1. 放宽 `rules.py:23` 的 `_RULE_PARSE_RE`：从 `^(Bash|Read|Write|Edit|Glob|Grep)(?:\((.*)\))?$` 改为 `^([A-Za-z0-9_-]+)(?:\((.*)\))?$`（接受任意合法工具名，含 `mcp__` 前缀；仍因 `[A-Za-z0-9_-]+` 拒非法字符）。
@@ -185,23 +185,23 @@
 3. 在 `tests/test_permission_rules.py` 补：①`mcp__github__create_issue` 能被 `Rule.parse` 接受；②裸写 `mcp__github__*`（无括号、pattern=""）→ match `mcp__github__create_issue` 为 True、match `mcp__other__x` 为 False；③带括号 `mcp__fs__read_file(/path)` 仍解析正确；④6 个内置友好名原用例仍全过（不回归）；⑤含非法字符的规则（如 `mcp__a b__x`）被 `Rule.parse` 拒绝返回 None。
 
 **验证：**
-- `ruff format --check mewcode/permission/rules.py tests/test_permission_rules.py` 无 diff
-- `ruff check mewcode/permission/rules.py tests/test_permission_rules.py` 无告警
+- `ruff format --check newcode/permission/rules.py tests/test_permission_rules.py` 无 diff
+- `ruff check newcode/permission/rules.py tests/test_permission_rules.py` 无告警
 - `python -m pytest tests/test_permission_rules.py -q` 全过（新 mcp__ 用例 + 原用例不回归）
 
 ---
 
 ## T7: 权限 allow_always 对 MCP 落盘裸名（checker.py）
 
-**文件：** `mewcode/permission/checker.py`、`tests/test_permission_checker.py`
+**文件：** `newcode/permission/checker.py`、`tests/test_permission_checker.py`
 **依赖：** T6（规则正则已接受 mcp__ 名，裸名规则才可被加载匹配）
 **步骤：**
 1. 改 `persist_local_allow`（checker.py:218）：方法开头判 `if tool_call.tool_name.startswith("mcp__"):`，则 `rule_str = fn`（裸工具名精确规则，不加括号、不取 target——MCP 工具 `extract_target` 返回 `ok=False`，原凭 target 落盘对 MCP 是空操作）；跳过后续 `info.is_file` 分支，直接进入「读现有配置→去重追加→写回」逻辑。内置工具逻辑保持原样。
 2. 在 `tests/test_permission_checker.py` 补：①对 `mcp__github__create_issue` 的 `ToolCall` 调 `persist_local_allow` → 本地 rules 文件 allow 列表出现 `mcp__github__create_issue`（无括号）；②再调一次→去重不重复；③内置 `execute_command` 工具落盘仍走带括号/转义既有逻辑（不回归）。用 `tmp_path` 隔离本地文件，测完清理。
 
 **验证：**
-- `ruff format --check mewcode/permission/checker.py tests/test_permission_checker.py` 无 diff
-- `ruff check mewcode/permission/checker.py tests/test_permission_checker.py` 无告警
+- `ruff format --check newcode/permission/checker.py tests/test_permission_checker.py` 无 diff
+- `ruff check newcode/permission/checker.py tests/test_permission_checker.py` 无告警
 - `python -m pytest tests/test_permission_checker.py -q` 全过
 - `python -m pytest tests/test_permission_rules.py tests/test_permission_engine.py tests/test_permission_agent.py tests/test_permission_sandbox.py tests/test_permission_blocklist.py tests/test_permission_tui.py -q` 全过（五层权限全量不回归）
 
@@ -209,19 +209,19 @@
 
 ## T8: 启动接入与单 loop 收尾（main.py）
 
-**文件：** `mewcode/main.py`
+**文件：** `newcode/main.py`
 **依赖：** T5（mcp 子包）、T6（规则泛化）、T7（落盘泛化）
 **步骤：**
-1. 顶部 import：`from mewcode.mcp import MCPManager, load_mcp_servers`、`from mewcode import __version__`。
+1. 顶部 import：`from newcode.mcp import MCPManager, load_mcp_servers`、`from newcode import __version__`。
 2. 把 `main()` 的「建 registry → 跑 TUI/oneshot → 退出」收进 `async def _amain(args, config, provider)`；`main()` 末尾改为 `asyncio.run(_amain(args, config, provider))`（**取代原 main.py:123/133 的两次 asyncio.run**，TUI / oneshot / MCP 共享同一 loop）。
 3. `_amain` 内：`registry = Registry.default()`；`permission = PermissionChecker.create(project_root)`（建在 MCP 之前）；`--mode` 覆盖仍在；`mcp_servers = load_mcp_servers(os.getcwd())`；`mcp_mgr = MCPManager(mcp_servers, client_version=__version__)`；`summary = await mcp_mgr.start_all()`；`if not summary.is_empty: print(MCPManager.format_summary(summary), file=sys.stderr)`（**启动可观测摘要，spec N5**）；`for t in mcp_mgr.tools(): registry.register(t)`；构造 agent/renderer/plan_manager（原逻辑）。
 4. `try:` 跑 `await _oneshot(...)`（`_oneshot` 从 `def` 改 `async def`，去掉其内部 `sys.exit(1)`，改为 raise 让 finally 跑）或 `await repl.run()`；`finally: await mcp_mgr.close()`。banner 打印条件不变。`REPL.run` 已 async，无需改。
 5. 版本号、provider 解析等同步部分保持。
 
 **验证：**
-- `ruff format --check mewcode/main.py` 无 diff；`ruff check mewcode/main.py` 无告警
-- `python -m mewcode --version` → `mewcode 0.7.0`
-- `python -c "import mewcode.main; print('import ok')"` → import 链不断
+- `ruff format --check newcode/main.py` 无 diff；`ruff check newcode/main.py` 无告警
+- `python -m newcode --version` → `newcode 0.7.0`
+- `python -c "import newcode.main; print('import ok')"` → import 链不断
 - 全量回归：`python -m pytest -q` 全过（ch01–ch06 既有 + ch07 新测试）
 
 ---
@@ -233,7 +233,7 @@
 **步骤：**
 1. 新建 `docs/ch07/mcp-servers.example.yaml`（YAML 注释说明放置位置与覆盖语义），含 stdio 与 http 各类，凭据一律 `${VAR}`：
    ```yaml
-   # 项目级放 <root>/.mewcode.yaml；用户级放 ~/.mewcode/config.yaml。
+   # 项目级放 <root>/.newcode.yaml；用户级放 ~/.newcode/config.yaml。
    # 同名 server 项目级完整覆盖用户级。
    # env / headers 的值支持 ${VAR} 从宿主环境变量展开；command/args 不展开。
    mcp_servers:
@@ -269,11 +269,11 @@
 > 本任务依赖真实 stdio MCP server 与真实终端，无法在无终端/无网络环境自动执行。
 > 按 CLAUDE.md「验证受阻必上报」纪律：列为「待人工验证」，**不混入可自动验证任务的「通过」**。
 
-**文件：** —（用临时 `.mewcode.yaml`，测完恢复项目根干净）
+**文件：** —（用临时 `.newcode.yaml`，测完恢复项目根干净）
 **依赖：** T1–T9
 **步骤：**
 1. 准备真实可用的 stdio MCP server。优先 `npx -y @modelcontextprotocol/server-everything`（官方示例，自带 echo/add 等基础工具）；若无 npx 用最小 Python server。
-2. 项目根写临时 `.mewcode.yaml`：
+2. 项目根写临时 `.newcode.yaml`：
    ```yaml
    mcp_servers:
      demo:
@@ -281,16 +281,16 @@
        command: npx
        args: ["-y", "@modelcontextprotocol/server-everything"]
    ```
-3. `tmux` 起 mewcode，人工观察：
+3. `tmux` 起 newcode，人工观察：
    - 启动 stderr 显示 server 连接成功 + 工具数；TUI 状态栏正常；
    - 让模型调 `mcp__demo__echo` 一类工具：default 模式弹人在回路→允许本次→结果回灌→模型续答；
-   - 选「永久允许」后本地权限规则被写入；重启 mewcode再调同工具不再弹窗（验证永久规则 + MCP 命名空间联动）；
+   - 选「永久允许」后本地权限规则被写入；重启 newcode再调同工具不再弹窗（验证永久规则 + MCP 命名空间联动）；
    - 切 bypassPermissions：调用不弹窗；让模型跑 `rm -rf /` 仍被内置黑名单拦下（MCP 工具不绕过黑名单作用域）；
    - Esc 取消弹窗：干净回到 idle，不退出；
-   - 退出 mewcode 后 `ps -ef | grep server-everything` 确认子进程已终止（AC10 退出干净）；
+   - 退出 newcode 后 `ps -ef | grep server-everything` 确认子进程已终止（AC10 退出干净）；
 4. 配一个 command 不存在的 server + 一个能跑的 server：启动 stderr 有失败告警，能跑的 server 工具仍可用（AC8 启动失败隔离）。
 
-**验证方式（人工）：** 上述全部观察通过；删临时 `.mewcode.yaml`，恢复项目根干净。
+**验证方式（人工）：** 上述全部观察通过；删临时 `.newcode.yaml`，恢复项目根干净。
 **若环境受限无法验证：** 标「待人工验证」，说明原因（无 npx/无真实 MCP server/无真实终端）、替代为 T3/T4 的 fake session/stub 覆盖的集成层、风险（真连接生命周期/退出子进程终止未在 CI 验证）、责任方（由谁在有环境时补验）。
 
 ---
@@ -301,10 +301,10 @@
 **依赖：** T1–T10
 **步骤：**
 1. `ruff format --check .`（无 diff）；`ruff check .`（无告警）。
-2. （可选）`mypy mewcode/mcp`（strict 子集亦可）。
+2. （可选）`mypy newcode/mcp`（strict 子集亦可）。
 3. `python -m pytest -q`（含 `tests/test_mcp_*.py` 全量）。
 4. 重点守护并发/收尾：`python -m pytest tests/test_mcp_manager.py -q` 内用例已断言无悬挂 task、close 不死锁。
-5. 凭据不落盘扫描：`git grep -nE "(Bearer|sk-|ghp_|github_pat_)[A-Za-z0-9_-]{16,}"`（无命中）；确认 `docs/ch07/mcp-servers.example.yaml`、项目根 `.mewcode.yaml` 无 token 明文。
+5. 凭据不落盘扫描：`git grep -nE "(Bearer|sk-|ghp_|github_pat_)[A-Za-z0-9_-]{16,}"`（无命中）；确认 `docs/ch07/mcp-servers.example.yaml`、项目根 `.newcode.yaml` 无 token 明文。
 6. docs 保护自检：确认 T1–T11 全程未改动 `docs/` 下任何已存在文件（仅 T9 新建了 `docs/ch07/mcp-servers.example.yaml`，属新建交付物）——`git status docs/` 应仅显示该新建文件，无对既有文档的修改。
 
 **验证：** 全部通过。

@@ -1,10 +1,10 @@
-# MewCode 多轮对话 — 需求规格 (spec.md)
+# NewCode 多轮对话 — 需求规格 (spec.md)
 
 ## 背景
 
-MewCode 是一个终端 AI 编程助手（类似 Claude Code），使用 Python 实现。本规格定义其第一版核心能力：**多轮对话**。
+NewCode 是一个终端 AI 编程助手（类似 Claude Code），使用 Python 实现。本规格定义其第一版核心能力：**多轮对话**。
 
-用户可以启动 MewCode，在终端中与 AI 进行持续的多轮对话，AI 能记住上下文，流式输出回复。第一版不涉及工具调用、文件操作等高级能力，专注于对话体验本身。
+用户可以启动 NewCode，在终端中与 AI 进行持续的多轮对话，AI 能记住上下文，流式输出回复。第一版不涉及工具调用、文件操作等高级能力，专注于对话体验本身。
 
 ## 目标用户
 
@@ -15,8 +15,8 @@ MewCode 是一个终端 AI 编程助手（类似 Claude Code），使用 Python 
 
 ### 对话能力
 
-1. **REPL 多轮对话**：启动 `mewcode` 后进入交互式 REPL，用户可连续输入，AI 逐轮流式回复，直到用户退出
-2. **单次调用模式**：`mewcode -c "问题"` 直接输出 AI 回复后退出，不进入 REPL
+1. **REPL 多轮对话**：启动 `newcode` 后进入交互式 REPL，用户可连续输入，AI 逐轮流式回复，直到用户退出
+2. **单次调用模式**：`newcode -c "问题"` 直接输出 AI 回复后退出，不进入 REPL
 3. **滑动窗口上下文管理**：保留最近 N 轮对话历史（N 可配置，默认 20），超过上限时丢弃最早的消息对
 4. **流式输出**：AI 回复逐 token 实时打印到终端，用户无需等待完整回复
 5. **多行输入**：自动检测未闭合的括号/引号，像 Python REPL 一样允许换行继续输入
@@ -37,7 +37,7 @@ MewCode 是一个终端 AI 编程助手（类似 Claude Code），使用 Python 
 ## 非功能要求
 
 - 使用 Python 实现，依赖 `anthropic` SDK 和 `openai` SDK
-- 配置文件为 YAML 格式，位于 `~/.mewcode/config.yaml`
+- 配置文件为 YAML 格式，位于 `~/.newcode/config.yaml`
 - 配置文件不存在时使用内置默认值正常启动
 - 流式输出到 stdout，错误信息输出到 stderr
 
@@ -46,12 +46,12 @@ MewCode 是一个终端 AI 编程助手（类似 Claude Code），使用 Python 
 ### 命令行接口
 
 ```
-mewcode                    # 启动 REPL 多轮对话
-mewcode -c "问题"          # 单次调用，输出后退出
-mewcode --help             # 显示帮助
+newcode                    # 启动 REPL 多轮对话
+newcode -c "问题"          # 单次调用，输出后退出
+newcode --help             # 显示帮助
 ```
 
-### 配置文件结构 (~/.mewcode/config.yaml)
+### 配置文件结构 (~/.newcode/config.yaml)
 
 ```yaml
 provider: anthropic-official

@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import tempfile
 
-from mewcode.permission.checker import PermissionChecker
-from mewcode.permission.modes import PermissionMode
+from newcode.permission.checker import PermissionChecker
+from newcode.permission.modes import PermissionMode
 
 
 def test_for_subagent_shares_layers():

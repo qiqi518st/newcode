@@ -13,9 +13,9 @@ from pathlib import Path
 
 import pytest
 
-from mewcode.worktree.config import WorktreesConfig
-from mewcode.worktree.manager import Manager
-from mewcode.worktree.types import (
+from newcode.worktree.config import WorktreesConfig
+from newcode.worktree.manager import Manager
+from newcode.worktree.types import (
     ExitAction,
     ExitOptions,
     WorktreeError,

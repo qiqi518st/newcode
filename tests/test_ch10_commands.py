@@ -9,14 +9,14 @@ import asyncio
 import tempfile
 from pathlib import Path
 
-from mewcode.memory import MemoryManager
-from mewcode.permission.checker import PermissionChecker
-from mewcode.permission.modes import PermissionMode
-from mewcode.permission.rules import RuleLayers
-from mewcode.plans.manager import PlanManager
-from mewcode.slash import CommandContext, CommandRegistry, NopUI, RecordingUI
-from mewcode.slash.commands import register_all
-from mewcode.slash.commands.memory import _slugify
+from newcode.memory import MemoryManager
+from newcode.permission.checker import PermissionChecker
+from newcode.permission.modes import PermissionMode
+from newcode.permission.rules import RuleLayers
+from newcode.plans.manager import PlanManager
+from newcode.slash import CommandContext, CommandRegistry, NopUI, RecordingUI
+from newcode.slash.commands import register_all
+from newcode.slash.commands.memory import _slugify
 
 
 def _registered() -> CommandRegistry:
@@ -173,7 +173,7 @@ def test_permission_add_and_rules(tmp_path):
     asyncio.run(_run(_registered(), "permission_rules", ctx))
     assert "local allow Bash(git *)" in ui.messages[-1]
     # 立即生效：check() 命中新规则
-    from mewcode.provider.base import ToolCall
+    from newcode.provider.base import ToolCall
 
     result = checker.check(ToolCall("execute_command", {"command": "git status"}))
     assert result.decision.value == "allow"
@@ -183,7 +183,7 @@ def test_permission_add_immediate_effect_on_checker():
     """add_rule 后同进程 check() 立即命中（防"重启才生效"的静默失效 bug）。"""
     checker = _perm(tempfile.mkdtemp())
     checker.add_rule("Bash(git *)", "allow")
-    from mewcode.provider.base import ToolCall
+    from newcode.provider.base import ToolCall
 
     r = checker.check(ToolCall("execute_command", {"command": "git pull"}))
     assert r.decision.value == "allow"

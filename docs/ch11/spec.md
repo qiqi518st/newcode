@@ -1,12 +1,12 @@
-# MewCode ch11 - Skill 技能包系统 Spec
+# NewCode ch11 - Skill 技能包系统 Spec
 
 ## 背景
 
-ch10 为 MewCode 装上了 SlashCommand 内置命令框架，用户通过 `/` 前缀的本地命令快速操作（12 条命令，注册中心 + TUI 分流器 + 补全）。但这些命令是**编译进二进制的 Python 代码**：改一条命令的提示词要改源码、重新构建、重启进程。
+ch10 为 NewCode 装上了 SlashCommand 内置命令框架，用户通过 `/` 前缀的本地命令快速操作（12 条命令，注册中心 + TUI 分流器 + 补全）。但这些命令是**编译进二进制的 Python 代码**：改一条命令的提示词要改源码、重新构建、重启进程。
 
 可复用的 AI 操作（提交代码、审查代码、跑测试……）本质上是一套「SOP 指令 + 工具约束」的组合。当前它们散落在：
 - 硬编码的 SlashCommand（如 `/review` 是 PROMPT 类型，注入一段固定文本触发 LLM 回合）
-- Claude Code 宿主技能（如 `.claude/skills/github-upload`，属于宿主环境，不经 MewCode）
+- Claude Code 宿主技能（如 `.claude/skills/github-upload`，属于宿主环境，不经 NewCode）
 
 ch11 引入 **Skill 技能包系统**：把可复用的 SOP 装进**可编辑的 Markdown 文件**（带 frontmatter + 资源的能力包），随时可编辑、不需要编译。核心机制是**两阶段加载 + 渐进式披露**——Agent 平时只看到 Skill 的名字 + 一句说明（几十 token），只有当判断任务匹配某个 Skill 时，才通过内置 `load_skill` 工具把完整指令和专属工具加载进当前会话。`/` 显式触发与意图识别自动触发共用同一套执行器。`inline` 模式 SOP 在主对话内执行，`fork` 模式独立子 Agent 隔离执行后把结果回流。
 
@@ -68,9 +68,9 @@ ch11 引入 **Skill 技能包系统**：把可复用的 SOP 装进**可编辑的
 ### F2 Skill 加载器
 
 - F2.1：三级搜索路径，优先级 **项目级 > 用户级 > 内置级**，同名按优先级覆盖（高优先级层覆盖低优先级层）：
-  - 项目级：`<cwd>/.mewcode/skills/`
-  - 用户级：`~/.mewcode/skills/`
-  - 内置级：`mewcode/skills/builtin/`（编译进二进制的默认 Skill 目录）
+  - 项目级：`<cwd>/.newcode/skills/`
+  - 用户级：`~/.newcode/skills/`
+  - 内置级：`newcode/skills/builtin/`（编译进二进制的默认 Skill 目录）
 - F2.2：扫描三目录，区分单文件与目录型两种布局（F1.1），每个 Skill 解析出元数据对象（name / description / prompt_body / allowed_tools / mode / context / model / source_path / is_directory）
 - F2.3：热加载 + 容错——`get(name)` 每次调用都重读源文件，文件修改即时生效；若本次解析失败，回退内存 `_cache` 中的旧版本并记 `warning`（内存 `_cache` = 最近一次成功解析的 Skill 对象，不落盘）
 - F2.4：Skill 加载完成后自动注册成 `/<名字>` 短命令出现在 `/help` 与 Tab 补全，描述末尾标注 `[skill]` 以区分内置命令；执行时经 `get(name)` 重读源文件正文支持热更新
@@ -129,7 +129,7 @@ ch11 引入 **Skill 技能包系统**：把可复用的 SOP 装进**可编辑的
 - F7.5：`/skill on <name>`——重新启用（从 disabled 集合移除）
 - F7.6：`/skill off <name>`——禁用（加入 disabled 集合；从阶段一摘要与可用列表移除；已激活的立即失活）
 - F7.7：`/skill unload <name>`——卸载（移出注册 + 清理内存状态；从 disabled 集合移除）
-- F7.8：disabled 集合跨会话持久（写入状态文件，如 `~/.mewcode/skills/disabled.json`）；`on` / `off` 立即生效并同步阶段一摘要
+- F7.8：disabled 集合跨会话持久（写入状态文件，如 `~/.newcode/skills/disabled.json`）；`on` / `off` 立即生效并同步阶段一摘要
 
 ### F8 失活机制（三层）
 
@@ -143,7 +143,7 @@ ch11 引入 **Skill 技能包系统**：把可复用的 SOP 装进**可编辑的
 - F9.2：`tool.json` 负责**注册**——声明这个 Skill **自己新增**的工具，格式与标准 function calling schema 兼容（name / description / parameters / 入口脚本路径）；加载后注册进主环境，成为可被模型直接调用的真实工具；**不与 `allowedTools` 重叠**（后者负责可见性）
 - F9.3：写 Skill 时**不要把已经存在的内置工具再放进 tool.json 重复定义**
 - F9.4：`references/` 是**静态参考资料层**，不可直接执行；按需加载（Progressive Disclosure）——Skill 激活后 Agent 根据任务进度自主判断是否查阅，需要时用内置 Read 工具读取并注入当前上下文，作为背景知识理解新工具的实现逻辑
-- F9.5：工具实现执行——tool.json 声明的工具被模型调用时，MewCode 以**子进程**方式执行 `references/` 里的实现脚本（不 import 进主进程）；脚本型工具也可按 references/ 文档说明由 Agent 构建并调用 Bash 执行
+- F9.5：工具实现执行——tool.json 声明的工具被模型调用时，NewCode 以**子进程**方式执行 `references/` 里的实现脚本（不 import 进主进程）；脚本型工具也可按 references/ 文档说明由 Agent 构建并调用 Bash 执行
 - F9.6：目录型 Skill 加载时工具注册进当前会话（F4.2 第 2 步）；Skill 失活/卸载时其注册工具一并注销
 - F9.7：目录型 Skill 整体作为一个可分发的能力包（拷贝目录即分发，不做市场/版本管理，见「不包含」）
 
@@ -172,7 +172,7 @@ ch11 引入 **Skill 技能包系统**：把可复用的 SOP 装进**可编辑的
 | 失活策略 | 三层机制（F8） | 压缩预算淘汰（自动）+ 会话自然失活 + 手动 /skill 子命令，覆盖自动/自然/主动三路径 |
 | 阶段一注入位置 | env context（每轮重建） | 与激活内容同一机制；/clear 后仍在；Skill 增删零特殊处理；几十 token 每轮重复可忽略 |
 | 同名冲突策略 | 内置命令优先，skill 跳过+日志 | 保护 clear/session 等生命周期命令；review 迁移为唯一例外 |
-| 搜索路径 | 三级（项目 > 用户 > 内置） | 项目级 `.mewcode/skills/`、用户级 `~/.mewcode/skills/`、内置级 `mewcode/skills/builtin/` |
+| 搜索路径 | 三级（项目 > 用户 > 内置） | 项目级 `.newcode/skills/`、用户级 `~/.newcode/skills/`、内置级 `newcode/skills/builtin/` |
 | 缓存 | 内存 `_cache` 回退，无磁盘缓存 | 磁盘缓存收益小（元数据解析轻量）、复杂度大（失效/脏缓存）；内存回退才有容错价值 |
 | context 缺省值 | `none` | fork 默认完全隔离；需要上下文显式声明 |
 | recent 无 N 时 | N 缺省 = 5 | 合理默认，带最近 5 条 |
@@ -189,7 +189,7 @@ ch11 引入 **Skill 技能包系统**：把可复用的 SOP 装进**可编辑的
 
 ## 未来蓝图（ch11 不做，记录防丢失）
 
-- **远程安装（InstallSkill）**：用户把 URL 发给 mewcode、由 Agent 自动安装到 `~/.mewcode/skills/<name>/`。支持 `skills.sh` / `github.com tree` / `raw.githubusercontent.com` 三种 URL；走 GitHub Contents API 递归拉取目录树（无需本地 git），单文件 ≤1 MiB、总大小 ≤8 MiB、文件数 ≤64、深度 ≤4；暂存到兄弟 tempdir，验证含 SKILL.md 后 atomic rename 到位；安装后自动 reload catalog + 重新注册斜杠命令，无需重启
+- **远程安装（InstallSkill）**：用户把 URL 发给 newcode、由 Agent 自动安装到 `~/.newcode/skills/<name>/`。支持 `skills.sh` / `github.com tree` / `raw.githubusercontent.com` 三种 URL；走 GitHub Contents API 递归拉取目录树（无需本地 git），单文件 ≤1 MiB、总大小 ≤8 MiB、文件数 ≤64、深度 ≤4；暂存到兄弟 tempdir，验证含 SKILL.md 后 atomic rename 到位；安装后自动 reload catalog + 重新注册斜杠命令，无需重启
 
 ## 验收标准
 
@@ -219,5 +219,5 @@ ch11 引入 **Skill 技能包系统**：把可复用的 SOP 装进**可编辑的
 
 - E2E1：用户说「帮我提交一下这些改动」→ Agent 经 `load_skill` 激活 commit（inline）→ 逐个 add + conventional commit → 完成后对话继续；`/skill list` 显示 commit 已激活
 - E2E2：用户说「审查一下这段代码」→ Agent 激活 review（fork）→ 独立对话按五维度审查 → 分级报告摘要回流主对话
-- E2E3：用户 `/skill off review` → review 从摘要与可用列表移除、立即失活；重启 MewCode → review 仍禁用
+- E2E3：用户 `/skill off review` → review 从摘要与可用列表移除、立即失活；重启 NewCode → review 仍禁用
 - E2E4：用户自己写了一个 skill（改 `$ARGUMENTS` 替换的模板），编辑源文件后不用重启，再触发即生效（验证：热更新）

@@ -1,4 +1,4 @@
-# MewCode 结构化 System Prompt 与 Prompt Cache 优化 — 验收清单 (checklist.md)
+# NewCode 结构化 System Prompt 与 Prompt Cache 优化 — 验收清单 (checklist.md)
 
 > 每一项通过运行代码或观察行为来验证，聚焦系统行为，与实现解耦。
 
@@ -24,10 +24,10 @@
 
 ## 编译与测试
 
-- [ ] 项目编译无错误（验证：`python -c "import mewcode.main"`）
+- [ ] 项目编译无错误（验证：`python -c "import newcode.main"`）
 - [ ] 全部测试通过（验证：`pytest tests/ -q`）
 - [ ] lint 通过（验证：`ruff format --check . && ruff check .`）
-- [ ] 版本号为 0.5.0（验证：`mewcode --version` 或 `python -c "import mewcode; print(mewcode.__version__)"`）
+- [ ] 版本号为 0.5.0（验证：`newcode --version` 或 `python -c "import newcode; print(newcode.__version__)"`）
 - [ ] **ch04 向后兼容**：Agent Loop 测试（自然终止、多工具、取消、未知工具、流式错误、Plan Mode 只读）全部通过，用例未删（验证：`pytest tests/test_agent.py -q` 全绿，diff 确认用例保留）
 
 ## 端到端场景

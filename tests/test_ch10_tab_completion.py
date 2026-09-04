@@ -10,9 +10,9 @@
 from prompt_toolkit.completion import Completion
 from prompt_toolkit.document import Document
 
-from mewcode.slash import CommandRegistry
-from mewcode.slash.commands import register_all
-from mewcode.tui.app import REPL, SessionState, SlashCompleter
+from newcode.slash import CommandRegistry
+from newcode.slash.commands import register_all
+from newcode.tui.app import REPL, SessionState, SlashCompleter
 
 
 def _registry() -> CommandRegistry:

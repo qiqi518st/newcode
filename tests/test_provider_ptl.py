@@ -4,10 +4,10 @@
 直接测 _wrap_*_error 纯函数（不实际发请求，mock SDK 异常对象）。
 """
 
-from mewcode.llm import PromptTooLongError
-from mewcode.provider.anthropic import _wrap_anthropic_error
-from mewcode.provider.openai import _wrap_openai_error
-from mewcode.utils.error import ProviderError
+from newcode.llm import PromptTooLongError
+from newcode.provider.anthropic import _wrap_anthropic_error
+from newcode.provider.openai import _wrap_openai_error
+from newcode.utils.error import ProviderError
 
 
 class _FakeAnthropicError(Exception):

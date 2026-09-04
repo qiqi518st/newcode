@@ -12,9 +12,9 @@ import tempfile
 
 from rich.console import Console
 
-from mewcode.agent.events import Event, EventType, StopReason
-from mewcode.plans import PlanManager
-from mewcode.tui.app import REPL
+from newcode.agent.events import Event, EventType, StopReason
+from newcode.plans import PlanManager
+from newcode.tui.app import REPL
 
 
 class FakeAgent:
@@ -119,7 +119,7 @@ def test_consume_stream_retries_then_succeeds():
 
 def test_tool_call_renders_tool_line():
     """TOOL_CALL 事件应渲染 Claude Code 风格工具行"""
-    from mewcode.provider.base import ToolCall, ToolResult
+    from newcode.provider.base import ToolCall, ToolResult
 
     events = [
         Event(EventType.TOOL_CALL, ToolCall("read_file", {"path": "main.py"})),
@@ -137,7 +137,7 @@ def test_tool_result_with_rich_markup_does_not_crash():
     解析抛 MarkupError，且 _show_error 打印错误信息时再次崩溃，TUI 直接 traceback。
     此测试确保转义生效。
     """
-    from mewcode.provider.base import ToolCall, ToolResult
+    from newcode.provider.base import ToolCall, ToolResult
 
     markup_content = "弹窗 [/do <slug> / not now] [bold]不会被解析[/bold]"
     events = [
@@ -153,7 +153,7 @@ def test_tool_result_with_rich_markup_does_not_crash():
 
 def test_token_usage_accumulates():
     """TOKEN_USAGE 事件应累加到会话计数"""
-    from mewcode.provider.base import TokenUsage
+    from newcode.provider.base import TokenUsage
 
     repl, _console = _make_repl(
         [

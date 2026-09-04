@@ -5,9 +5,9 @@
 
 import pytest
 
-from mewcode.context.files import FileTracker
-from mewcode.context.recovery import BOUNDARY_NOTICE, RecoveryBuilder
-from mewcode.provider.base import ToolDefinition
+from newcode.context.files import FileTracker
+from newcode.context.recovery import BOUNDARY_NOTICE, RecoveryBuilder
+from newcode.provider.base import ToolDefinition
 
 
 @pytest.mark.anyio

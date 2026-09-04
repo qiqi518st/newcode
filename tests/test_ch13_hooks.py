@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import pytest
 
-from mewcode.hooks.engine import Engine
-from mewcode.hooks.types import (
+from newcode.hooks.engine import Engine
+from newcode.hooks.types import (
     Action,
     ActionType,
     AgentAction,

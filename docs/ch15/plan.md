@@ -1,8 +1,8 @@
-# MewCode ch15 - AgentTeam 与 Coordinator Mode Plan
+# NewCode ch15 - AgentTeam 与 Coordinator Mode Plan
 
 ## 架构概览
 
-本章引入 `mewcode.team` 顶层包，把 ch13 SubAgent 的「子 Agent」扩展为「Team 队员」。整体分**四层**：
+本章引入 `newcode.team` 顶层包，把 ch13 SubAgent 的「子 Agent」扩展为「Team 队员」。整体分**四层**：
 
 1. **数据模型层**（`team/types.py` + `team/manager.py` + `team/persistence.py`）——Team、TeammateInfo 数据结构与持久化
 2. **后端层**（`team/backend/`）——`Backend` Protocol 与三种实现 tmux / iterm2 / inprocess，屏蔽 spawn 差异
@@ -39,7 +39,7 @@ class Team:
     members: list["TeammateInfo"] = field(default_factory=list)
 
     # 派生路径（不持久化）
-    config_dir: str = ""            # <home_dir>/.mewcode/teams/<sanitized_name>/
+    config_dir: str = ""            # <home_dir>/.newcode/teams/<sanitized_name>/
     config_path: str = ""           # <config_dir>/config.json
     tasks_path: str = ""            # <config_dir>/tasks.json
     mailbox_dir: str = ""           # <config_dir>/mailbox/
@@ -175,7 +175,7 @@ class IncomingMailbox(Protocol):   # agent.run 每轮调用（队员邮箱注入
 
 ### coordinator 包（顶层，3 个纯函数，无状态）
 ```python
-def is_enabled(cfg) -> bool: ...            # feature(COORDINATOR_MODE) and env_truthy(MEWCODE_COORDINATOR_MODE)
+def is_enabled(cfg) -> bool: ...            # feature(COORDINATOR_MODE) and env_truthy(NEWCODE_COORDINATOR_MODE)
 def allowed_tools() -> list[str]: ...        # COORDINATOR_ALLOWED_TOOLS 常量
 def system_prompt_suffix() -> str: ...       # 四阶段 + 派完停手纪律
 ```
@@ -186,7 +186,7 @@ def system_prompt_suffix() -> str: ...       # 四阶段 + 派完停手纪律
 
 - **`types.py`**：Team / TeammateInfo / BackendType / 异常家族（`TeamError` → `TeamNotFoundError` / `TeamHasActiveMembersError` / `MemberNameConflictError` / `InProcessTeammateNoSpawnError` / `BackendUnavailableError` / `SendMessageValidationError`）
 - **`manager.py`（Manager）**：
-  - 构造：校验 `~/.mewcode/teams/` 可写；扫描子目录还原 `teams` dict（坏 JSON 跳过 + stderr 警告，F17.2）；`task_mgr.on_task_done(self._on_task_done)` 注册回调（TD-13）
+  - 构造：校验 `~/.newcode/teams/` 可写；扫描子目录还原 `teams` dict（坏 JSON 跳过 + stderr 警告，F17.2）；`task_mgr.on_task_done(self._on_task_done)` 注册回调（TD-13）
   - `async create(name, agent_type) -> Team`：sanitize → 同名后缀 `-2/-3` → 建目录 + mailbox/ → detect_backend → 写 config.json（Lead 首个成员）→ 入 dict
   - `get(name)` / `async delete(name, force)`（顺序：kill → 删 session/worktree → rmtree(config_dir)，F17.4）
   - `member_of(agent_id) -> (Team, TeammateInfo) | None` / `is_teammate(agent_id) -> bool`（TUI 通知选型用）
@@ -198,7 +198,7 @@ def system_prompt_suffix() -> str: ...       # 四阶段 + 派完停手纪律
 
 - **`__init__.py`**：`Backend` Protocol / `SpawnRequest` / `new_backend(t: BackendType, **deps) -> Backend` 工厂
 - **`detect.py`**：`detect() -> BackendType`——`$TMUX` → tmux；`$TERM_PROGRAM==iTerm.app` 且 `it2` 可执行 → iterm2；`shutil.which("tmux")` → tmux；否则 in-process（F2.4，一次性决定，启动后不运行时回退）
-- **`tmux.py`（TmuxBackend）**：spawn = `asyncio.create_subprocess_exec("tmux","split-window","-h","-P","-F","#{pane_id}","--",cmd)` 捕获 pane_id；cmd = `python -m mewcode --team-member ...`（含预生成 `--agent-id`，F3.2）；会话外 `tmux new-session -d` detached、失败抛 `BackendUnavailableError`（F2.5）；wake = `tmux send-keys -t <pane_id> "" Enter`；kill = `tmux kill-pane` 忽略不存在
+- **`tmux.py`（TmuxBackend）**：spawn = `asyncio.create_subprocess_exec("tmux","split-window","-h","-P","-F","#{pane_id}","--",cmd)` 捕获 pane_id；cmd = `python -m newcode --team-member ...`（含预生成 `--agent-id`，F3.2）；会话外 `tmux new-session -d` detached、失败抛 `BackendUnavailableError`（F2.5）；wake = `tmux send-keys -t <pane_id> "" Enter`；kill = `tmux kill-pane` 忽略不存在
 - **`iterm2.py`（骨架）**：接口约定 `it2 split --new-pane --command` / `it2 send-text --pane` / `it2 close-pane --pane`；本环境 WSL 不可验证，实装标「待人工验证」（F4.1）
 - **`inprocess.py`**（允许依赖 agent，TD-15）：spawn = `task_mgr.launch(sub, initial_prompt, name=member_name)` 返回 task_id 作 agent_id；wake no-op；kill = `task_mgr.stop(agent_id)`
 
@@ -251,7 +251,7 @@ def system_prompt_suffix() -> str: ...       # 四阶段 + 派完停手纪律
 
 **`slash/commands/team.py`**（新建，F16）：`/team list` / `/team info <name>` / `/team delete <name> [--force]` / `/team kill <member>`；`CommandKind.LOCAL`，经 `CommandContext.team_mgr` 访问
 
-**版本**：`mewcode/__init__.py` + `pyproject.toml` → 0.15.0
+**版本**：`newcode/__init__.py` + `pyproject.toml` → 0.15.0
 
 ## 模块交互（数据流）
 
@@ -298,7 +298,7 @@ def system_prompt_suffix() -> str: ...       # 四阶段 + 派完停手纪律
 ## 文件组织
 
 ```
-mewcode/team/                      新建（顶层包，四层）
+newcode/team/                      新建（顶层包，四层）
 ├── __init__.py                    包导出
 ├── types.py                       Team / TeammateInfo / BackendType / 异常家族
 ├── manager.py                     Manager（create/get/delete/member_of/is_teammate/poll_lead_mailboxes/on_task_done 处理）
@@ -329,29 +329,29 @@ mewcode/team/                      新建（顶层包，四层）
     ├── task_create.py / task_get.py / task_list.py / task_update.py / send_message.py
     └── teammate_filter.py         TEAM_COLLAB_TOOLS 白名单
 
-mewcode/coordinator/               新建（独立顶层包，3 纯函数）
+newcode/coordinator/               新建（独立顶层包，3 纯函数）
 └── __init__.py                    is_enabled / allowed_tools / system_prompt_suffix
 
-mewcode/agent/
+newcode/agent/
 ├── agent_tool.py                  修改：team_name 参数 + team_hook 委托
 ├── team_hook.py                   新建：TeamHook Protocol / TeamSpawnRequest / IncomingMailbox Protocol
 ├── team_mailbox.py                新建：成员 Loop 头部邮箱注入
 └── agent.py                       修改：incoming 注入 / set_allowed_tools / raw reminders / 收窄强制
 
-mewcode/task/manager.py            修改：name_reg 委托（废弃 _by_name）+ on_task_done 回调
-mewcode/session/runtime.py         修改：raw reminder 通道 + open_at 辅助
-mewcode/subagent/
+newcode/task/manager.py            修改：name_reg 委托（废弃 _by_name）+ on_task_done 回调
+newcode/session/runtime.py         修改：raw reminder 通道 + open_at 辅助
+newcode/subagent/
 ├── types.py / parser.py           修改：plan_mode_required 字段
 └── launcher.py                    修改：make_sub_agent/build_sub_registry 扩展参数
-mewcode/permission/sandbox.py      修改：/tmp + /private/tmp 白名单（N14）
-mewcode/config/                    修改：FeaturesConfig（features.coordinator_mode / fork_teammate）
-mewcode/tui/
+newcode/permission/sandbox.py      修改：/tmp + /private/tmp 白名单（N14）
+newcode/config/                    修改：FeaturesConfig（features.coordinator_mode / fork_teammate）
+newcode/tui/
 ├── app.py                         修改：team_mgr / coordinator 标签 / lead mail 消费 / 自动续推
 └── tasks.py                       修改：consume_lead_mail / wait_for_lead_mail
-mewcode/slash/commands/team.py     新建：/team 四子命令
-mewcode/slash/commands/__init__.py 修改：COMMAND_MODULES 加 team
-mewcode/main.py                    修改：装配 + --team-member CLI + coordinator 激活
-mewcode/__init__.py / pyproject.toml  修改：版本 0.15.0
+newcode/slash/commands/team.py     新建：/team 四子命令
+newcode/slash/commands/__init__.py 修改：COMMAND_MODULES 加 team
+newcode/main.py                    修改：装配 + --team-member CLI + coordinator 激活
+newcode/__init__.py / pyproject.toml  修改：版本 0.15.0
 
 tests/
 ├── test_team_manager.py           Team 生命周期 + 持久化 + reload
@@ -380,7 +380,7 @@ tests/
 | TD-6 | 邮箱并发锁 | `O_CREAT\|O_EXCL` + 5-100ms 抖动重试 10 次 + stale(10s) 判定 + `os.replace` 原子替换 | F8.4 明文；EEXIST 抢占（Python 无跨平台 flock 语义统一） |
 | TD-7 | 成员工具池同名覆盖 | view(visible+extra) 后 `register()` 覆盖 task_list/get/send_message + 新增 task_create/update | 「复用 ch13 同名，团队态覆盖」；view() 返回独立 Registry，主 registry 不受影响 |
 | TD-8 | in-process 已停续写去重 | 先写 mailbox（统一真值）→ 续写路径 mark_read 刚写消息 → `continue_agent` 以消息为新一轮 user 消息 | 单点投递避免 mailbox 重复注入 |
-| TD-9 | --team-member 配置 | chdir(worktree) 后走 main() 配置流程（ccswitch 兜底） | worktree 已含 `.mewcode/` 配置副本（ch14 F4.1）；provider 全局可用 |
+| TD-9 | --team-member 配置 | chdir(worktree) 后走 main() 配置流程（ccswitch 兜底） | worktree 已含 `.newcode/` 配置副本（ch14 F4.1）；provider 全局可用 |
 | TD-10 | 沙箱 /tmp 白名单 | `check_path` 对 `/tmp`、`/private/tmp` 前缀放行（file-class） | N14 明文；全局生效，验收单列影响面 |
 | TD-11 | coordinator 收窄强制 | `set_allowed_tools` 既收窄 tool_defs 又硬过滤 known_calls | 只藏定义可被注入提示绕过；满足 N8「运行时不可解锁」 |
 | TD-12 | agent↔team 解耦 | `TeamHook`/`IncomingMailbox` Protocol 定义在 agent 包；team 结构类型实现；cli 装配注入 | 无环、可测（mock hook）、依赖单向 `agent→team` |

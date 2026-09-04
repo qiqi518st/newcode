@@ -27,7 +27,7 @@
 相关测试会话中的落盘文件：
 
 ```text
-.mewcode/sessions/1787129336-59eaaa30/tool-results/call_00_96Hs32oUAK22JkknqmtO3634
+.newcode/sessions/1787129336-59eaaa30/tool-results/call_00_96Hs32oUAK22JkknqmtO3634
 ```
 
 ### 提示语混淆
@@ -50,7 +50,7 @@
 - 历史记录缺少新字段时，回退使用 session 和用户输入进行分组。
 - 右侧详情支持在同一用户请求的多个 provider 调用之间切换。
 - `Latest Provider History` 支持分页查看，避免单页内容超出窗口后无法上下翻动。
-- 多个 MewCode 窗口通过不同 session/run 标识区分。
+- 多个 NewCode 窗口通过不同 session/run 标识区分。
 - 打开监控工具时默认定位到最新记录，同时保留手动选择历史记录的能力。
 
 ## 其他测试现象

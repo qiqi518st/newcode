@@ -2,14 +2,14 @@
 
 背景（防回归）：load_ccswitch 曾硬编码 Path.home()/.claude/settings.json，
 在 CLAUDE_CONFIG_DIR 指向其它目录（如 WSL 里指向 /mnt/c/Users/... 的 Windows
-侧配置）时读不到最新的 ANTHROPIC_API_KEY，回退到 .mewcode.yaml 里过期的 key。
+侧配置）时读不到最新的 ANTHROPIC_API_KEY，回退到 .newcode.yaml 里过期的 key。
 修复后优先读 CLAUDE_CONFIG_DIR/settings.json，且同时认 API_KEY 与 AUTH_TOKEN。
 """
 
 import json
 import pathlib
 
-from mewcode.config.loader import load_ccswitch
+from newcode.config.loader import load_ccswitch
 
 
 def _write_settings(tmp_path, env: dict) -> pathlib.Path:
@@ -72,7 +72,7 @@ class TestLoadCcswitch:
         assert cfg.providers[0].api_key == "sk-homekey"
 
     def test_missing_settings_file_returns_none(self, tmp_path, monkeypatch):
-        """CLAUDE_CONFIG_DIR 下没有 settings.json → None，落到 .mewcode.yaml"""
+        """CLAUDE_CONFIG_DIR 下没有 settings.json → None，落到 .newcode.yaml"""
         d = tmp_path / "empty"
         d.mkdir()
         monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(d))

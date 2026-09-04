@@ -1,33 +1,33 @@
-# MewCode Plan 文件管理 — 任务拆解 (task-plan-files.md)
+# NewCode Plan 文件管理 — 任务拆解 (task-plan-files.md)
 
 ## 文件清单
 
 | 操作 | 文件 | 职责 |
 |------|------|------|
-| 新建 | `mewcode/plans/__init__.py` | 导出 PlanManager, PlanMeta |
-| 新建 | `mewcode/plans/manager.py` | PlanManager 类 + PlanMeta dataclass |
-| 修改 | `mewcode/config/schema.py` | 移除 plan_file，新增 cleanup_period_days |
-| 修改 | `mewcode/config/loader.py` | 解析 cleanup_period_days |
-| 修改 | `mewcode/prompt/resources.py` | PLAN_MODE_REMINDER 增加 slug 声明 |
-| 修改 | `mewcode/tui/app.py` | REPL 重构，使用 PlanManager |
-| 修改 | `mewcode/main.py` | 创建 PlanManager，启动清理 |
+| 新建 | `newcode/plans/__init__.py` | 导出 PlanManager, PlanMeta |
+| 新建 | `newcode/plans/manager.py` | PlanManager 类 + PlanMeta dataclass |
+| 修改 | `newcode/config/schema.py` | 移除 plan_file，新增 cleanup_period_days |
+| 修改 | `newcode/config/loader.py` | 解析 cleanup_period_days |
+| 修改 | `newcode/prompt/resources.py` | PLAN_MODE_REMINDER 增加 slug 声明 |
+| 修改 | `newcode/tui/app.py` | REPL 重构，使用 PlanManager |
+| 修改 | `newcode/main.py` | 创建 PlanManager，启动清理 |
 | 新建 | `tests/test_plan_manager.py` | PlanManager 单元测试 |
 | 修改 | `tests/test_tui_wiring.py` | 适配 PlanManager 新接口 |
 
 ## T1: 创建 plans 包和 PlanMeta
 
-**文件：** `mewcode/plans/__init__.py`、`mewcode/plans/manager.py`
+**文件：** `newcode/plans/__init__.py`、`newcode/plans/manager.py`
 **依赖：** 无
 **步骤：**
-1. 创建 `mewcode/plans/` 目录
+1. 创建 `newcode/plans/` 目录
 2. 创建 `__init__.py`，导出 `PlanManager`, `PlanMeta`
 3. 定义 `PlanMeta` dataclass：`slug`, `file`, `task`, `created_at`, `executed_at`
 
-**验证：** `from mewcode.plans import PlanManager, PlanMeta` 导入成功
+**验证：** `from newcode.plans import PlanManager, PlanMeta` 导入成功
 
 ## T2: 实现 PlanManager 核心方法
 
-**文件：** `mewcode/plans/manager.py`
+**文件：** `newcode/plans/manager.py`
 **依赖：** T1
 **步骤：**
 1. 实现 `__init__`：接收 `plans_dir`，创建目录，记录 `.meta.json` 路径
@@ -47,7 +47,7 @@
 
 ## T3: 更新配置
 
-**文件：** `mewcode/config/schema.py`、`mewcode/config/loader.py`
+**文件：** `newcode/config/schema.py`、`newcode/config/loader.py`
 **依赖：** 无
 **步骤：**
 1. `schema.py`：移除 `plan_file` 字段，新增 `cleanup_period_days: int = 30`
@@ -55,11 +55,11 @@
 3. `loader.py`：`_parse()` 中两处 `Config(...)` 调用同步更新
 4. `loader.py`：`load_ccswitch()` 中 `Config(...)` 调用无需改动（使用默认值）
 
-**验证：** `export PYTHONIOENCODING=utf-8 && python -c "from mewcode.config.loader import load; print('OK')"`
+**验证：** `export PYTHONIOENCODING=utf-8 && python -c "from newcode.config.loader import load; print('OK')"`
 
 ## T4: 更新 PLAN_MODE_REMINDER
 
-**文件：** `mewcode/prompt/resources.py`
+**文件：** `newcode/prompt/resources.py`
 **依赖：** 无
 **步骤：**
 1. 在 `PLAN_MODE_REMINDER` 计划格式要求中新增一条：
@@ -69,11 +69,11 @@
      例如：<!-- slug: add-login-page -->
    ```
 
-**验证：** `export PYTHONIOENCODING=utf-8 && python -c "from mewcode.prompt.resources import PLAN_MODE_REMINDER; assert 'slug' in PLAN_MODE_REMINDER"`
+**验证：** `export PYTHONIOENCODING=utf-8 && python -c "from newcode.prompt.resources import PLAN_MODE_REMINDER; assert 'slug' in PLAN_MODE_REMINDER"`
 
 ## T5: REPL 重构 — 构造函数和 /plan
 
-**文件：** `mewcode/tui/app.py`
+**文件：** `newcode/tui/app.py`
 **依赖：** T2, T3, T4
 **步骤：**
 1. 导入 `from ..plans.manager import PlanManager, PlanMeta`
@@ -92,7 +92,7 @@
 
 ## T6: REPL 重构 — 确认弹窗
 
-**文件：** `mewcode/tui/app.py`
+**文件：** `newcode/tui/app.py`
 **依赖：** T5
 **步骤：**
 1. 确认弹窗文本改为 `f"是否执行此计划？[/do {slug} / not now] "`
@@ -103,7 +103,7 @@
 
 ## T7: REPL 重构 — /do 命令
 
-**文件：** `mewcode/tui/app.py`
+**文件：** `newcode/tui/app.py`
 **依赖：** T5
 **步骤：**
 1. `/do <slug>`：调用 `plan_manager.get_plan(slug)` → 打印 plan 信息（名称、创建时间、是否已执行）→ `read_plan_content()` → execute mode
@@ -114,7 +114,7 @@
 
 ## T8: REPL 重构 — /delete-plan
 
-**文件：** `mewcode/tui/app.py`
+**文件：** `newcode/tui/app.py`
 **依赖：** T5
 **步骤：**
 1. 新增 `_delete_plan_interactive()` 方法
@@ -128,15 +128,15 @@
 
 ## T9: 更新 main.py
 
-**文件：** `mewcode/main.py`
+**文件：** `newcode/main.py`
 **依赖：** T3, T5
 **步骤：**
-1. 导入 `from mewcode.plans import PlanManager`
+1. 导入 `from newcode.plans import PlanManager`
 2. 创建 `plan_manager = PlanManager(os.path.join(os.getcwd(), "plans"))`
 3. 启动时调用 `plan_manager.cleanup_old(config.cleanup_period_days)`
 4. REPL 构造改为 `REPL(agent, renderer, plan_manager=plan_manager, default_mode=config.default_mode)`
 
-**验证：** `export PYTHONIOENCODING=utf-8 && python -c "from mewcode.main import main; print('OK')"`
+**验证：** `export PYTHONIOENCODING=utf-8 && python -c "from newcode.main import main; print('OK')"`
 
 ## T10: 编写 PlanManager 单元测试
 
@@ -171,7 +171,7 @@
 **依赖：** T5
 **步骤：**
 1. `_make_repl` 中：移除 `repl.plan_file = "plan.md"`
-2. 新增 `import tempfile` 和 `from mewcode.plans import PlanManager`
+2. 新增 `import tempfile` 和 `from newcode.plans import PlanManager`
 3. 新增 `repl.plan_manager = PlanManager(tempfile.mkdtemp())`
 4. 新增 `repl._pending_slug = ""` 和 `repl._executing_slug = ""`
 

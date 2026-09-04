@@ -11,12 +11,12 @@ from pathlib import Path
 
 import pytest
 
-from mewcode.agent import Agent, EventType, StopReason
-from mewcode.conversation.manager import ConversationManager
-from mewcode.prompt.builder import PromptBuilder, Section
-from mewcode.provider.base import Message, StreamEvent, TokenUsage
-from mewcode.session.runtime import SessionRuntime
-from mewcode.tools.registry import Registry
+from newcode.agent import Agent, EventType, StopReason
+from newcode.conversation.manager import ConversationManager
+from newcode.prompt.builder import PromptBuilder, Section
+from newcode.provider.base import Message, StreamEvent, TokenUsage
+from newcode.session.runtime import SessionRuntime
+from newcode.tools.registry import Registry
 
 # ---------- ConversationManager 回调 ----------
 

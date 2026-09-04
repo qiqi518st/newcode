@@ -1,4 +1,4 @@
-# MewCode 多轮对话 — 验收清单 (checklist.md)
+# NewCode 多轮对话 — 验收清单 (checklist.md)
 
 > 每一项必须可勾选、可观测。完成后在 `[ ]` 中填 `x`。
 
@@ -6,20 +6,20 @@
 
 ## 一、项目搭建
 
-- [ ] `pip install -e .` 执行成功，`import mewcode` 无报错
-- [ ] `mewcode --help` 输出帮助信息，包含 `-c` 参数说明
+- [ ] `pip install -e .` 执行成功，`import newcode` 无报错
+- [ ] `newcode --help` 输出帮助信息，包含 `-c` 参数说明
 
 ## 二、配置加载
 
-- [ ] 不创建 `~/.mewcode/config.yaml` 时，启动 `mewcode` 不报错，使用默认配置
-- [ ] 创建 `~/.mewcode/config.yaml` 写入 `max_turns: 10`，启动后 `max_turns` 生效为 10
+- [ ] 不创建 `~/.newcode/config.yaml` 时，启动 `newcode` 不报错，使用默认配置
+- [ ] 创建 `~/.newcode/config.yaml` 写入 `max_turns: 10`，启动后 `max_turns` 生效为 10
 - [ ] 配置文件中 `api_key: "${MY_API_KEY}"` 引用环境变量，export 对应变量后 API key 正确解析
 - [ ] 配置文件中 `api_key` 直接填写明文 key 时，正确使用该 key
 - [ ] 配置 `provider: openai` 切换到 OpenAI provider，请求走 OpenAI API
 
 ## 三、REPL 交互
 
-- [ ] 启动 `mewcode` 后显示欢迎信息和 `> ` 提示符
+- [ ] 启动 `newcode` 后显示欢迎信息和 `> ` 提示符
 - [ ] 输入一行文本按回车，AI 开始流式回复
 - [ ] 输入 `/exit` 或 `/quit`，REPL 正常退出，返回码为 0
 - [ ] 按 `Ctrl+D`（EOF），REPL 正常退出
@@ -36,7 +36,7 @@
 
 ## 五、单次调用模式
 
-- [ ] `mewcode -c "1+1等于几"` 输出 AI 回复并退出，返回码为 0
+- [ ] `newcode -c "1+1等于几"` 输出 AI 回复并退出，返回码为 0
 - [ ] 单次调用模式不进入 REPL，输出完毕即退出
 - [ ] 单次调用模式也支持流式输出
 
@@ -65,12 +65,12 @@
 
 ## 十、端到端验收
 
-- [ ] 从零启动：`pip install -e .` → 配置 API key → `mewcode` → 输入"你好，介绍一下你自己" → 看到流式回复 → `/exit` 退出
+- [ ] 从零启动：`pip install -e .` → 配置 API key → `newcode` → 输入"你好，介绍一下你自己" → 看到流式回复 → `/exit` 退出
 - [ ] 完整对话流：启动 → 输入问题 A → 收到回复 → 输入问题 B（引用问题 A 的上下文）→ 收到回复 → 退出
 - [ ] Provider 切换：修改配置 `provider: openai` → 启动 → 输入问题 → 确认走 OpenAI API → 退出
 - [ ] 多行输入：启动 → 粘贴多行代码块 → 正常输入 → 收到回复 → 退出
-- [ ] `grep -r "import" mewcode/` 返回预期文件列表（main.py, config.py, conversation.py, repl.py, providers/*.py 等）
-- [ ] `mewcode --help` 输出包含 `-c, --command` 和 `--help` 两个选项
+- [ ] `grep -r "import" newcode/` 返回预期文件列表（main.py, config.py, conversation.py, repl.py, providers/*.py 等）
+- [ ] `newcode --help` 输出包含 `-c, --command` 和 `--help` 两个选项
 - [ ] 对话超过 max_turns 后，`len(conversation.messages) <= max_turns * 2` 成立
 
 ## 配置文件默认值

@@ -1,4 +1,4 @@
-# MewCode Agent Loop — 技术设计 (plan.md)
+# NewCode Agent Loop — 技术设计 (plan.md)
 
 ## 架构概览
 
@@ -14,12 +14,12 @@ provider → {config, prompt}
 
 各包变更：
 
-- **`mewcode.agent`（重写 run）**：把 ch03 的「请求#1 → 执行 → 请求#2 → 停」改为真正的 ReAct 循环——`while` 迭代直到自然完成 / 上限 / 取消 / 连续未知工具 / 出错。新增保序分批并发执行、迭代进度与用量事件、终止时的历史一致性收尾、Plan/Normal 两种模式。
-- **`mewcode.provider`（扩展）**：`StreamEvent` 增 `usage` 字段；`Provider.stream` 增 `system_suffix: str` 形参（Plan Mode 系统提示后缀）；两适配器在流结束后上抛本轮 token 用量、把 `system_suffix` 拼到内置系统提示后；OpenAI 适配器打开 `stream_options={"include_usage": True}`。
-- **`mewcode.tools`（扩展）**：`Tool` Protocol 增 `read_only: bool` 属性；6 个工具各实现；`Registry` 增 `read_only_definitions()` 与 `is_read_only(name)`。
-- **`mewcode.conversation`（扩展）**：增 `last_role()`（终止收尾时判断角色尾巴是否合法）。
-- **`mewcode.prompt`（扩展）**：增 `PLAN_MODE_REMINDER`（计划态系统后缀）与 `EXECUTE_DIRECTIVE`（`/do` 触发执行时的用户消息）；`SYSTEM_PROMPT` 增补「持续工作直到任务完成」的 Agent 循环约定。
-- **`mewcode.tui`（扩展）**：`submit` 识别 `/plan`、`/do`；引入 per-turn 取消事件；事件泵处理用量 / 进度 / 通知 / 多个并发工具；按键处理拆分 Esc / Ctrl+C；状态栏显示模式与累计用量、动态区显示迭代轮次。
+- **`newcode.agent`（重写 run）**：把 ch03 的「请求#1 → 执行 → 请求#2 → 停」改为真正的 ReAct 循环——`while` 迭代直到自然完成 / 上限 / 取消 / 连续未知工具 / 出错。新增保序分批并发执行、迭代进度与用量事件、终止时的历史一致性收尾、Plan/Normal 两种模式。
+- **`newcode.provider`（扩展）**：`StreamEvent` 增 `usage` 字段；`Provider.stream` 增 `system_suffix: str` 形参（Plan Mode 系统提示后缀）；两适配器在流结束后上抛本轮 token 用量、把 `system_suffix` 拼到内置系统提示后；OpenAI 适配器打开 `stream_options={"include_usage": True}`。
+- **`newcode.tools`（扩展）**：`Tool` Protocol 增 `read_only: bool` 属性；6 个工具各实现；`Registry` 增 `read_only_definitions()` 与 `is_read_only(name)`。
+- **`newcode.conversation`（扩展）**：增 `last_role()`（终止收尾时判断角色尾巴是否合法）。
+- **`newcode.prompt`（扩展）**：增 `PLAN_MODE_REMINDER`（计划态系统后缀）与 `EXECUTE_DIRECTIVE`（`/do` 触发执行时的用户消息）；`SYSTEM_PROMPT` 增补「持续工作直到任务完成」的 Agent 循环约定。
+- **`newcode.tui`（扩展）**：`submit` 识别 `/plan`、`/do`；引入 per-turn 取消事件；事件泵处理用量 / 进度 / 通知 / 多个并发工具；按键处理拆分 Esc / Ctrl+C；状态栏显示模式与累计用量、动态区显示迭代轮次。
 
 ---
 
@@ -510,7 +510,7 @@ agent/agent.py → Agent.run("", mode="execute", plan_content=plan_md)
 ## 文件组织
 
 ```
-mewcode/
+newcode/
 ├── agent/
 │   ├── __init__.py          — 导出 Agent, Event, EventType, StopReason, TokenUsage, TurnEnd
 │   ├── agent.py             — 重写：ReAct 循环引擎（替代 ch03 单轮闭环）

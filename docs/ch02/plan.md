@@ -1,4 +1,4 @@
-# MewCode TUI 多轮对话 — 技术设计 (plan.md)
+# NewCode TUI 多轮对话 — 技术设计 (plan.md)
 
 ## 技术栈
 
@@ -9,12 +9,12 @@
 
 ## 架构概览
 
-1. **入口层** `mewcode.main` — 加载配置、打印启动横幅、分发到 TUI 或单次调用模式。
-2. **配置层** `mewcode.config` — 读取并校验项目根目录的 `.mewcode.yaml`，解析 `${ENV_VAR}` 占位符，提供 providers 列表和全局配置。
-3. **LLM 协议层** `mewcode.provider` — 定义协议无关的 `Provider` 接口与统一流式事件类型；Anthropic、OpenAI 两个适配器各自封装官方 SDK，统一吐出 `StreamEvent`（思考增量内部丢弃）。
-4. **会话层** `mewcode.conversation` — 进程内维护多轮对话历史，提供完整上下文（system prompt + 滑动窗口内消息对）。
-5. **提示词/资源层** `mewcode.prompt` — 内置 system prompt 与启动横幅（ASCII 小狗）。
-6. **终端层** `mewcode.tui` — prompt_toolkit REPL 循环，含状态机（空闲/流式）、输入框（Alt+Enter 多行编辑）、Rich 流式 Markdown 渲染、响应计时、ESC 流式中断、错误反馈与重试展示；以 async task 消费 `Provider.stream()` 的 `StreamEvent` 生成器，实时写入终端。
+1. **入口层** `newcode.main` — 加载配置、打印启动横幅、分发到 TUI 或单次调用模式。
+2. **配置层** `newcode.config` — 读取并校验项目根目录的 `.newcode.yaml`，解析 `${ENV_VAR}` 占位符，提供 providers 列表和全局配置。
+3. **LLM 协议层** `newcode.provider` — 定义协议无关的 `Provider` 接口与统一流式事件类型；Anthropic、OpenAI 两个适配器各自封装官方 SDK，统一吐出 `StreamEvent`（思考增量内部丢弃）。
+4. **会话层** `newcode.conversation` — 进程内维护多轮对话历史，提供完整上下文（system prompt + 滑动窗口内消息对）。
+5. **提示词/资源层** `newcode.prompt` — 内置 system prompt 与启动横幅（ASCII 小狗）。
+6. **终端层** `newcode.tui` — prompt_toolkit REPL 循环，含状态机（空闲/流式）、输入框（Alt+Enter 多行编辑）、Rich 流式 Markdown 渲染、响应计时、ESC 流式中断、错误反馈与重试展示；以 async task 消费 `Provider.stream()` 的 `StreamEvent` 生成器，实时写入终端。
 
 **数据流：**
 
@@ -52,7 +52,7 @@ class ProviderConfig:
 
 @dataclass
 class Config:
-    """MewCode 全局配置"""
+    """NewCode 全局配置"""
     provider: str                              # 当前激活的 provider name
     max_turns: int = 20                        # 滑动窗口保留轮数
     system_prompt: str = ""                    # 自定义 system prompt，空则用内置默认值
@@ -104,7 +104,7 @@ class ConversationManager:
         ...
 
 # ───────── prompt 层 ─────────
-SYSTEM_PROMPT: str = "你是一个 AI 编程助手 MewCode，运行在终端中。请用中文回复，回答简洁清晰。"
+SYSTEM_PROMPT: str = "你是一个 AI 编程助手 NewCode，运行在终端中。请用中文回复，回答简洁清晰。"
 DOG_BANNER: str = "..."                        # ASCII 小狗图案
 def render_banner(version: str, cwd: str) -> str:
     """返回拼接后的启动横幅：ASCII 小狗 + 版本号 + 工作目录"""
@@ -148,14 +148,14 @@ class REPL:
 
 **参数定义：**
 ```
-mewcode                  # 启动 TUI 多轮对话
-mewcode -c "问题"        # 单次调用，输出后退出
-mewcode --help           # 显示帮助
+newcode                  # 启动 TUI 多轮对话
+newcode -c "问题"        # 单次调用，输出后退出
+newcode --help           # 显示帮助
 ```
 
 **流程：**
 1. 解析命令行参数
-2. 调用 `config.load()` 加载项目根目录的 `.mewcode.yaml`
+2. 调用 `config.load()` 加载项目根目录的 `.newcode.yaml`
 3. 根据 `config.provider` 找到对应的 ProviderConfig
 4. 调用 `new_provider()` 工厂函数创建 Provider 实例
 5. 创建 ConversationManager 实例
@@ -329,13 +329,13 @@ mewcode --help           # 显示帮助
 
 #### utils/error.py
 ```python
-class MewCodeError(Exception): ...
+class NewCodeError(Exception): ...
 
 
-class ConfigError(MewCodeError): ...  # 配置相关的错误
+class ConfigError(NewCodeError): ...  # 配置相关的错误
 
 
-class ProviderError(MewCodeError): ...  # Provider 调用相关的错误
+class ProviderError(NewCodeError): ...  # Provider 调用相关的错误
 ```
 
 **依赖：** 无
@@ -346,7 +346,7 @@ class ProviderError(MewCodeError): ...  # Provider 调用相关的错误
 
 ```
 ┌──────────────┐     ┌─────────────────┐     ┌──────────────────┐
-│   main.py    │────▶│  config.load()  │────▶│  .mewcode.yaml   │
+│   main.py    │────▶│  config.load()  │────▶│  .newcode.yaml   │
 │  (入口)      │     │                 │     │  (项目根目录)    │
 └──────┬───────┘     └─────────────────┘     └──────────────────┘
        │
@@ -397,9 +397,9 @@ class ProviderError(MewCodeError): ...  # Provider 调用相关的错误
 ## 文件组织
 
 ```
-mewcode/
+newcode/
 ├── __init__.py
-├── __main__.py              # python -m mewcode 入口
+├── __main__.py              # python -m newcode 入口
 ├── main.py                  # CLI 入口，argparse 解析，流程编排
 ├── config/
 │   ├── __init__.py
@@ -422,7 +422,7 @@ mewcode/
 │   └── renderer.py          # RichRenderer：流式 Markdown 渲染
 └── utils/
     ├── __init__.py
-    └── error.py             # MewCodeError, ConfigError, ProviderError
+    └── error.py             # NewCodeError, ConfigError, ProviderError
 ```
 
 ---

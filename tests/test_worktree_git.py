@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from mewcode.worktree import git as g
+from newcode.worktree import git as g
 
 pytestmark = pytest.mark.anyio
 

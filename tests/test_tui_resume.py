@@ -13,14 +13,14 @@ import json
 
 from rich.console import Console
 
-from mewcode.context.session import _new_session_id
-from mewcode.permission.modes import PermissionMode
-from mewcode.plans import PlanManager
-from mewcode.session.archive import SessionArchive
-from mewcode.session.runtime import SessionRuntime
-from mewcode.slash import CommandContext, CommandRegistry
-from mewcode.slash.commands import register_all
-from mewcode.tui.app import REPL, AppMode, RichUIController, SessionState
+from newcode.context.session import _new_session_id
+from newcode.permission.modes import PermissionMode
+from newcode.plans import PlanManager
+from newcode.session.archive import SessionArchive
+from newcode.session.runtime import SessionRuntime
+from newcode.slash import CommandContext, CommandRegistry
+from newcode.slash.commands import register_all
+from newcode.tui.app import REPL, AppMode, RichUIController, SessionState
 
 
 class _StubAgent:
@@ -86,7 +86,7 @@ def make_repl(tmp_path, *, state=SessionState.IDLE, with_runtime=True):
 
 
 def _make_old_session(workspace, session_id, title, ts):
-    d = workspace / ".mewcode" / "sessions" / session_id
+    d = workspace / ".newcode" / "sessions" / session_id
     (d / "tool-results").mkdir(parents=True, exist_ok=True)
     with (d / "conversation.jsonl").open("w", encoding="utf-8") as fh:
         fh.write(
@@ -188,5 +188,5 @@ def test_session_shows_path_and_id(tmp_path):
     repl.session_runtime.create_new()
     asyncio.run(repl.dispatch_slash("/session"))
     output = repl._console.export_text(clear=False)
-    assert ".mewcode" in output and "sessions" in output
+    assert ".newcode" in output and "sessions" in output
     assert repl.session_runtime.session_id in output

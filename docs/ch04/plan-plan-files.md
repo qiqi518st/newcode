@@ -1,8 +1,8 @@
-# MewCode Plan 文件管理 — 技术设计 (plan-plan-files.md)
+# NewCode Plan 文件管理 — 技术设计 (plan-plan-files.md)
 
 ## 架构概览
 
-新增 `mewcode/plans/` 包，核心是 `PlanManager` 类。所有 plan 文件操作收敛到 `PlanManager`，`REPL` 只负责交互和展示。
+新增 `newcode/plans/` 包，核心是 `PlanManager` 类。所有 plan 文件操作收敛到 `PlanManager`，`REPL` 只负责交互和展示。
 
 ```
 用户输入                     REPL                         PlanManager              文件系统
@@ -48,7 +48,7 @@ class PlanMeta:
 
 ## 模块设计
 
-### 模块 A: `mewcode/plans/manager.py` — PlanManager
+### 模块 A: `newcode/plans/manager.py` — PlanManager
 
 **职责：** 所有 plan 文件的 CRUD + 索引管理 + 清理
 
@@ -85,19 +85,19 @@ class PlanMeta:
 
 **依赖：** 无（仅标准库 `json`, `os`, `re`, `datetime`）
 
-### 模块 B: `mewcode/config/schema.py` — 配置调整
+### 模块 B: `newcode/config/schema.py` — 配置调整
 
 **改动：**
 - 移除 `plan_file: str = "plans/plan.md"`
 - 新增 `cleanup_period_days: int = 30`
 
-### 模块 C: `mewcode/config/loader.py` — 配置解析调整
+### 模块 C: `newcode/config/loader.py` — 配置解析调整
 
 **改动：**
 - 移除 `plan_file` 解析和传递
 - 新增 `cleanup_period_days` 解析和传递
 
-### 模块 D: `mewcode/prompt/resources.py` — PLAN_MODE_REMINDER
+### 模块 D: `newcode/prompt/resources.py` — PLAN_MODE_REMINDER
 
 **改动：** 新增 slug 声明要求：
 ```
@@ -106,7 +106,7 @@ class PlanMeta:
   例如：<!-- slug: add-login-page -->
 ```
 
-### 模块 E: `mewcode/tui/app.py` — REPL 重构
+### 模块 E: `newcode/tui/app.py` — REPL 重构
 
 **职责：** Plan 交互入口，委托 PlanManager 处理文件操作
 
@@ -123,7 +123,7 @@ class PlanMeta:
 9. **移除方法**：`_read_plan_file()`、`_write_plan_file()`
 10. **状态栏**：新增 `/delete-plan` 提示
 
-### 模块 F: `mewcode/main.py` — 启动流程
+### 模块 F: `newcode/main.py` — 启动流程
 
 **改动：**
 1. 创建 `PlanManager(plans_dir)`
@@ -187,7 +187,7 @@ TUI._process_input("/delete-plan")
 ## 文件组织
 
 ```
-mewcode/
+newcode/
 ├── plans/                    ← 新增包
 │   ├── __init__.py           ← 导出 PlanManager, PlanMeta
 │   └── manager.py            ← PlanManager 类 + PlanMeta dataclass

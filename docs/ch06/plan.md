@@ -1,4 +1,4 @@
-# MewCode ch06 — 五层权限系统 技术设计 (plan.md)
+# NewCode ch06 — 五层权限系统 技术设计 (plan.md)
 
 ## 架构概览
 
@@ -122,9 +122,9 @@ class RuleSet:
 class RuleLayers:
     """三层规则：本地 > 项目 > 用户，跨层先命中定案"""
 
-    local: RuleSet  # 本地级（.mewcode/permissions.local.yaml）
-    project: RuleSet  # 项目级（.mewcode/permissions.yaml）
-    user: RuleSet  # 用户级（~/.config/mewcode/permissions.yaml）
+    local: RuleSet  # 本地级（.newcode/permissions.local.yaml）
+    project: RuleSet  # 项目级（.newcode/permissions.yaml）
+    user: RuleSet  # 用户级（~/.config/newcode/permissions.yaml）
 
     def match(self, friendly: str, target: str) -> Decision | None:
         """local → project → user 顺序，首命中即返回"""
@@ -148,7 +148,7 @@ class HITLResponse:
 ### 事件扩展
 
 ```python
-# 在 mewcode/agent/events.py 中新增
+# 在 newcode/agent/events.py 中新增
 class EventType(Enum):
     # ... 现有类型 ...
     HITL_REQUEST = "hitl_request"  # payload: HITLRequest
@@ -166,7 +166,7 @@ class TargetInfo:
 
 ## 模块设计
 
-### mewcode/permission/blocklist.py — 危险命令黑名单（L1）
+### newcode/permission/blocklist.py — 危险命令黑名单（L1）
 
 **职责：** 用内置正则匹配拦截高危命令，不可配置、不可关闭。
 
@@ -188,7 +188,7 @@ def hits_blacklist(command: str) -> bool:
 - 非命令执行类工具直接跳过此层
 - 模块文档顶部声明「启发式、非完备、不可配置放开」（N2 安全底线）
 
-### mewcode/permission/sandbox.py — 路径沙箱（L2）
+### newcode/permission/sandbox.py — 路径沙箱（L2）
 
 **职责：** 限制文件类工具读写只能落在项目根目录内，解析符号链接防逃逸。
 
@@ -221,15 +221,15 @@ def check_path(target_path: str, project_root: str) -> CheckResult:
 - glob/grep 的遍历由现有 `os.walk` / `glob` 实现（不跟随目录软链接）限制越界遍历
 - 沙箱对 glob/grep 为**尽力围栏搜索根**，登记为已知盲区
 
-### mewcode/permission/rules.py — 规则加载与分层（L3）
+### newcode/permission/rules.py — 规则加载与分层（L3）
 
 **职责：** 从 YAML 文件加载三层规则，提供统一的匹配入口。
 
 **核心接口：**
 ```python
-RULE_FILE_LOCAL = ".mewcode/permissions.local.yaml"  # 本地级
-RULE_FILE_PROJECT = ".mewcode/permissions.yaml"  # 项目级
-RULE_FILE_USER = "~/.config/mewcode/permissions.yaml"  # 用户级
+RULE_FILE_LOCAL = ".newcode/permissions.local.yaml"  # 本地级
+RULE_FILE_PROJECT = ".newcode/permissions.yaml"  # 项目级
+RULE_FILE_USER = "~/.config/newcode/permissions.yaml"  # 用户级
 
 
 def load_settings(filepath: str) -> dict:
@@ -261,7 +261,7 @@ def match_pattern(pattern: str, target: str) -> bool:
 - 每个文件 try/except 加载，失败→空规则集 + 打印警告
 - 不存在的文件静默视为空
 
-### mewcode/permission/engine.py — 规则引擎（L3）
+### newcode/permission/engine.py — 规则引擎（L3）
 
 **职责：** 对一次工具调用匹配三层规则，返回 allow/deny/None。
 
@@ -277,7 +277,7 @@ class RuleEngine:
 
 **依赖：** rules.py
 
-### mewcode/permission/modes.py — 权限模式矩阵（L4）
+### newcode/permission/modes.py — 权限模式矩阵（L4）
 
 **职责：** 根据当前模式和工具类别返回兜底裁决（Allow/Ask，绝不 Deny）。
 
@@ -297,7 +297,7 @@ def resolve_mode(mode: PermissionMode, category: ToolCategory) -> Decision:
 
 **依赖：** 无（纯数据）
 
-### mewcode/permission/hitl.py — 人在回路数据结构（L5）
+### newcode/permission/hitl.py — 人在回路数据结构（L5）
 
 **职责：** 定义 HITL 请求/响应的数据结构，不包含 UI 逻辑。
 
@@ -316,7 +316,7 @@ class HITLResponse:
 
 **依赖：** 无（纯数据）
 
-### mewcode/permission/checker.py — 权限检查器（串联入口 + 参数提取 + 工具分类）
+### newcode/permission/checker.py — 权限检查器（串联入口 + 参数提取 + 工具分类）
 
 **职责：** 串联前四层防线，输出最终 CheckResult；内置参数提取与工具分类逻辑。是 Agent 调用的唯一入口。
 
@@ -384,7 +384,7 @@ class PermissionChecker:
 **职责：** 在现有 Registry 中新增工具分类和友好名映射。
 
 ```python
-# mewcode/tools/registry.py
+# newcode/tools/registry.py
 
 FRIENDLY_NAME_MAP: dict[str, str] = {
     "Bash": "execute_command",
@@ -571,12 +571,12 @@ parser.add_argument(
 
 ### 权限配置示例文件
 
-**`.mewcode/permissions.yaml.example`（新建）：**
+**`.newcode/permissions.yaml.example`（新建）：**
 ```yaml
 # 权限规则配置示例
-# 三层文件：用户级 ~/.config/mewcode/permissions.yaml
-#           项目级 .mewcode/permissions.yaml（可入库团队共享）
-#           本地级 .mewcode/permissions.local.yaml（个人本地，建议 gitignore）
+# 三层文件：用户级 ~/.config/newcode/permissions.yaml
+#           项目级 .newcode/permissions.yaml（可入库团队共享）
+#           本地级 .newcode/permissions.local.yaml（个人本地，建议 gitignore）
 
 defaultMode: default
 
@@ -647,13 +647,13 @@ main.py 启动
   ├─ 加载 Config（现有）
   ├─ PermissionChecker.create(project_root)
   │   ├─ resolve_root(project_root) → 规整项目根
-  │   ├─ 加载用户级 ~/.config/mewcode/permissions.yaml
+  │   ├─ 加载用户级 ~/.config/newcode/permissions.yaml
   │   │   ├─ 存在 → 解析 YAML → RuleSet
   │   │   └─ 不存在 → 空 RuleSet
-  │   ├─ 加载项目级 .mewcode/permissions.yaml
+  │   ├─ 加载项目级 .newcode/permissions.yaml
   │   │   ├─ 存在 → 解析 → 合并到 RuleLayers
   │   │   └─ 不存在/格式错误 → 空 RuleSet（降级）
-  │   ├─ 加载本地级 .mewcode/permissions.local.yaml
+  │   ├─ 加载本地级 .newcode/permissions.local.yaml
   │   │   ├─ 存在 → 解析 → 合并（最高层）
   │   │   └─ 不存在 → 空 RuleSet
   │   ├─ start_mode：依次取 local/project/user 的 defaultMode
@@ -665,7 +665,7 @@ main.py 启动
 ## 文件组织
 
 ```
-mewcode/
+newcode/
 ├── permission/                          ← 新建
 │   ├── __init__.py                     — 公开 API（Decision, PermissionMode, PermissionChecker, RuleLayers 等）
 │   ├── blocklist.py                    — 黑名单正则常量（L1）
@@ -693,7 +693,7 @@ mewcode/
 │   └── reminders.py                    — 修改：plan 模式提醒新增「单纯询问直接回答」
 └── main.py                             — 修改：--mode 参数、权限系统初始化
 
-.mewcode/
+.newcode/
 └── permissions.yaml.example            — 新建：权限配置示例
 
 tests/
@@ -728,7 +728,7 @@ tests/
 | 规则匹配 | fnmatch（Python 标准库） | 零额外依赖，支持 `*` 和 `**` 通配 |
 | 规则文件格式 | YAML，permissions: {allow: [...], deny: [...]} | 与 Claude Code 兼容 |
 | 规则文件路径 | 三层：用户/项目/本地 | 本地级可 .gitignore，不进 git |
-| 永久放行落点 | 写本地层 .mewcode/permissions.local.yaml | 不进 git、不影响队友 |
+| 永久放行落点 | 写本地层 .newcode/permissions.local.yaml | 不进 git、不影响队友 |
 | 自动规则泛化 | 不泛化，只生成精确规则 | 自动猜泛化模式有误放行风险；泛化交用户手写 |
 | 永久放行实现 | escapeGlob 转义 + 去重 + createDirectories | 防止命令中的 `*`/`?` 被误当通配；幂等安全 |
 | 人在回路选项集 | 三选一（允许本次/永久/拒绝）+ 默认高亮允许本次 | 1:1 复刻 Claude Code |

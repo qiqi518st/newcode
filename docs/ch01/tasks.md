@@ -1,4 +1,4 @@
-# MewCode 多轮对话 — 任务拆分 (tasks.md)
+# NewCode 多轮对话 — 任务拆分 (tasks.md)
 
 ## 任务总览
 
@@ -8,29 +8,29 @@
 
 ### 任务 1：项目脚手架搭建
 
-**影响文件**：`pyproject.toml`、`mewcode/__init__.py`、`README.md`
+**影响文件**：`pyproject.toml`、`newcode/__init__.py`、`README.md`
 
 **依赖**：无
 
 **内容**：
 - 创建 `pyproject.toml`，声明项目元信息、Python 版本要求（≥3.10）
 - 添加依赖：`anthropic`、`openai`、`pyyaml`
-- 创建 `mewcode/` 包目录及 `__init__.py`
+- 创建 `newcode/` 包目录及 `__init__.py`
 - 创建 `README.md` 简要说明项目
 
-**验收**：`pip install -e .` 成功后 `import mewcode` 不报错
+**验收**：`pip install -e .` 成功后 `import newcode` 不报错
 
 ---
 
 ### 任务 2：配置模块
 
-**影响文件**：`mewcode/config.py`、`mewcode/config.yaml.example`
+**影响文件**：`newcode/config.py`、`newcode/config.yaml.example`
 
 **依赖**：任务 1
 
 **内容**：
 - 定义配置数据类：`Config`（provider、max_turns、system_prompt）、`ProviderConfig`（name、protocol、base_url、api_key、model、thinking）
-- 实现 `load_config()` 函数：从 `~/.mewcode/config.yaml` 读取 YAML，解析为 `Config` 对象
+- 实现 `load_config()` 函数：从 `~/.newcode/config.yaml` 读取 YAML，解析为 `Config` 对象
 - 配置文件不存在时返回内置默认值（默认 provider 为 `anthropic-official`，包含火山引擎 API 的默认配置）
 - 支持 `${ENV_VAR}` 语法在 api_key 字段中引用环境变量
 - 创建 `config.yaml.example` 示例文件
@@ -40,13 +40,13 @@
 - `pathlib.Path.home()` 获取用户主目录
 - `os.path.expandvars()` 或 `re.sub()` 处理 `${VAR}` 环境变量替换
 
-**验收**：手动创建/删除 `~/.mewcode/config.yaml`，验证默认值和自定义值均可正确加载
+**验收**：手动创建/删除 `~/.newcode/config.yaml`，验证默认值和自定义值均可正确加载
 
 ---
 
 ### 任务 3：Provider 抽象层
 
-**影响文件**：`mewcode/providers/__init__.py`、`mewcode/providers/base.py`
+**影响文件**：`newcode/providers/__init__.py`、`newcode/providers/base.py`
 
 **依赖**：任务 2
 
@@ -66,7 +66,7 @@
 
 ### 任务 4：Anthropic Protocol Provider
 
-**影响文件**：`mewcode/providers/anthropic_provider.py`
+**影响文件**：`newcode/providers/anthropic_provider.py`
 
 **依赖**：任务 3
 
@@ -100,7 +100,7 @@
 
 ### 任务 5：OpenAI Protocol Provider
 
-**影响文件**：`mewcode/providers/openai_provider.py`
+**影响文件**：`newcode/providers/openai_provider.py`
 
 **依赖**：任务 3
 
@@ -132,7 +132,7 @@
 
 ### 任务 6：对话管理模块
 
-**影响文件**：`mewcode/conversation.py`
+**影响文件**：`newcode/conversation.py`
 
 **依赖**：任务 3（需要 `BaseProvider` 类型）
 
@@ -154,7 +154,7 @@
 
 ### 任务 7：流式输出处理
 
-**影响文件**：`mewcode/streaming.py`
+**影响文件**：`newcode/streaming.py`
 
 **依赖**：任务 6
 
@@ -172,13 +172,13 @@
 
 ### 任务 8：REPL 循环 + CLI 入口
 
-**影响文件**：`mewcode/repl.py`、`mewcode/main.py`
+**影响文件**：`newcode/repl.py`、`newcode/main.py`
 
 **依赖**：任务 6、任务 7
 
 **内容**：
 
-`mewcode/repl.py`：
+`newcode/repl.py`：
 - 实现 `REPL` 类：
   - `__init__(self, conversation: ConversationManager)` 
   - `run()` — 主循环：打印欢迎信息 → 显示 `> ` 提示符 → 读取用户输入 → 处理特殊命令 → 调用对话管理 → 流式输出 → 循环
@@ -186,12 +186,12 @@
   - 支持 `/exit`、`/quit` 退出
   - 支持 `Ctrl+C`（中断当前操作但不退出）、`Ctrl+D`（退出）
 
-`mewcode/main.py`：
+`newcode/main.py`：
 - 实现 `main()` 函数：
   - 使用 `argparse` 解析命令行：`-c/--command` 单次调用
   - 加载配置 → 创建 provider → 创建对话管理器 → 进入 REPL 或单次调用
   - 单次调用模式：发送消息，流式输出，打印换行，退出
-- `pyproject.toml` 中注册 `mewcode` 命令入口点：`mewcode = mewcode.main:main`
+- `pyproject.toml` 中注册 `newcode` 命令入口点：`newcode = newcode.main:main`
 
 **多行输入检测**：
 - 跟踪括号栈：`(` `[` `{` 需要匹配的闭合符号
@@ -203,7 +203,7 @@
 - `pyproject.toml` 中 `[project.scripts]` 注册 CLI 入口
 - Python `code` 模块 / `codeop` 模块的 `compile_command()` 可用于检测代码是否完整
 
-**验收**：`mewcode` 启动 REPL，`mewcode -c "你好"` 单次调用后退出
+**验收**：`newcode` 启动 REPL，`newcode -c "你好"` 单次调用后退出
 
 ---
 
@@ -214,12 +214,12 @@
 **依赖**：任务 8
 
 **内容**：
-1. 准备配置文件 `~/.mewcode/config.yaml`，填入有效的 API key
-2. 启动 REPL：`mewcode`
+1. 准备配置文件 `~/.newcode/config.yaml`，填入有效的 API key
+2. 启动 REPL：`newcode`
 3. 输入对话，观察流式输出
 4. 测试多行输入（粘贴代码块）
 5. 测试 `/exit` 退出
-6. 测试 `mewcode -c "一句话问题"` 单次调用
+6. 测试 `newcode -c "一句话问题"` 单次调用
 7. 测试 `Ctrl+C` 中断流式输出
 8. 测试 `Ctrl+D` 退出
 9. 测试配置文件不存在时的默认行为

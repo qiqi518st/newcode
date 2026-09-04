@@ -4,7 +4,7 @@
 snapshot 浅拷贝导致外部改动污染内部；预算淘汰不按激活顺序（F8.1 踢最旧）。
 """
 
-from mewcode.skills.active import ActiveSkills
+from newcode.skills.active import ActiveSkills
 
 
 def test_activate_and_snapshot():

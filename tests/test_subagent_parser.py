@@ -7,8 +7,8 @@
 
 from __future__ import annotations
 
-from mewcode.subagent.parser import parse_definition_text
-from mewcode.subagent.types import Source
+from newcode.subagent.parser import parse_definition_text
+from newcode.subagent.types import Source
 
 
 def _parse(frontmatter: str):

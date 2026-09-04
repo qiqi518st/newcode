@@ -2,7 +2,7 @@
 
 对目标模型发逐步增长的 prompt 直到 provider 返回 prompt_too_long，二分逼近边界。
 产出的数字是经验下界（受系统提示、工具定义、provider 预留输出影响），由开发者
-手工填入 mewcode/context/capabilities.py 并提交——不自动回填。
+手工填入 newcode/context/capabilities.py 并提交——不自动回填。
 
 不在 Agent 主流程、不被 import、不被 F29 引用（F30）。
 依赖有效 API key 与网络，由开发者手动运行。
@@ -18,9 +18,9 @@ _CHARS_PER_TOKEN = 3.5
 def _build_provider(
     protocol: str, model: str, base_url: str | None, api_key: str | None
 ):
-    """按协议构造 provider 适配器（复用 mewcode.provider，探测路径独立于 Agent）。"""
-    from mewcode.config.schema import ProviderConfig
-    from mewcode.provider.base import new_provider
+    """按协议构造 provider 适配器（复用 newcode.provider，探测路径独立于 Agent）。"""
+    from newcode.config.schema import ProviderConfig
+    from newcode.provider.base import new_provider
 
     cfg = ProviderConfig(
         name="probe",
@@ -40,9 +40,9 @@ def _fill_prompt(token_estimate: int) -> str:
 
 async def _probe_once(provider, token_estimate: int) -> tuple[bool, str | None]:
     """发一次填充 prompt，返回 (是否超长 PTL, 错误信息)。"""
-    from mewcode.llm import PromptTooLongError
-    from mewcode.prompt.assembler import PromptPayload
-    from mewcode.provider.base import Message
+    from newcode.llm import PromptTooLongError
+    from newcode.prompt.assembler import PromptPayload
+    from newcode.provider.base import Message
 
     payload = PromptPayload(
         stable_prompt="probe",
@@ -96,7 +96,7 @@ async def _run(
     print(lower)
     print(
         f"\n# 经验下界（受系统提示/工具/预留输出影响），手工填入 "
-        f"mewcode/context/capabilities.py：\n"
+        f"newcode/context/capabilities.py：\n"
         f'#   "{model}": {lower},  # 来源：probe_context_window.py 探测',
         file=sys.stderr,
     )

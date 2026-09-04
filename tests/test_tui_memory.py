@@ -10,13 +10,13 @@ import asyncio
 
 from rich.console import Console
 
-from mewcode.memory.manager import MemoryManager
-from mewcode.memory.models import MemoryOperation
-from mewcode.permission.modes import PermissionMode
-from mewcode.plans import PlanManager
-from mewcode.slash import CommandContext, CommandRegistry
-from mewcode.slash.commands import register_all
-from mewcode.tui.app import REPL, AppMode, RichUIController, SessionState
+from newcode.memory.manager import MemoryManager
+from newcode.memory.models import MemoryOperation
+from newcode.permission.modes import PermissionMode
+from newcode.plans import PlanManager
+from newcode.slash import CommandContext, CommandRegistry
+from newcode.slash.commands import register_all
+from newcode.tui.app import REPL, AppMode, RichUIController, SessionState
 
 
 class _StubAgent:
@@ -57,7 +57,7 @@ def make_repl(tmp_path, *, with_memory=True):
     repl.agent = _StubAgent()
     if with_memory:
         repl.memory_manager = MemoryManager(
-            str(tmp_path / ".mewcode" / "memory"),
+            str(tmp_path / ".newcode" / "memory"),
             str(tmp_path / "user_memory"),
         )
     else:

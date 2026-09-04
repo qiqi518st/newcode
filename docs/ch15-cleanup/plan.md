@@ -1,4 +1,4 @@
-# MewCode ch15 收尾 - 团队清理引导与孤儿 Worktree 自动清扫 Plan
+# NewCode ch15 收尾 - 团队清理引导与孤儿 Worktree 自动清扫 Plan
 
 ## 架构概览
 
@@ -13,7 +13,7 @@
 ## 核心数据结构 / 接口
 
 ```python
-# mewcode/team/cleanup.py（新）
+# newcode/team/cleanup.py（新）
 TEAM_CLEANUP_DISCIPLINE: str = (
     "## 团队清理纪律\n"
     "删除/清理团队必须调用 TeamDelete 工具，或提示用户使用 /team delete <name> [--force]；\n"
@@ -23,14 +23,14 @@ TEAM_CLEANUP_DISCIPLINE: str = (
 def guard_team_git_cleanup(mgr, command: str) -> str | None:
     """命中「团队仍存在」的 team worktree 手动 git 清理 → 返回拦截提示；否则 None（放行）。"""
 
-# mewcode/team/manager.py（修改）
+# newcode/team/manager.py（修改）
 def sweep_orphan_worktrees(self) -> list[str]:
     """清扫团队配置已不存在的 team-* worktree（fail-closed）；返回移除的名字列表。"""
 
 async def run(self, interval_seconds: float) -> None:
     """周期孤儿清扫循环（仿 worktree sweep F6.5；单轮失败不退出）。"""
 
-# mewcode/tools/shell.py（修改）
+# newcode/tools/shell.py（修改）
 class ExecuteCommandTool:
     def __init__(self, guard: Callable[[str], str | None] | None = None): ...
     # execute 开头：if self._guard: hint = self._guard(command); if hint: return error(hint)
@@ -82,7 +82,7 @@ class ExecuteCommandTool:
 
 ### 6. 版本
 
-- `mewcode/__init__.py` + `pyproject.toml`：`0.15.0` → `0.15.1`（N7）
+- `newcode/__init__.py` + `pyproject.toml`：`0.15.0` → `0.15.1`（N7）
 
 ## 模块交互
 
@@ -99,12 +99,12 @@ class ExecuteCommandTool:
 ## 文件组织
 
 ```
-mewcode/team/cleanup.py              新建：TEAM_CLEANUP_DISCIPLINE + guard_team_git_cleanup
-mewcode/team/manager.py              修改：sweep_orphan_worktrees + run(interval)
-mewcode/team/tools/team_delete.py    修改：删队成功后补扫
-mewcode/tools/shell.py               修改：ExecuteCommandTool guard 注入
-mewcode/main.py                      修改：提示词 + guard 装配 + 启动/周期清扫
-mewcode/__init__.py + pyproject.toml 修改：0.15.1
+newcode/team/cleanup.py              新建：TEAM_CLEANUP_DISCIPLINE + guard_team_git_cleanup
+newcode/team/manager.py              修改：sweep_orphan_worktrees + run(interval)
+newcode/team/tools/team_delete.py    修改：删队成功后补扫
+newcode/tools/shell.py               修改：ExecuteCommandTool guard 注入
+newcode/main.py                      修改：提示词 + guard 装配 + 启动/周期清扫
+newcode/__init__.py + pyproject.toml 修改：0.15.1
 tests/test_team_cleanup.py           新建：守卫匹配 + 清扫测试
 ```
 

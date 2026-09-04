@@ -15,11 +15,11 @@ from typing import ClassVar
 
 import pytest
 
-from mewcode.agent import EventType
-from mewcode.conversation.manager import ConversationManager
-from mewcode.hooks import load
-from mewcode.hooks.engine import Engine
-from mewcode.hooks.types import (
+from newcode.agent import EventType
+from newcode.conversation.manager import ConversationManager
+from newcode.hooks import load
+from newcode.hooks.engine import Engine
+from newcode.hooks.types import (
     Action,
     ActionType,
     Event,
@@ -27,9 +27,9 @@ from mewcode.hooks.types import (
     Hook,
     PromptAction,
 )
-from mewcode.provider.base import StreamEvent, TokenUsage, ToolCall, ToolResult
-from mewcode.session.runtime import SessionRuntime
-from mewcode.tools.registry import Registry
+from newcode.provider.base import StreamEvent, TokenUsage, ToolCall, ToolResult
+from newcode.session.runtime import SessionRuntime
+from newcode.tools.registry import Registry
 
 pytestmark = pytest.mark.anyio
 
@@ -83,7 +83,7 @@ class TestIntegration:
         _write_hooks(
             tmp_path,
             {
-                ".mewcode/config.local.yaml": (
+                ".newcode/config.local.yaml": (
                     "hooks:\n"
                     "  - name: block-rm\n"
                     "    event: pre_tool_use\n"
@@ -93,7 +93,7 @@ class TestIntegration:
                     '          match: {type: glob, value: "rm -rf *"}\n'
                     "    action: {type: command, command: \"echo 'dangerous: rm -rf' >&2; exit 2\"}\n"
                 ),
-                ".mewcode/config.yaml": (
+                ".newcode/config.yaml": (
                     "hooks:\n"
                     "  - name: hint\n"
                     "    event: turn_start\n"
@@ -102,7 +102,7 @@ class TestIntegration:
             },
         )
         monkeypatch.setattr(
-            "mewcode.hooks.loader.HOOK_FILE_USER", str(tmp_path / "user.yaml")
+            "newcode.hooks.loader.HOOK_FILE_USER", str(tmp_path / "user.yaml")
         )
         eng = load(str(tmp_path))
         assert [r.name for r in eng.rules] == ["block-rm", "hint"]
@@ -125,7 +125,7 @@ class TestIntegration:
         _write_hooks(
             tmp_path,
             {
-                ".mewcode/config.yaml": (
+                ".newcode/config.yaml": (
                     "hooks:\n"
                     "  - name: bad\n"
                     "    event: UnknownEvent\n"
@@ -137,7 +137,7 @@ class TestIntegration:
             },
         )
         monkeypatch.setattr(
-            "mewcode.hooks.loader.HOOK_FILE_USER", str(tmp_path / "user.yaml")
+            "newcode.hooks.loader.HOOK_FILE_USER", str(tmp_path / "user.yaml")
         )
         eng = load(str(tmp_path))
         assert [r.name for r in eng.rules] == ["good"]
@@ -148,7 +148,7 @@ class TestIntegration:
         _write_hooks(
             tmp_path,
             {
-                ".mewcode/config.yaml": (
+                ".newcode/config.yaml": (
                     "hooks:\n"
                     "  - name: once-hint\n"
                     "    event: turn_start\n"
@@ -158,7 +158,7 @@ class TestIntegration:
             },
         )
         monkeypatch.setattr(
-            "mewcode.hooks.loader.HOOK_FILE_USER", str(tmp_path / "user.yaml")
+            "newcode.hooks.loader.HOOK_FILE_USER", str(tmp_path / "user.yaml")
         )
         eng = load(str(tmp_path))
         runtime = SessionRuntime(".")
@@ -167,7 +167,7 @@ class TestIntegration:
         registry.register(MockWriteTool())
         provider = _ToolProvider()
         conv = ConversationManager(20)
-        from mewcode.agent import Agent
+        from newcode.agent import Agent
 
         agent = Agent(provider, conv, registry, hooks=eng, runtime=runtime)
         MockWriteTool.executed = []
@@ -212,9 +212,9 @@ class TestIntegration:
             sources=["t"],
         )
         # 用条件过滤：is_error=false 才触发
-        from mewcode.hooks.conditions import AtomCondition, Condition
-        from mewcode.hooks.types import CombineMode
-        from mewcode.permission.matcher import matcher_from_spec
+        from newcode.hooks.conditions import AtomCondition, Condition
+        from newcode.hooks.types import CombineMode
+        from newcode.permission.matcher import matcher_from_spec
 
         hook = eng.rules[0]
         hook.condition = Condition(
@@ -248,7 +248,7 @@ class TestIntegration:
         registry.register(MockWriteTool())
         provider = _ToolProvider()
         conv = ConversationManager(20)
-        from mewcode.agent import Agent
+        from newcode.agent import Agent
 
         agent = Agent(provider, conv, registry, hooks=eng, runtime=runtime)
         MockWriteTool.executed = []

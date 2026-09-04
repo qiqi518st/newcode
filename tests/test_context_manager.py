@@ -5,10 +5,10 @@
 
 import pytest
 
-from mewcode.context.files import FileTracker
-from mewcode.context.manager import ContextManager
-from mewcode.conversation.manager import ConversationManager
-from mewcode.provider.base import StreamEvent, ToolCall, ToolResult
+from newcode.context.files import FileTracker
+from newcode.context.manager import ContextManager
+from newcode.conversation.manager import ConversationManager
+from newcode.provider.base import StreamEvent, ToolCall, ToolResult
 
 
 class MockProvider:
@@ -237,7 +237,7 @@ async def test_anchor_reset_after_compact(tmp_path, monkeypatch):
     _build_conv(cm)
     p = MockProvider(_ok_script)
     ctx = _make_ctx(p, cm, tmp_path)
-    from mewcode.provider.base import TokenUsage
+    from newcode.provider.base import TokenUsage
 
     # 模拟锚点已涵盖部分历史（anchor_msg_len < 消息数），使 L1 后估算仍达阈值
     ctx.update_anchor(TokenUsage(1000, 200), 0)

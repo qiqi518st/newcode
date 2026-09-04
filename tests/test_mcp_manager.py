@@ -12,10 +12,10 @@ from typing import ClassVar
 
 import pytest
 
-import mewcode.mcp.manager as manager_mod
-from mewcode.mcp.config import ServerConfig
-from mewcode.mcp.manager import MCPManager
-from mewcode.mcp.wrapper import McpTool
+import newcode.mcp.manager as manager_mod
+from newcode.mcp.config import ServerConfig
+from newcode.mcp.manager import MCPManager
+from newcode.mcp.wrapper import McpTool
 
 
 def _server(name: str) -> ServerConfig:
@@ -156,7 +156,7 @@ async def test_connect_timeout_bounded(fake_conn, monkeypatch, capsys):
 @pytest.mark.anyio
 async def test_real_bad_command_server_isolated(monkeypatch, capsys):
     """真坏 command（SDK stdio_client 真实失败路径）+ 假成功组合：失败跳过、成功保留。"""
-    import mewcode.mcp.conn as conn_mod
+    import newcode.mcp.conn as conn_mod
 
     class RealForBadFakeForGood:
         def __new__(cls, server, version):

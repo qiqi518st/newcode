@@ -1,8 +1,8 @@
-# MewCode 多轮对话 — 实施计划 (plan.md)
+# NewCode 多轮对话 — 实施计划 (plan.md)
 
 ## 目标
 
-在 Python 中实现 MewCode 终端 AI 编程助手的第一版核心能力：**多轮对话**。
+在 Python 中实现 NewCode 终端 AI 编程助手的第一版核心能力：**多轮对话**。
 
 ## 技术选型
 
@@ -17,11 +17,11 @@
 ## 项目结构
 
 ```
-mewcode/
+newcode/
 ├── pyproject.toml
 ├── README.md
 ├── config.yaml.example
-└── mewcode/
+└── newcode/
     ├── __init__.py
     ├── main.py              # CLI 入口，argparse
     ├── config.py            # 配置加载，YAML 解析
@@ -60,7 +60,7 @@ mewcode/
                     └──────┬──────┘
                            │
                     ┌──────▼──────┐
-                    │  config.py  │  读取 ~/.mewcode/config.yaml
+                    │  config.py  │  读取 ~/.newcode/config.yaml
                     │  load_config│
                     └──────┬──────┘
                            │

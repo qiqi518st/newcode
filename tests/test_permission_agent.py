@@ -13,19 +13,19 @@ from typing import ClassVar
 
 import pytest
 
-from mewcode.agent import Agent, EventType, StopReason
-from mewcode.conversation.manager import ConversationManager
-from mewcode.permission.checker import PermissionChecker
-from mewcode.permission.hitl import HITLResponse
-from mewcode.permission.modes import PermissionMode
-from mewcode.permission.rules import Rule, RuleLayers
-from mewcode.provider.base import (
+from newcode.agent import Agent, EventType, StopReason
+from newcode.conversation.manager import ConversationManager
+from newcode.permission.checker import PermissionChecker
+from newcode.permission.hitl import HITLResponse
+from newcode.permission.modes import PermissionMode
+from newcode.permission.rules import Rule, RuleLayers
+from newcode.provider.base import (
     StreamEvent,
     TokenUsage,
     ToolCall,
     ToolResult,
 )
-from mewcode.tools.registry import Registry
+from newcode.tools.registry import Registry
 
 
 class MockWriteTool:
@@ -259,7 +259,7 @@ async def test_allow_always_writes_local_file(tmp_path):
             agent.resolve_hitl(HITLResponse(action="allow_always"))
         events.append(e)
 
-    local = tmp_path / ".mewcode" / "permissions.local.yaml"
+    local = tmp_path / ".newcode" / "permissions.local.yaml"
     assert local.exists(), "应写入本地级规则文件"
     content = local.read_text(encoding="utf-8")
     assert "Write(a.txt)" in content

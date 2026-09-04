@@ -11,8 +11,8 @@ from dataclasses import dataclass
 
 import pytest
 
-from mewcode.mcp.wrapper import make_tool
-from mewcode.provider.base import ToolResult
+from newcode.mcp.wrapper import make_tool
+from newcode.provider.base import ToolResult
 
 
 @dataclass

@@ -4,7 +4,7 @@
 active 块漏 body；多 Skill 并存顺序错乱。
 """
 
-from mewcode.prompt.skills_block import (
+from newcode.prompt.skills_block import (
     ActiveSkillEntry,
     SkillCatalogItem,
     render_active_skills_block,

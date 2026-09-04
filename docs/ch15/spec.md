@@ -1,10 +1,10 @@
-# MewCode ch15 - AgentTeam 与 Coordinator Mode Spec
+# NewCode ch15 - AgentTeam 与 Coordinator Mode Spec
 
 ## 背景
 
 ch13 SubAgent 把任务从单 Agent 委派给子 Agent，实现了消息、权限账本、文件读缓存与 token 计数的隔离；ch14 Worktree 给每个子 Agent 配上独立工作目录，文件系统层并发也安全。但这两章合起来仍是**星型**拓扑——所有子 Agent 只能与主 Agent 通信，子 Agent 之间没有横向通道；主 Agent 既要决策、又要中转，**既是大脑也是邮局**。对「同时重构四个模块」「三个角度查同一个 bug」这类持续性、需要互相交流的工作，星型结构的瓶颈很明显。
 
-本章把 mewcode 从星型升级到**网状**：
+本章把 newcode 从星型升级到**网状**：
 
 - 主 Agent 创建 **Team** 后升任 **Lead**——Team 是长期存在的小组对象，记名称、负责人、成员花名册、持久化位置；
 - 每个**队员**（Teammate）是独立 Agent 实例，有独立 Conversation 与独立 Worktree；
@@ -18,19 +18,19 @@ ch13 SubAgent 把任务从单 Agent 委派给子 Agent，实现了消息、权�
 - ch13 `task.Manager` 已支持后台任务管理 + `send_message` 续派 + `by_name` 名称映射（name → id）；本章扩展为多 Team 寻址
 - ch13 `AgentTool.execute` 已是子 Agent 启动入口，本章新增 `team_name` 参数走 Team spawn 分支
 - ch13 工具过滤 `apply_agent_tool_filter` 已支持多层防线（`GLOBAL_DENY` 禁 `agent`、后台白名单、系统工具豁免）；本章新增团队专属白名单（协作工具）与 Coordinator Mode 白名单
-- ch14 `worktree.Manager` 已支持嵌套 slug（`team/alice` → `.mewcode/worktrees/team+alice/`），本章复用做队员 worktree（slug 形式 `team-<team_name>/<member>`）
-- ch12 session 持久化（`.mewcode/sessions/<id>/conversation.jsonl`）按对话粒度落盘；本章给每个队员单独申请一个 session，队员 stop 不删 session，SendMessage 续派时经 session 反序列化 Conversation
+- ch14 `worktree.Manager` 已支持嵌套 slug（`team/alice` → `.newcode/worktrees/team+alice/`），本章复用做队员 worktree（slug 形式 `team-<team_name>/<member>`）
+- ch12 session 持久化（`.newcode/sessions/<id>/conversation.jsonl`）按对话粒度落盘；本章给每个队员单独申请一个 session，队员 stop 不删 session，SendMessage 续派时经 session 反序列化 Conversation
 - ch10 slash 命令系统，本章新增 `/team` 系列
 - ch07 permission 已支持 `plan` 模式，本章 `plan_mode_required` 的 Plan 提交-Lead 审批工作流套用同一引擎
 
-环境约束（已实测）：开发环境为 **WSL2**（Linux），`tmux 3.4` 已安装可实测；**iTerm2 是 macOS 专属**，本环境完全无法验证 → iterm2 后端本期只做**探测/配置/报错骨架**，实装标「待人工验证」。`~/.mewcode/teams/` 目录已存在（空）。
+环境约束（已实测）：开发环境为 **WSL2**（Linux），`tmux 3.4` 已安装可实测；**iTerm2 是 macOS 专属**，本环境完全无法验证 → iterm2 后端本期只做**探测/配置/报错骨架**，实装标「待人工验证」。`~/.newcode/teams/` 目录已存在（空）。
 
 本章**只做**「Lead 多人协作 + Plan 审批 + Coordinator 收敛」。跨进程跨机器分布式团队、队员之间实时流式通信、复杂任务依赖约束（优先级 / deadline）、Windows 平台 iterm2 适配均不在范围内。
 
 ## 目标
 
-- G1：**`team.Team` 与 `team.Manager`**——Team 封装小组生命周期（name、lead_agent_id、members、config_path）；Manager 在单 mewcode 进程内管理多个 Team（典型场景同时只有一个活跃 Team）
-- G2：**`TeamCreate` 工具**——主 Agent 调用即创建 Team、调 `detect_backend` 确定后端、写 `~/.mewcode/teams/<sanitized_name>/config.json`、把 Lead 注册成第一个成员；同名团队自动后缀 `-2`/`-3` 避免冲突
+- G1：**`team.Team` 与 `team.Manager`**——Team 封装小组生命周期（name、lead_agent_id、members、config_path）；Manager 在单 newcode 进程内管理多个 Team（典型场景同时只有一个活跃 Team）
+- G2：**`TeamCreate` 工具**——主 Agent 调用即创建 Team、调 `detect_backend` 确定后端、写 `~/.newcode/teams/<sanitized_name>/config.json`、把 Lead 注册成第一个成员；同名团队自动后缀 `-2`/`-3` 避免冲突
 - G3：**扩展 `Agent` 工具**——增加 `team_name` 可选参数，非空时走 Team spawn 分支：加载定义 → 创建队员 Worktree → 注入协作工具 → 按后端分流 spawn → 注册到名称注册表 → 写入 `team.members`
 - G4：**`TeamDelete` 工具**——确认所有成员空闲后删队员 worktree + 删 team 目录、Lead 退出团队；有活跃成员时拒绝删除
 - G5：**三种执行后端 `tmux`/`iterm2`/`in-process`**，统一抽象 `team.Backend` Protocol；`detect_backend` 按 `$TMUX → $TERM_PROGRAM==iTerm.app && which it2 → which tmux → in-process` 优先级一次性决定，不做运行时回退
@@ -43,7 +43,7 @@ ch13 SubAgent 把任务从单 Agent 委派给子 Agent，实现了消息、权�
 - G12：**队员完成通知 Lead**——团队 config 标记 `is_active=False`、Lead 邮箱收到 `idle_notification`；队员 Conversation 已经 ch12 Writer 实时写入 session 文件
 - G13：**队员续写**——Lead 调 `SendMessage` 时系统检测队员已停，从 session 反序列化 Conversation、新建 asyncio task 续派，Conv 沿用历史，不重头 spawn
 - G14：**`plan_mode_required` 审批工作流**——队员以 plan 模式起步，生成计划后发给 Lead，Lead 用 `plan_approval_response` approve/reject；approve 时权限切到 Lead 当前模式继续执行
-- G15：**Coordinator Mode**——独立于 Team；`is_coordinator_mode() = feature(COORDINATOR_MODE) && env_truthy(MEWCODE_COORDINATOR_MODE)` 双锁全开才生效；工具集收窄 + 四阶段工作流提示词 + 「派完停手」纪律
+- G15：**Coordinator Mode**——独立于 Team；`is_coordinator_mode() = feature(COORDINATOR_MODE) && env_truthy(NEWCODE_COORDINATOR_MODE)` 双锁全开才生效；工具集收窄 + 四阶段工作流提示词 + 「派完停手」纪律
 - G16：**收敛全由 LLM 推理驱动**——Lead 用 Bash 逐个 `git merge` 队员 worktree 分支，冲突自行解决，搞不定 `--abort` 保留 worktree 上报
 - G17：**TUI slash 命令** `/team list` / `/team info <name>` / `/team delete <name>` / `/team kill <member>`，辅助人工介入
 - G18：**与 ch04~ch14 协同**——主 Agent 平时（未 TeamCreate）工具列表不变；协作工具仅团队上下文出现；ch13 后台任务 / 超时移交 / SendMessage 续派路径保留，队员续派复用同一套底层 `task.Manager`
@@ -52,9 +52,9 @@ ch13 SubAgent 把任务从单 Agent 委派给子 Agent，实现了消息、权�
 
 ### F1 Team 数据结构与 Manager
 
-- F1.1 `Team` 字段：`name`（原始名）、`sanitized_name`（经 sanitize 用于路径）、`lead_agent_id`（本期固定 `"lead"`）、`members: list[TeammateInfo]`、`config_dir`（`<home_dir>/.mewcode/teams/<sanitized_name>/`）、`config_path`、`created_at`、`backend`。
+- F1.1 `Team` 字段：`name`（原始名）、`sanitized_name`（经 sanitize 用于路径）、`lead_agent_id`（本期固定 `"lead"`）、`members: list[TeammateInfo]`、`config_dir`（`<home_dir>/.newcode/teams/<sanitized_name>/`）、`config_path`、`created_at`、`backend`。
 - F1.2 `TeammateInfo` 字段：`name`（Lead 分配的队员名，Team 内唯一）、`agent_id`、`agent_type`（使用的 subagent 定义名；Fork 路径下为空）、`model`（覆盖，空表 inherit）、`worktree_path`（绝对路径）、`branch`（对应 worktree 分支名）、`backend_type`（可 per-member 不同）、`pane_id`（tmux/iterm2 pane id，in-process 为空）、`is_active: bool | None`（None 或 True 表活跃，False 表空闲；终止后从 members 移除）、`plan_mode_required`、`session_dir`（队员独立 session 目录绝对路径）。
-- F1.3 `Manager` 构造：校验 `<home_dir>/.mewcode/teams/` 可写；扫描该目录还原 `teams` dict（每个子目录读一次 config.json，解析失败的跳过并 stderr 警告）；`Manager._lock` 仅保护 `teams` dict。
+- F1.3 `Manager` 构造：校验 `<home_dir>/.newcode/teams/` 可写；扫描该目录还原 `teams` dict（每个子目录读一次 config.json，解析失败的跳过并 stderr 警告）；`Manager._lock` 仅保护 `teams` dict。
 - F1.4 `Manager.create(name, agent_type)`：
   1. `sanitize(name)`——只保留 `[a-zA-Z0-9._-]`，其余替换为 `-`，首尾去 `-`，空字符串拒绝；
   2. 同名冲突时在 sanitized 后追加 `-2`/`-3` 直到唯一；
@@ -89,7 +89,7 @@ ch13 SubAgent 把任务从单 Agent 委派给子 Agent，实现了消息、权�
 
 ### F3 tmux 后端
 
-- F3.1 `spawn`：`tmux split-window`（横向分屏，`-P` 打印 pane id，`-F` 指定格式）；命令为 `python -m mewcode --team-member --team <team_name> --member <member_name> --agent-id <agent_id> --session-dir <session_dir> --worktree <worktree_path> [--agent-type <type>] [--model <model>] [--plan-mode]`。用 `asyncio.create_subprocess_exec` 跑 tmux，捕获 stdout 作 pane_id。
+- F3.1 `spawn`：`tmux split-window`（横向分屏，`-P` 打印 pane id，`-F` 指定格式）；命令为 `python -m newcode --team-member --team <team_name> --member <member_name> --agent-id <agent_id> --session-dir <session_dir> --worktree <worktree_path> [--agent-type <type>] [--model <model>] [--plan-mode]`。用 `asyncio.create_subprocess_exec` 跑 tmux，捕获 stdout 作 pane_id。
 - F3.2 `--agent-id` 预生成是关键：Lead spawn 时已生成的 agent_id 直接传给子进程，子进程无需读 Lead 尚未写完的 config.json 找自己。
 - F3.3 `wake`：`tmux send-keys -t <pane_id> "" Enter`——回车触发子进程 stdin reader 读到一行，立即去 mailbox 轮询。
 - F3.4 `kill`：`tmux kill-pane -t <pane_id>`（忽略 pane 不存在错误）。
@@ -107,7 +107,7 @@ ch13 SubAgent 把任务从单 Agent 委派给子 Agent，实现了消息、权�
 
 ### F6 Pane 子进程 team-member 模式
 
-- F6.1 `python -m mewcode --team-member` 子进程**不启动 TUI**，跑自治协程：
+- F6.1 `python -m newcode --team-member` 子进程**不启动 TUI**，跑自治协程：
   1. 解析 `--team / --member / --agent-id / --session-dir / --worktree / --agent-type / --model / --plan-mode`；
   2. `os.chdir(--worktree)`，让该进程的 `Path.cwd()` 与权限沙箱根都指到 worktree；
   3. 构造单独的 Manager、provider、registry、permission engine、hook engine（完整复用 Lead wire 代码，但不构造 TUI）；
@@ -186,8 +186,8 @@ ch13 SubAgent 把任务从单 Agent 委派给子 Agent，实现了消息、权�
 
 ### F14 Coordinator Mode
 
-- F14.1 `is_enabled(cfg)`：`feature_has(cfg, "COORDINATOR_MODE")`（经配置读 `features.coordinator_mode`）且 `env_truthy(MEWCODE_COORDINATOR_MODE)`（接受 `"1"`/`"true"`/`"yes"`，大小写不敏感）→ 双锁全开才生效；缺一把启动时 stderr 提示缺哪把。
-- F14.2 生效时机：启动时判定（环境变量进程级），会话内固定，不做运行时切换；**运行时不可解锁**（避免 LLM 被注入后自行解锁；唯一解除方式=退出 mewcode 重启）。
+- F14.1 `is_enabled(cfg)`：`feature_has(cfg, "COORDINATOR_MODE")`（经配置读 `features.coordinator_mode`）且 `env_truthy(NEWCODE_COORDINATOR_MODE)`（接受 `"1"`/`"true"`/`"yes"`，大小写不敏感）→ 双锁全开才生效；缺一把启动时 stderr 提示缺哪把。
+- F14.2 生效时机：启动时判定（环境变量进程级），会话内固定，不做运行时切换；**运行时不可解锁**（避免 LLM 被注入后自行解锁；唯一解除方式=退出 newcode 重启）。
 - F14.3 **工具收窄**：`COORDINATOR_ALLOWED_TOOLS = [Agent, TeamCreate, TeamDelete, TaskCreate, TaskGet, TaskList, TaskUpdate, SendMessage, read_file, glob, grep, bash]`；剥夺 `write_file`/`edit_file`。
 - F14.4 TUI 状态栏显示 `[COORDINATOR]` 模式标签。
 - F14.5 **四阶段工作流提示词注入**（追加 system_prompt 末尾）：
@@ -218,7 +218,7 @@ ch13 SubAgent 把任务从单 Agent 委派给子 Agent，实现了消息、权�
 
 - F17.1 `config.json` 结构：`name` / `sanitized_name` / `lead_agent_id` / `backend` / `description` / `created_at` / `members[]`（字段同 F1.2）。所有写操作原子（`.tmp` + `os.replace`），受 `Team._lock` 保护；跨进程 reload-before-modify（F1.7）。
 - F17.2 启动扫描：解析失败的目录跳过并 stderr 警告；**不自动恢复 in-process 队员**（进程重启后 in-process 状态丢失，is_active 视为 False）；Pane 队员按 `pane_id` 探测后端是否仍在（`tmux has-session` / `it2 list-panes`），不在的 is_active 标 False。
-- F17.3 队员 session 沿用 ch12：路径 `<project_root>/.mewcode/sessions/<id>/conversation.jsonl`；Team 删除时一并删除。
+- F17.3 队员 session 沿用 ch12：路径 `<project_root>/.newcode/sessions/<id>/conversation.jsonl`；Team 删除时一并删除。
 - F17.4 `Manager.delete(name, force=True)` 顺序：持锁校验 → 对每个非 lead 成员用其 `backend_type` 解析 Backend 实例并 `backend.kill`（Pane 子进程检测到 mailbox 目录消失会自行优雅退出兜底）→ 删 session 目录与 worktree → `shutil.rmtree(config_dir)` → 从 `teams` dict 移除。
 
 ## 非功能需求
@@ -239,13 +239,13 @@ ch13 SubAgent 把任务从单 Agent 委派给子 Agent，实现了消息、权�
 - N14：**沙箱临时目录白名单**——权限沙箱允许写入项目根**之外**的 `/tmp` 与 macOS 真实路径 `/private/tmp` 作为系统临时目录白名单（file-class 工具生效；bash 走 exec-class 不受沙箱约束）。理由：工具脚本和队员经常需要 /tmp 中转文件，严格限定项目根内会误杀正常用法
 - N15：**测试规范**——接线测试自动跑、mock 驱动真实代码路径、每测试标注防的 bug；无 API key / 无真实终端可执行（tmux 相关用 mock 子进程驱动真实代码路径）
 - N16：**文档保护**——docs/ 不可变（本流程四份文档除外）
-- N17：**版本号**——0.15.0（`mewcode/__init__.py` 与 `pyproject.toml` 两处一致）
+- N17：**版本号**——0.15.0（`newcode/__init__.py` 与 `pyproject.toml` 两处一致）
 - N18：**兼容**——ch04~ch14 存量功能零回归；pytest 全绿、ruff 通过
 - N19：**待人工验证标注**——iterm2 实装、真实 tmux 交互、macOS `/private/tmp` 等环境受限项标「待人工验证」，不混入通过
 
 ## 不做的事
 
-- 跨 mewcode 进程的 Team 共享（同一仓库同一时刻单实例操作活跃 Team）
+- 跨 newcode 进程的 Team 共享（同一仓库同一时刻单实例操作活跃 Team）
 - 跨机器分布式 Team
 - 队员之间实时流式通信（走 mailbox 文件 + 轮询/Wake，不走 socket）
 - 复杂任务依赖约束（优先级、deadline、SLA）
@@ -260,13 +260,13 @@ ch13 SubAgent 把任务从单 Agent 委派给子 Agent，实现了消息、权�
 
 ## 验收标准
 
-- AC1（F1.3/F17.2）：`Manager` 构造时 `~/.mewcode/teams/` 不存在自动创建；已有时正确扫描子目录还原 `teams` dict；坏 config.json 跳过 + stderr 警告、不崩
-- AC2（F1.4）：`create("refactor auth")` → sanitize 为 `refactor-auth`，`~/.mewcode/teams/refactor-auth/config.json` 落地，`backend` 字段反映 `detect_backend` 结果
+- AC1（F1.3/F17.2）：`Manager` 构造时 `~/.newcode/teams/` 不存在自动创建；已有时正确扫描子目录还原 `teams` dict；坏 config.json 跳过 + stderr 警告、不崩
+- AC2（F1.4）：`create("refactor auth")` → sanitize 为 `refactor-auth`，`~/.newcode/teams/refactor-auth/config.json` 落地，`backend` 字段反映 `detect_backend` 结果
 - AC3（F1.4）：同名 Team 二次 create 自动后缀 `-2`，目录与 sanitized_name 都生效
 - AC4（F1.5）：`delete(name, False)` 有 `is_active != False` 成员时抛 `TeamHasActiveMembersError`，目录仍在
 - AC5（F1.5）：`delete(name, True)` 删 Worktree、删 session 目录、删 config_dir
 - AC6（F2.4）：`detect_backend()`——`$TMUX` 已设返回 `tmux`；未设但 `$TERM_PROGRAM==iTerm.app` 且 `it2` 可执行返回 `iterm2`；都无但 `tmux` 在 PATH 返回 `tmux`；否则 `in-process`
-- AC7（F10.3/F10.7）：`Agent(team_name="<existing>")` → `.mewcode/worktrees/team-<sanitized>+<member>/` 落地、调 backend.spawn、`team.members` 出现该成员；不带 `team_name` 维持 ch13 原行为
+- AC7（F10.3/F10.7）：`Agent(team_name="<existing>")` → `.newcode/worktrees/team-<sanitized>+<member>/` 落地、调 backend.spawn、`team.members` 出现该成员；不带 `team_name` 维持 ch13 原行为
 - AC8（F5.4）：in-process 队员的 `Agent` 工具调 `team_name` 参数被拦截，抛 `InProcessTeammateNoSpawnError`
 - AC9（F7.1/F7.8）：协作工具在未建团队的主 Agent 工具列表**不可见**；在 Team 队员工具列表**可见**
 - AC10（F7.3/F7.6）：`TaskCreate` 落 `<team_config_dir>/tasks.json`；`TaskUpdate(task_id, add_blocked_by=[id])` 正确双向更新 `blocked_by`/`blocks`
@@ -282,14 +282,14 @@ ch13 SubAgent 把任务从单 Agent 委派给子 Agent，实现了消息、权�
 - AC20（F13.3/F13.4）：Lead 发 `plan_approval_response({approve: True})` 后队员下一轮权限模式切回 `default`
 - AC21（F14.1/F14.3/F14.4）：feature 开 + env 设 → Lead allowed tools 收窄为 `COORDINATOR_ALLOWED_TOOLS`，`write_file`/`edit_file` 不在其中；TUI 状态栏显示 `[COORDINATOR]`
 - AC22（F14.1）：只开一把锁 → 不进入 coordinator 且 stderr 提示缺哪把
-- AC23（F3.1）：tmux 后端 spawn 后 `tmux list-panes` 见新 pane，pane 内 mewcode 实例启动并连接该 Team
+- AC23（F3.1）：tmux 后端 spawn 后 `tmux list-panes` 见新 pane，pane 内 newcode 实例启动并连接该 Team
 - AC24（F3.3）：`wake(pane_id, agent_id)` 经 `tmux send-keys` 触发目标 pane 输入（集成测试可观察 pane 内容）
 - AC25（F5.1）：in-process 队员与主 Agent 同进程运行、共享 `task.Manager`，但有独立 `cwd=worktree_path`
 - AC26（F16）：`/team list` 输出含所有 Team 摘要；`/team info <name>` 输出成员详情；`/team delete <name>` 调 `manager.delete`
-- AC27（N17/N18）：版本 0.15.0 两处一致；`python -m mewcode` 正常启动；ruff check 通过；pytest 全绿
-- AC28（tmux 端到端）：在 tmux 会话内启动 mewcode → `TeamCreate("demo")` 落地 config.json → `Agent(team_name="demo", name="alice", …)` 观察新 pane + worktree 目录 + 队员写文件落在 worktree → `/team info demo` 显示 alice → `SendMessage(to="alice")` 观察 pane 被唤醒续写 → `/team delete demo --force` 清空（真实 tmux 交互标「待人工验证」）
+- AC27（N17/N18）：版本 0.15.0 两处一致；`python -m newcode` 正常启动；ruff check 通过；pytest 全绿
+- AC28（tmux 端到端）：在 tmux 会话内启动 newcode → `TeamCreate("demo")` 落地 config.json → `Agent(team_name="demo", name="alice", …)` 观察新 pane + worktree 目录 + 队员写文件落在 worktree → `/team info demo` 显示 alice → `SendMessage(to="alice")` 观察 pane 被唤醒续写 → `/team delete demo --force` 清空（真实 tmux 交互标「待人工验证」）
 - AC29（in-process 端到端）：`unset TMUX TERM_PROGRAM` 启动（自动 in-process）→ `TeamCreate("inproc")` → `Agent(team_name="inproc", name="bob", …)` 同进程启动 → bob 完成 `is_active=False` + Lead 收 idle → `SendMessage(to="bob")` 从 session 恢复续写
-- AC30（Coordinator 实跑）：`MEWCODE_COORDINATOR_MODE=1` 启动 → 主 Agent 的 `write_file` 调用被拒（is_error=True）；`bash git merge` 调用允许
+- AC30（Coordinator 实跑）：`NEWCODE_COORDINATOR_MODE=1` 启动 → 主 Agent 的 `write_file` 调用被拒（is_error=True）；`bash git merge` 调用允许
 
 ## 端到端场景（验收参考）
 

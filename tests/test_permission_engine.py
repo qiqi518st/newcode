@@ -5,9 +5,9 @@
 非 None 导致跳过模式矩阵。
 """
 
-from mewcode.permission.engine import RuleEngine
-from mewcode.permission.rules import Rule, RuleLayers
-from mewcode.permission.types import Decision
+from newcode.permission.engine import RuleEngine
+from newcode.permission.rules import Rule, RuleLayers
+from newcode.permission.types import Decision
 
 
 class TestRuleEngine:

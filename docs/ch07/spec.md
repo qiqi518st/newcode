@@ -1,10 +1,10 @@
-# MewCode ch07 — MCP 客户端 需求规格 (spec.md)
+# NewCode ch07 — MCP 客户端 需求规格 (spec.md)
 
 ## 背景
 
-MewCode 自 ch03 起拥有六个内置工具（Read / Write / Edit / Bash / Glob / Grep），ch04 引入 Agent Loop 实现多工具连环调用，ch06 建立五层权限系统使工具调用安全可控。但当前工具集是**封闭的**——所有工具都是代码中写死的 `Tool` 实现，要增加新工具（如 GitHub、数据库、内部服务）必须修改 MewCode 源码、重新发版。
+NewCode 自 ch03 起拥有六个内置工具（Read / Write / Edit / Bash / Glob / Grep），ch04 引入 Agent Loop 实现多工具连环调用，ch06 建立五层权限系统使工具调用安全可控。但当前工具集是**封闭的**——所有工具都是代码中写死的 `Tool` 实现，要增加新工具（如 GitHub、数据库、内部服务）必须修改 NewCode 源码、重新发版。
 
-MCP（Model Context Protocol）是一套开放标准，用统一的 JSON-RPC 协议把"提供工具的一方（server）"与"使用工具的一方（client）"解耦，社区已有大量现成 server（GitHub、Slack、SQLite、文件系统……）。给 MewCode 装上 MCP 客户端：启动时按配置自动发现并连接外部 server，把它们的工具包装成 MewCode 已有的工具抽象、注册进工具中心，Agent 调用时与内置工具**完全无感**，并自动复用已有的权限护栏。这是从"工具集固定"到"工具生态可插拔"的一跃。
+MCP（Model Context Protocol）是一套开放标准，用统一的 JSON-RPC 协议把"提供工具的一方（server）"与"使用工具的一方（client）"解耦，社区已有大量现成 server（GitHub、Slack、SQLite、文件系统……）。给 NewCode 装上 MCP 客户端：启动时按配置自动发现并连接外部 server，把它们的工具包装成 NewCode 已有的工具抽象、注册进工具中心，Agent 调用时与内置工具**完全无感**，并自动复用已有的权限护栏。这是从"工具集固定"到"工具生态可插拔"的一跃。
 
 ## 目标
 
@@ -23,7 +23,7 @@ MCP（Model Context Protocol）是一套开放标准，用统一的 JSON-RPC 协
 
 ### F1: 两层 YAML 配置加载与合并
 
-从**用户级** `~/.mewcode/config.yaml` 与**项目级** `<root>/.mewcode.yaml` 两个文件读取 `mcp_servers` 段（map：key 为 server 名，value 为 server 定义）；按 server 名合并，**项目级同名 server 完整覆盖用户级**（不做字段级合并，避免半合并出畸形 server）。文件缺失视为空 `mcp_servers`；文件格式非法时**跳过该文件并 stderr 告警**，绝不致启动失败、不抛未捕获异常。`mcp_servers` 顶层不存在或为空，视为零个 MCP server，正常进 TUI。
+从**用户级** `~/.newcode/config.yaml` 与**项目级** `<root>/.newcode.yaml` 两个文件读取 `mcp_servers` 段（map：key 为 server 名，value 为 server 定义）；按 server 名合并，**项目级同名 server 完整覆盖用户级**（不做字段级合并，避免半合并出畸形 server）。文件缺失视为空 `mcp_servers`；文件格式非法时**跳过该文件并 stderr 告警**，绝不致启动失败、不抛未捕获异常。`mcp_servers` 顶层不存在或为空，视为零个 MCP server，正常进 TUI。
 
 ### F2: server 类型与必填字段
 
@@ -61,7 +61,7 @@ mcp_servers:
 
 ### F4: stdio 传输
 
-对 `stdio` 类型 server，以 `command` + `args` 启动子进程；通过子进程的标准输入输出按 JSON-RPC 帧通信（由 SDK 的 `stdio_client` + `StdioServerParameters` 完成）。`env` 与宿主进程环境合并后注入子进程（同名宿主变量被 `env` 覆盖，便于按 server 配置注入凭据）。子进程 `stderr` 透传给宿主 stderr 便于排查。子进程在 MewCode 退出时一并干净终止（关闭其 stdin → 等待 → 必要时发信号；由 SDK 的 `async with` 上下文管理器承载）。
+对 `stdio` 类型 server，以 `command` + `args` 启动子进程；通过子进程的标准输入输出按 JSON-RPC 帧通信（由 SDK 的 `stdio_client` + `StdioServerParameters` 完成）。`env` 与宿主进程环境合并后注入子进程（同名宿主变量被 `env` 覆盖，便于按 server 配置注入凭据）。子进程 `stderr` 透传给宿主 stderr 便于排查。子进程在 NewCode 退出时一并干净终止（关闭其 stdin → 等待 → 必要时发信号；由 SDK 的 `async with` 上下文管理器承载）。
 
 ### F5: Streamable HTTP 传输
 
@@ -73,13 +73,13 @@ mcp_servers:
 
 ### F7: 工具适配（远端工具 ↔ 内置 Tool 抽象）
 
-把 server 返回的每个远端工具包装成一个实现 MewCode `Tool` 协议的对象，注册进工具中心：
+把 server 返回的每个远端工具包装成一个实现 NewCode `Tool` 协议的对象，注册进工具中心：
 
 - **名字**：`mcp__<server>__<tool>`（见 F8）。
 - **描述**：直接取远端 `description`（空则给一个含 server 名的兜底说明）。
-- **参数 schema**：把远端 `inputSchema` 转成 MewCode 的 `dict[str, Any]` 形式（透传 JSON Schema），不二次裁剪。
+- **参数 schema**：把远端 `inputSchema` 转成 NewCode 的 `dict[str, Any]` 形式（透传 JSON Schema），不二次裁剪。
 - **只读性**：远端 `annotations.readOnlyHint==True` → `read_only==True`；其余（含字段缺失/非法）→ `False`（安全默认按有副作用处理）。
-- **执行**：调用时通过该 server 的会话发 `call_tool`；远端返回的 `content` 中文本块（`TextContent`）的文本按顺序拼成 MewCode `ToolResult` 的结果正文，远端 `isError==True` 映射为 MewCode `ToolResult` 的错误标记；非 text 块（image / audio / resource_link / embedded_resource 等）静默丢弃并 stderr 告警一次；调用过程中协议错误（连接断、超时、传输错）也转成错误态的结构化错误**回灌给模型**（不向 Agent Loop 抛 Python 异常，复用不中断会话的契约）。Agent 与 provider 适配层不感知"该工具来自远端"。
+- **执行**：调用时通过该 server 的会话发 `call_tool`；远端返回的 `content` 中文本块（`TextContent`）的文本按顺序拼成 NewCode `ToolResult` 的结果正文，远端 `isError==True` 映射为 NewCode `ToolResult` 的错误标记；非 text 块（image / audio / resource_link / embedded_resource 等）静默丢弃并 stderr 告警一次；调用过程中协议错误（连接断、超时、传输错）也转成错误态的结构化错误**回灌给模型**（不向 Agent Loop 抛 Python 异常，复用不中断会话的契约）。Agent 与 provider 适配层不感知"该工具来自远端"。
 
 ### F8: 工具命名空间
 
@@ -92,7 +92,7 @@ mcp_servers:
 
 ### F9: 启动同步连接 + 单 server 30s 超时 + 失败隔离
 
-在进入 TUI 之前**同步**对所有配置中的 server 发起连接 + 握手 + 列工具（实现并发用 `asyncio.gather` 缩短总时延）；**每个 server 的整个启动序列受 30s 超时约束**（内置不可配，用 `asyncio.wait_for`）。任一 server 的连接 / 握手 / 列工具失败或超时**只跳过它自身**：MewCode 启动不被阻断、其它 server 与内置工具集照常注册可用、stderr 给出该 server 的失败原因。所有 server 连接尝试结束后才进入 TUI；进入 TUI 时工具中心呈现的就是"内置 6 工具 + 成功连上的 server 工具"全集，Agent 在任意一轮看到的工具集稳定不变。
+在进入 TUI 之前**同步**对所有配置中的 server 发起连接 + 握手 + 列工具（实现并发用 `asyncio.gather` 缩短总时延）；**每个 server 的整个启动序列受 30s 超时约束**（内置不可配，用 `asyncio.wait_for`）。任一 server 的连接 / 握手 / 列工具失败或超时**只跳过它自身**：NewCode 启动不被阻断、其它 server 与内置工具集照常注册可用、stderr 给出该 server 的失败原因。所有 server 连接尝试结束后才进入 TUI；进入 TUI 时工具中心呈现的就是"内置 6 工具 + 成功连上的 server 工具"全集，Agent 在任意一轮看到的工具集稳定不变。
 
 ### F10: 工具调用超时
 
@@ -100,7 +100,7 @@ mcp_servers:
 
 ### F11: 退出时统一关闭
 
-MewCode 正常退出（用户主动退出、致命错收尾）时，对所有已建立的会话统一调用关闭逻辑：stdio server 的子进程被干净终止（先关 stdin、给 server 自然退出窗口、必要时发信号），HTTP server 的会话用 DELETE 通知 server 释放（由 SDK 处理）。退出**不**强行等待所有连接关闭完成超过若干秒（整体兜底 5s，避免某 server 卡住拖死整个程序退出）。
+NewCode 正常退出（用户主动退出、致命错收尾）时，对所有已建立的会话统一调用关闭逻辑：stdio server 的子进程被干净终止（先关 stdin、给 server 自然退出窗口、必要时发信号），HTTP server 的会话用 DELETE 通知 server 释放（由 SDK 处理）。退出**不**强行等待所有连接关闭完成超过若干秒（整体兜底 5s，避免某 server 卡住拖死整个程序退出）。
 
 ### F12: 权限链路无感复用
 
@@ -114,7 +114,7 @@ MCP 工具走现有判定链路：
 
 ## 非功能需求
 
-- **N1: 失败隔离不阻塞**——单 server 任意阶段（连接 / 握手 / 列工具 / 调用）失败或卡住，只跳过它自身、不阻塞 MewCode 启动、不影响其它 server 与内置工具；连接卡住时 30s 超时强制收尾，绝不死锁。
+- **N1: 失败隔离不阻塞**——单 server 任意阶段（连接 / 握手 / 列工具 / 调用）失败或卡住，只跳过它自身、不阻塞 NewCode 启动、不影响其它 server 与内置工具；连接卡住时 30s 超时强制收尾，绝不死锁。
 - **N2: 安全默认**——`readOnlyHint` 缺失或非法 → 非只读（默认走 Ask）；`${VAR}` 未定义 → 空串（不替 server 拍板）；type 非法 / 字段缺失 → 跳过该 server（不静默放行未定义 server）。
 - **N3: 跨协议一致**——MCP 工具行为与 provider（Anthropic / OpenAI）无关；provider 适配层零修改。
 - **N4: 权限改动面向未来**——本章为接入 MCP 对 permission 做一次性泛化（规则正则放宽、工具名 `*` 通配、allow_always 对 MCP 落盘裸工具名规则）；**泛化后未来新增 MCP 工具无需再改 permission 源码**即可进入判定链路（spec「零改动」原意即此）。
@@ -128,7 +128,7 @@ MCP 工具走现有判定链路：
 - MCP 资源（resources）、提示词（prompts）、采样（sampling）、引导（roots）——本章只覆盖工具能力。
 - `tools/list` 变更通知 / 调用进度通知——不订阅独立 SSE 通道（SDK 默认开，本章显式关闭或不消费），工具集快照固定在启动时。
 - 健康检查 / 自动重连 / 退避——单连接挂掉就挂掉，留待后续章节。
-- 配置热加载 / 运行时增减 server——重启 MewCode 才能应用新配置。
+- 配置热加载 / 运行时增减 server——重启 NewCode 才能应用新配置。
 - 本地级 mcp_servers 配置层——仅两层（用户级 + 项目级）。
 - mcp_servers 字段级合并——按 server 名维度合并，同名项目级完整覆盖用户级。
 - `command` / `args` / 工具名 / server 名的变量展开——仅 env / headers 的值展开 `${VAR}`。
@@ -137,14 +137,14 @@ MCP 工具走现有判定链路：
 - MCP 工具的黑名单与路径沙箱扩展——这两层只对内置工具有意义，MCP 工具仅走规则 + 模式兜底 + 人在回路。
 - 非文本内容块的回灌——仅收集 `TextContent` 的内容块拼成 ToolResult；image / audio / resource_link / embedded_resource 等静默丢弃并 stderr 告警一次。
 - 资源配额 / 速率限制 / 审计日志。
-- MCP server 端的实现——MewCode 仅作 client。
+- MCP server 端的实现——NewCode 仅作 client。
 
 ## 验收标准
 
-- **AC1: 配置加载与两层合并**——`~/.mewcode/config.yaml` 与 `<root>/.mewcode.yaml` 都存在时，按 server 名合并；同名 server 项目级完整覆盖用户级；任一文件缺失或非法时跳过该文件、不致启动失败、其它正常加载。（F1/N1）
+- **AC1: 配置加载与两层合并**——`~/.newcode/config.yaml` 与 `<root>/.newcode.yaml` 都存在时，按 server 名合并；同名 server 项目级完整覆盖用户级；任一文件缺失或非法时跳过该文件、不致启动失败、其它正常加载。（F1/N1）
 - **AC2: 字段校验**——stdio 类型缺 command、http 类型缺 url、type 非法或缺失时，该 server 被跳过并 stderr 告警，其它 server 不受影响。（F2/N2）
 - **AC3: 变量展开**——env / headers 的值 `${VAR}` 从宿主环境取值；未定义变量展开为空串并告警；command / args / 工具名 / server 名不展开。（F3/N2/N6）
-- **AC4: stdio 启动 + 子进程终止**——能拉起一个 stdio MCP server 子进程，握手 + 列工具成功；env 注入生效；MewCode 退出时子进程被终止、无僵尸。（F4/F6/F11/N7）
+- **AC4: stdio 启动 + 子进程终止**——能拉起一个 stdio MCP server 子进程，握手 + 列工具成功；env 注入生效；NewCode 退出时子进程被终止、无僵尸。（F4/F6/F11/N7）
 - **AC5: HTTP 连接 + 自定义 headers**——能对一个 HTTP MCP server 完成握手 + 列工具；`headers` 注入到 HTTP 请求中。（F5/F6/N6）
 - **AC6: 工具适配与命名**——同一 server 的工具列出后注册进 registry，名字符合 `mcp__<server>__<tool>`，描述非空，参数 schema 透传；调用时远端 text content 拼接为 `ToolResult` 的结果正文，远端 isError 映射到 `ToolResult` 的错误标记；非 text 块静默丢弃。（F6/F7/F8）
 - **AC7: 命名空间隔离**——同名工具来自不同 server 不互相覆盖；与 6 个内置工具天然不重名；前缀拼接后含 LLM 工具名禁用字符（非 `[A-Za-z0-9_-]`）的工具被跳过并告警。（F8）

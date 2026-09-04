@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import re
 
-from mewcode.team.tasks import Filter, Patch, Status, Store, Task
+from newcode.team.tasks import Filter, Patch, Status, Store, Task
 
 
 def _store(tmp_path) -> Store:

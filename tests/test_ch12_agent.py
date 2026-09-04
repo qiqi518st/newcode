@@ -15,10 +15,10 @@ from typing import ClassVar
 
 import pytest
 
-from mewcode.agent import Agent, EventType, StopReason
-from mewcode.conversation.manager import ConversationManager
-from mewcode.hooks.engine import Engine
-from mewcode.hooks.types import (
+from newcode.agent import Agent, EventType, StopReason
+from newcode.conversation.manager import ConversationManager
+from newcode.hooks.engine import Engine
+from newcode.hooks.types import (
     Action,
     ActionType,
     Event,
@@ -26,10 +26,10 @@ from mewcode.hooks.types import (
     Hook,
     PromptAction,
 )
-from mewcode.permission.types import CheckResult, Decision
-from mewcode.provider.base import StreamEvent, TokenUsage, ToolCall, ToolResult
-from mewcode.session.runtime import SessionRuntime
-from mewcode.tools.registry import Registry
+from newcode.permission.types import CheckResult, Decision
+from newcode.provider.base import StreamEvent, TokenUsage, ToolCall, ToolResult
+from newcode.session.runtime import SessionRuntime
+from newcode.tools.registry import Registry
 
 pytestmark = pytest.mark.anyio
 

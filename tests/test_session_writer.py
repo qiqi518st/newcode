@@ -9,9 +9,9 @@ from pathlib import Path
 
 import pytest
 
-from mewcode.context.session import new_session_context
-from mewcode.provider.base import Message
-from mewcode.session.writer import (
+from newcode.context.session import new_session_context
+from newcode.provider.base import Message
+from newcode.session.writer import (
     SessionWriter,
     entry_from_message,
     message_from_entry,

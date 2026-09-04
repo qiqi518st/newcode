@@ -5,12 +5,12 @@ from typing import ClassVar
 
 import pytest
 
-from mewcode.agent import Agent, EventType, StopReason
-from mewcode.context.summarize import CompactOutcome
-from mewcode.conversation.manager import ConversationManager
-from mewcode.llm import PromptTooLongError
-from mewcode.provider.base import StreamEvent, TokenUsage, ToolCall, ToolResult
-from mewcode.tools.registry import Registry
+from newcode.agent import Agent, EventType, StopReason
+from newcode.context.summarize import CompactOutcome
+from newcode.conversation.manager import ConversationManager
+from newcode.llm import PromptTooLongError
+from newcode.provider.base import StreamEvent, TokenUsage, ToolCall, ToolResult
+from newcode.tools.registry import Registry
 
 
 class FakeProvider:

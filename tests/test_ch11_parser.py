@@ -9,12 +9,12 @@ from pathlib import Path
 
 import pytest
 
-from mewcode.skills.parser import (
+from newcode.skills.parser import (
     normalize_name,
     parse_frontmatter_and_body,
     parse_skill,
 )
-from mewcode.skills.types import SkillParseError, SkillSource
+from newcode.skills.types import SkillParseError, SkillSource
 
 VALID_FM = "---\nname: my-skill\ndescription: A test skill\n---\nbody here"
 

@@ -6,7 +6,7 @@ dict 引用被外部改动污染；complete 未排除 hidden（AC14/F9.5）；�
 
 import pytest
 
-from mewcode.slash.registry import CommandDef, CommandRegistry
+from newcode.slash.registry import CommandDef, CommandRegistry
 
 
 def _cmd(name: str, aliases: tuple[str, ...] = (), **kw) -> CommandDef:

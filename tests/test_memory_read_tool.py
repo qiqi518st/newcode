@@ -1,6 +1,6 @@
 """read_memory 工具测试（spec F13 加载闭环的读取侧）
 
-背景：read_file 被路径沙箱锁在项目工作区内，用户级记忆在 ~/.mewcode/memory/
+背景：read_file 被路径沙箱锁在项目工作区内，用户级记忆在 ~/.newcode/memory/
 工作区外读不到；read_memory 按文件名跨项目/用户两级读全文，只读无副作用。
 防 bug：忘记注册工具 / 读不到用户级记忆 / 越权读任意文件。
 """
@@ -8,9 +8,9 @@
 import asyncio
 from pathlib import Path
 
-from mewcode.memory.manager import MemoryManager
-from mewcode.memory.models import MemoryOperation
-from mewcode.tools.memory_read import ReadMemoryTool
+from newcode.memory.manager import MemoryManager
+from newcode.memory.models import MemoryOperation
+from newcode.tools.memory_read import ReadMemoryTool
 
 
 def _write_note(store, *, level, type_, title, slug, content):
@@ -50,7 +50,7 @@ def test_read_project_note(tmp_path):
 
 
 def test_read_user_note_across_scope(tmp_path):
-    """防 bug：用户级记忆在 ~/.mewcode/memory（工作区外），read_file 沙箱读不到，
+    """防 bug：用户级记忆在 ~/.newcode/memory（工作区外），read_file 沙箱读不到，
     read_memory 必须能读。"""
     user_dir = tmp_path / "user"
     tool, _ = _tool(tmp_path, user_dir)
@@ -84,7 +84,7 @@ def test_read_rejects_bad_args(tmp_path):
 
 def test_read_only_and_registered(tmp_path):
     """防 bug：read_memory 必须只读（Plan Mode 下可用），且注册进注册表后能被导出。"""
-    from mewcode.tools.registry import Registry
+    from newcode.tools.registry import Registry
 
     tool, _ = _tool(tmp_path, tmp_path / "user")
     assert tool.read_only is True
@@ -98,6 +98,6 @@ def test_read_only_and_registered(tmp_path):
 
 def _manager_store(directory: Path):
     """直接构造 MemoryStore 以绕过 MemoryManager 内部，保持与 manager 同目录"""
-    from mewcode.memory.store import MemoryStore
+    from newcode.memory.store import MemoryStore
 
     return MemoryStore(directory)

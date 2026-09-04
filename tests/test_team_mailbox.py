@@ -13,8 +13,8 @@ import os
 import time
 from pathlib import Path
 
-from mewcode.team.filelock import LOCK_STALE_AFTER, acquire
-from mewcode.team.mailbox import Box, Message, MessageType
+from newcode.team.filelock import LOCK_STALE_AFTER, acquire
+from newcode.team.mailbox import Box, Message, MessageType
 
 
 def _box(tmp_path) -> Box:

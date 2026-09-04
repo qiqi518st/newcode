@@ -1,4 +1,4 @@
-# MewCode Plan 文件管理 — 需求规格 (spec-plan-files.md)
+# NewCode Plan 文件管理 — 需求规格 (spec-plan-files.md)
 
 ## 背景
 

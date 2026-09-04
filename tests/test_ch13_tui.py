@@ -14,9 +14,9 @@ import types
 
 import pytest
 
-from mewcode.conversation.manager import ConversationManager
-from mewcode.subagent.manager import TaskManager
-from mewcode.tui import app as appmod
+from newcode.conversation.manager import ConversationManager
+from newcode.subagent.manager import TaskManager
+from newcode.tui import app as appmod
 
 pytestmark = pytest.mark.anyio
 
@@ -71,7 +71,7 @@ async def test_injection_failure_isolated():
 
 async def test_clear_all_on_session_change():
     """/clear /resume /session_new 路径调用 task_manager.clear_all（F7.9）。"""
-    from mewcode.subagent.manager import Status
+    from newcode.subagent.manager import Status
 
     class H:
         async def run_to_completion(self, task, **kw):

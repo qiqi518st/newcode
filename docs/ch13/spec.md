@@ -1,8 +1,8 @@
-# MewCode ch13 - 多 Agent 分发架构 Spec
+# NewCode ch13 - 多 Agent 分发架构 Spec
 
 ## 背景
 
-ch12 给 MewCode 装上了 Hook 生命周期钩子系统，Agent 在关键节点上有了可编程的扩展能力。但不管挂了多少 Hook，干活的还是同一个 Agent：所有任务都塞进同一个对话上下文，上下文越来越长、噪声越来越多、Token 越烧越快。这一章解决的是「从单 Agent 进化到能分发任务的多 Agent 架构」：主 Agent 可以把子任务委派给独立的子 Agent，每个子 Agent 有自己的上下文、工具集和权限边界，干完活把结果交回来就行。
+ch12 给 NewCode 装上了 Hook 生命周期钩子系统，Agent 在关键节点上有了可编程的扩展能力。但不管挂了多少 Hook，干活的还是同一个 Agent：所有任务都塞进同一个对话上下文，上下文越来越长、噪声越来越多、Token 越烧越快。这一章解决的是「从单 Agent 进化到能分发任务的多 Agent 架构」：主 Agent 可以把子任务委派给独立的子 Agent，每个子 Agent 有自己的上下文、工具集和权限边界，干完活把结果交回来就行。
 
 现状里已有几处铺垫可复用，不是从零开始：
 
@@ -41,7 +41,7 @@ ch12 给 MewCode 装上了 Hook 生命周期钩子系统，Agent 在关键节点
 - Task 工具组（TaskList / TaskGet / TaskStop / SendMessage）+ `/tasks` 斜杠命令族
 - hook `agent` 动作接通（ch12 占位兑现）
 - Skill fork 底座统一改造
-- `.mewcode/config.yaml` 的 `agents:` 配置段（含模型分层、后台总闸、保留/续派上限）
+- `.newcode/config.yaml` 的 `agents:` 配置段（含模型分层、后台总闸、保留/续派上限）
 
 **不包含（留给后续章节或明确不做）：**
 - Worktree 级文件系统隔离（下一章）
@@ -89,9 +89,9 @@ ch12 给 MewCode 装上了 Hook 生命周期钩子系统，Agent 在关键节点
 
 | 优先级 | 来源 | 目录 |
 |--------|------|------|
-| 1（最高） | 项目级 | `<projectRoot>/.mewcode/agents/*.md` |
-| 2 | 用户级 | `~/.mewcode/agents/*.md` |
-| 3 | 内置 | 随包发布的 `mewcode/subagent/builtin/*.md`（经 importlib.resources 读取） |
+| 1（最高） | 项目级 | `<projectRoot>/.newcode/agents/*.md` |
+| 2 | 用户级 | `~/.newcode/agents/*.md` |
+| 3 | 内置 | 随包发布的 `newcode/subagent/builtin/*.md`（经 importlib.resources 读取） |
 | 4（最低） | 插件级 | 插件目录下的 `agents/*.md`（第三方把 Agent 定义打包进插件分发；**本期不实现真插件加载**，此层恒为空，SourcePlugin 常量占位） |
 
 - F2.3：同名定义按优先级覆盖——`resolve(name)` 返回优先级最高的版本；低优先级未被覆盖的角色仍可用
@@ -100,7 +100,7 @@ ch12 给 MewCode 装上了 Hook 生命周期钩子系统，Agent 在关键节点
   - `general-purpose`——通用全能：无 disallowedTools，model=inherit，maxTurns=25，permissionMode=default
   - `explore`——代码探索（只读为主）：disallowedTools=[write_file, edit_file]，model=haiku，maxTurns=30，permissionMode=default
   - `plan`——计划制定（只读 + 产出计划）：disallowedTools=[write_file, edit_file]，model=inherit，maxTurns=15，permissionMode=plan
-  - `verifier`——验证角色，**默认 `enabled: false`**，经 `.mewcode/config.yaml` 的 `agents.enable_verifier` 开关启用（F10.1）
+  - `verifier`——验证角色，**默认 `enabled: false`**，经 `.newcode/config.yaml` 的 `agents.enable_verifier` 开关启用（F10.1）
   - （maxTurns / model 为建议初值，实现时可调）
 
 ### F3 两种创建模式
@@ -148,7 +148,7 @@ ch12 给 MewCode 装上了 Hook 生命周期钩子系统，Agent 在关键节点
 
 - F6.1 **全局禁止（GLOBAL_DENY）**：硬编码集合 `{"agent"}`——Agent 工具排除于**定义式**子 Agent（无论前台/后台），不可被配置覆盖
 - F6.2 **自定义限制（定义层过滤）**：用户/项目在定义 Agent 时做的额外禁止与收窄——frontmatter 的 `disallowedTools`（黑名单）与 `tools`（白名单）；`tools` 为空 = 不限制；黑名单命中即移除（即使在白名单内）；系统工具（load_skill）豁免过滤恒可见（沿用既有 `is_system_tool` 语义）
-- F6.3 **后台白名单（ASYNC_AGENT_ALLOWED_TOOLS）**：硬编码、**不受 Agent 定义文件配置影响**；后台工作者（含全部 Fork、run_in_background、hook 触发的）工具集与该白名单求交集。MewCode 内部名单：
+- F6.3 **后台白名单（ASYNC_AGENT_ALLOWED_TOOLS）**：硬编码、**不受 Agent 定义文件配置影响**；后台工作者（含全部 Fork、run_in_background、hook 触发的）工具集与该白名单求交集。NewCode 内部名单：
   - 核心六件套：`read_file` / `write_file` / `edit_file` / `list_files` / `search_code` / `execute_command`
   - 记忆工具：`read_memory` / `write_memory`
   - 系统工具：`load_skill`（豁免恒可见）
@@ -218,7 +218,7 @@ ch12 给 MewCode 装上了 Hook 生命周期钩子系统，Agent 在关键节点
 
 ### F11 配置
 
-- F11.1：`.mewcode/config.yaml` 新增 `agents:` 段（缺省全部可用，段缺失不报错不阻断）：
+- F11.1：`.newcode/config.yaml` 新增 `agents:` 段（缺省全部可用，段缺失不报错不阻断）：
   ```yaml
   agents:
     enable_verifier: false          # 启用内置 verifier 角色（F2.5）
@@ -250,8 +250,8 @@ ch12 给 MewCode 装上了 Hook 生命周期钩子系统，Agent 在关键节点
 - N10：**复用既有机制**——frontmatter 解析复用 skills 解析器；fork 执行复用 skills executor 的隔离会话模式；模型工厂复用 main.py `make_provider` 模式（对应 F10）
 - N11：**可诊断**——角色解析失败 / 任务失败定位到文件与原因，不静默
 - N12：**Hook 可区分来源**——子 Agent 事件 payload 带 `agent_id`，Hook 条件可按来源筛选（对应 F4.3）
-- N13：**文档保护**——docs/ 不可变；ch13 四份文档走 mew-spec 流程生成，逐份经用户审批
-- N14：**版本号**——本章开发前 bump 到 0.13.0，`mewcode/__init__.py` 与 `pyproject.toml` 同步更新
+- N13：**文档保护**——docs/ 不可变；ch13 四份文档走 new-spec 流程生成，逐份经用户审批
+- N14：**版本号**——本章开发前 bump 到 0.13.0，`newcode/__init__.py` 与 `pyproject.toml` 同步更新
 - N15：**测试规范**——接线测试自动跑、不依赖真实终端与 API key；mock 驱动真实代码路径（复用 ch12 的 object.__new__ / mock provider 手法）；每个测试标注它防的 bug
 
 ## 验收标准
@@ -259,7 +259,7 @@ ch12 给 MewCode 装上了 Hook 生命周期钩子系统，Agent 在关键节点
 - AC1（F1.1/F1.4）：`agent` 工具注册成功，主 Agent 工具定义列表含且仅含它；加载任意角色前后主 Agent 工具定义列表数量与 schema 一致
 - AC2（F1.2/F1.3）：`agent` 工具调用 `{prompt, subagent_type:"explore"}` 时，主 Agent 收到的 tool_result 是 explore 子 Agent 的最后一条 assistant 文本
 - AC3（F1.5）：`subagent_type:"non-existent"` → 结构化错误 `未知 subagent_type`，主 Agent 继续
-- AC4（F2.2/F2.3）：项目级 `.mewcode/agents/explore.md` 覆盖内置 explore，`resolve("explore")` 返回项目级版本；用户级与项目级同名 → 项目级生效；未覆盖的名字正常可用
+- AC4（F2.2/F2.3）：项目级 `.newcode/agents/explore.md` 覆盖内置 explore，`resolve("explore")` 返回项目级版本；用户级与项目级同名 → 项目级生效；未覆盖的名字正常可用
 - AC5（F2.4）：用户/项目级角色 frontmatter 写未知 `model` / `permissionMode` → 启动 stderr 定位并降级缺省（inherit / default），该角色仍可 resolve 与调用；内置级解析失败直接 raise
 - AC6（F2.5/F11.1）：默认启动 `subagent_type:"verifier"` → 未知角色；配置 `enable_verifier: true` 后可用
 - AC7（F3.2/N4）：`agent` 调用不传 `subagent_type` 时，子 Agent 收到首条 user 消息以 `<fork_boilerplate>` 起头，且消息列表前缀与父对话逐字节一致（测试断言）

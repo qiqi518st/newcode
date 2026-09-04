@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mewcode.subagent.config import load_agent_config
+from newcode.subagent.config import load_agent_config
 
 
 def _write(path: Path, text: str) -> None:
@@ -33,18 +33,18 @@ def test_all_defaults_when_no_config(tmp_path):
 
 
 def test_project_config_applies(tmp_path):
-    _write(tmp_path / ".mewcode" / "config.yaml", "agents:\n  enable_verifier: true\n")
+    _write(tmp_path / ".newcode" / "config.yaml", "agents:\n  enable_verifier: true\n")
     cfg = load_agent_config(str(tmp_path))
     assert cfg.enable_verifier is True
 
 
 def test_local_overrides_project(tmp_path):
     _write(
-        tmp_path / ".mewcode" / "config.yaml",
+        tmp_path / ".newcode" / "config.yaml",
         "agents:\n  enable_verifier: true\n  async_timeout_s: 10\n",
     )
     _write(
-        tmp_path / ".mewcode" / "config.local.yaml",
+        tmp_path / ".newcode" / "config.local.yaml",
         "agents:\n  async_timeout_s: 30\n",
     )
     cfg = load_agent_config(str(tmp_path))
@@ -54,7 +54,7 @@ def test_local_overrides_project(tmp_path):
 
 def test_model_tiers(tmp_path):
     _write(
-        tmp_path / ".mewcode" / "config.yaml",
+        tmp_path / ".newcode" / "config.yaml",
         "agents:\n  model_tiers: {haiku: h-1, sonnet: s-1}\n",
     )
     cfg = load_agent_config(str(tmp_path))
@@ -62,7 +62,7 @@ def test_model_tiers(tmp_path):
 
 
 def test_invalid_numeric_falls_back(capsys, tmp_path):
-    _write(tmp_path / ".mewcode" / "config.yaml", "agents:\n  max_idle_agents: abc\n")
+    _write(tmp_path / ".newcode" / "config.yaml", "agents:\n  max_idle_agents: abc\n")
     cfg = load_agent_config(str(tmp_path))
     assert cfg.max_idle_agents == 10
     assert "非法" in capsys.readouterr().err

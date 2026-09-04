@@ -1,8 +1,8 @@
-# MewCode ch07 — MCP 客户端 技术设计 (plan.md)
+# NewCode ch07 — MCP 客户端 技术设计 (plan.md)
 
 ## 架构概览
 
-本章在 ch06 五层权限系统之上，新增一个 **`mewcode.mcp` 子包**，用适配器模式把外部 server 的工具无缝接进 MewCode 既有的工具/权限/调度管线。所有协议细节下沉到官方 `mcp` SDK（`pip install mcp`，import 名 `mcp`），MewCode 只负责配置、生命周期、适配、注册集成。
+本章在 ch06 五层权限系统之上，新增一个 **`newcode.mcp` 子包**，用适配器模式把外部 server 的工具无缝接进 NewCode 既有的工具/权限/调度管线。所有协议细节下沉到官方 `mcp` SDK（`pip install mcp`，import 名 `mcp`），NewCode 只负责配置、生命周期、适配、注册集成。
 
 ```
                                   ┌─────────────────────────────────────────┐
@@ -159,7 +159,7 @@ class McpTool:
 
 ```python
 # 加载并合并两层配置；返回归一化的 server 字典。纯函数。
-# - root: 项目根（定位 <root>/.mewcode.yaml）
+# - root: 项目根（定位 <root>/.newcode.yaml）
 # - 文件不存在 → 该层视为空；格式非法 → 跳过该层 + stderr 告警（降级，不抛）
 # - 内部完成 ${VAR} 展开（仅 env/headers 的值）与字段校验（非法 server 直接剔除）
 # - 永不抛出
@@ -181,24 +181,24 @@ async def McpTool.execute(self, arguments: dict) -> ToolResult: ...
 
 ## 模块设计
 
-### mewcode/mcp/__init__.py
+### newcode/mcp/__init__.py
 **职责：** 子包门面，导出 `MCPManager`、`MCPConnection`、`McpTool`、`CallerSession`、`ServerConfig`、`load_mcp_servers`。
 **对外接口：** `__all__` 导出上述符号。
-**依赖：** 仅 `mewcode.tools`、`mewcode.provider.base`（`ToolResult`）、`mcp` SDK、标准库；**不依赖 agent / tui / permission / conversation / config**。
+**依赖：** 仅 `newcode.tools`、`newcode.provider.base`（`ToolResult`）、`mcp` SDK、标准库；**不依赖 agent / tui / permission / conversation / config**。
 
-### mewcode/mcp/config.py
+### newcode/mcp/config.py
 **职责：** 两层 YAML 加载、合并、字段校验、`${VAR}` 展开、非法 server 隔离。纯函数。
 **对外接口：** `load_mcp_servers(root: str) -> dict[str, ServerConfig]`、数据类 `ServerConfig`。
 **依赖：** `pyyaml`、`os`、`re`、标准库 `sys`（告警）。
 **关键点：**
-- 用户级路径 `~/.mewcode/config.yaml`、项目级路径 `<root>/.mewcode.yaml`。两文件各取 `mcp_servers` 段。
+- 用户级路径 `~/.newcode/config.yaml`、项目级路径 `<root>/.newcode.yaml`。两文件各取 `mcp_servers` 段。
 - `_load_file(path) -> dict`：不存在 → `{}`；读/`yaml.safe_load` 失败 → stderr 一行告警 + `{}`（调用方降级，不抛）；取 `mcp_servers` 段，缺失视为空。
 - `_merge_servers(user, project) -> dict`：复制 user，遍历 project，同名直接整对象覆盖（不做字段级合并）。
 - `_expand_value(s: str, server_name: str, seen_undef: set[str]) -> str`：正则 `\$\{([A-Za-z_][A-Za-z0-9_]*)\}` 用 `os.environ.get` 取值；未定义变量 → 空串 + 记入 `seen_undef`。**仅作用于 `env` / `headers` 的值**。同一 server 同一未定义变量限一次告警（局部 set 去重）。
 - `_validate_server(name, raw) -> ServerConfig | None`：`type` 必为 `stdio`/`http`；stdio 必填非空 `command`，http 必填非空 `url`；任一不通过跳过 + stderr 告警 `[mcp] warn: skip server <name>: <reason>`。
 - `load_mcp_servers(root)`：两层各自 `_load_file` → 各自对可用 server 跑展开 → `_merge_servers` → 逐个 `_validate_server` 组装结果字典。
 
-### mewcode/mcp/conn.py
+### newcode/mcp/conn.py
 **职责：** 单 server 会话的生命周期与调用，封装官方 SDK 传输 + `ClientSession`。
 **对外接口：** `MCPConnection` 类（`connect_and_list` / `call_tool` / `close`）、`MCPStartupError` 异常。（`CallerSession` Protocol、`make_tool`、`_VALID_NAME` 均**归 `wrapper.py`**，conn 依赖 wrapper。）
 **依赖：** 官方 `mcp` SDK（`stdio_client`、`StdioServerParameters`、`streamablehttp_client`、`ClientSession`、`TextContent` 等类型、`Implementation`）、`asyncio`、`os`、标准库 `sys`、本包 `wrapper`（`make_tool`）。
@@ -234,7 +234,7 @@ async def McpTool.execute(self, arguments: dict) -> ToolResult: ...
       read_stream, write_stream = transport       # stdio / http 都是 2 元组
       session = await stack.enter_async_context(
           ClientSession(read_stream, write_stream,
-                        client_info=Implementation(name="mewcode", version=self._client_version))
+                        client_info=Implementation(name="newcode", version=self._client_version))
       )
       await session.initialize()            # 握手，报 client_info
       listed = await session.list_tools()
@@ -251,7 +251,7 @@ async def McpTool.execute(self, arguments: dict) -> ToolResult: ...
 - 结果映射（兼容 repo 现有 `ToolResult`）：远端非错 → `status="ok"`、文本进 `output`；远端 `is_error==True` → `status="error"`、文本进 `error`；协议错/超时 → `status="error"`、原因进 `error`。`truncated` 保持默认 False。
 - `make_tool(server_name, caller, remote)`：`full_name = f"mcp__{srv.name}__{remote.name}"`（`srv.name` 通过连接持有的 `ServerConfig.name` 取得，但 `make_tool` 形参用 `server_name` 字符串 + `caller: CallerSession`，**不依赖具象 `MCPConnection`**，契合「CallerSession Protocol」决策）；禁用字符校验 `_VALID_NAME.fullmatch(full_name)`（`_VALID_NAME = ^[A-Za-z0-9_-]+$`）不通过 → 返回 None + 告警；`description = remote.description or f"MCP 工具（来自 server {srv.name}）"`；`parameters = dict(remote.input_schema) or {"type":"object"}`（SDK 2.0 为 `input_schema` snake_case）；`read_only = bool(remote.annotations and remote.annotations.read_only_hint)`（SDK 2.0 为 `read_only_hint` snake_case）。conn 调用形为 `make_tool(self.server.name, self, remote)`。
 
-### mewcode/mcp/wrapper.py
+### newcode/mcp/wrapper.py
 **职责：** `McpTool` 适配器实现 + `CallerSession` Protocol + `make_tool`。
 **对外接口：** `McpTool` 类（`name/description/parameters/read_only/execute`）、`CallerSession`、`make_tool`、模块常量 `_VALID_NAME`。
 **依赖：** `MCPConnection`（作为 `CallerSession` 的生产实现）、`ToolResult`。
@@ -261,7 +261,7 @@ async def McpTool.execute(self, arguments: dict) -> ToolResult: ...
 - `_VALID_NAME = re.compile(r"^[A-Za-z0-9_-]+$")`。
 - `read_only` 严格只信 `annotations.readOnlyHint==True`（None-safe），缺失/非法 → False（安全默认走 Ask）。
 
-### mewcode/mcp/manager.py
+### newcode/mcp/manager.py
 **职责：** 多 server 生命周期编排：并发启动、收集工具、稳定排序、统一关闭、失败隔离。
 **对外接口：** `MCPManager` 类（`start_all` / `tools` / `close`）、模块级 `connect_timeout` / `close_timeout`。（不提供 async 工厂；装配处用 `MCPManager(servers, client_version)` + `await start_all()` 两步，见 main 设计。）
 **依赖：** `ServerConfig`、`MCPConnection`、`McpTool`、`asyncio`。
@@ -272,15 +272,15 @@ async def McpTool.execute(self, arguments: dict) -> ToolResult: ...
 - `close`：`await asyncio.wait_for(asyncio.gather(*[c.close() for c in cons], return_connections=True), close_timeout)`（单层兜底），超时 → 告警 `some sessions may leak`，不再等。
 - `start_all` 本身**不可失败**——只产告警不抛。空 servers → 空列表 gather 立即返回。
 
-### mewcode/permission/rules.py（修改）
+### newcode/permission/rules.py（修改）
 **改动 1**：`_RULE_PARSE_RE`（rules.py:23）从 `^(Bash|Read|Write|Edit|Glob|Grep)(?:\((.*)\))?$` 放宽为接受任意合法工具名：
   `^([A-Za-z0-9_-]+)(?:\((.*)\))?$`。`Rule.parse` 其余逻辑不变。
 **改动 2**：`RuleSet.match`（rules.py:104）工具名比对由 `rule.tool_name == friendly` 改为**支持 `*` 通配**：无 `*` 时等价 `==`，含 `*` 时用 `fnmatch.fnmatchcase(friendly, rule.tool_name)`。令 `mcp__github__*` 能匹配 `mcp__github__create_issue`。括号内 target 的 `*` 语义不变。
 
-### mewcode/permission/checker.py（修改）
+### newcode/permission/checker.py（修改）
 **改动 3**：`persist_local_allow`（checker.py:218）对 MCP 工具落盘**裸工具名精确规则**：检测 `tool_call.tool_name` 以 `mcp__` 开头时，`rule_str = f"{fn}"`（不加括号、不取 target——MCP 工具 `extract_target` 返回 `ok=False`，原凭 target 落盘的逻辑对 MCP 是空操作，需在 MCP 情况下改走裸工具名）。内置工具逻辑保持原样。
 
-### mewcode/main.py（修改）
+### newcode/main.py（修改）
 **改成单一事件循环 `_amain`**，让 MCP session 与运行循环同寿：
 ```python
 async def _amain(args, config, provider, ...) -> None:
@@ -338,9 +338,9 @@ allowed → ToolScheduler.schedule → registry.execute(name, args)
 ### 配置加载与合并
 
 ```
-~/.mewcode/config.yaml  ─┐
+~/.newcode/config.yaml  ─┐
                          ├─ _load_file → 各 mcp_servers 段（文件非法→跳过+告警）
-<root>/.mewcode.yaml   ─┘
+<root>/.newcode.yaml   ─┘
       │
       ▼ 按 server 名合并 {**user, **project}   （项目级完整覆盖）
       │
@@ -354,7 +354,7 @@ allowed → ToolScheduler.schedule → registry.execute(name, args)
 ## 文件组织
 
 ```
-mewcode/
+newcode/
 ├── mcp/
 │   ├── __init__.py      — 门面导出
 │   ├── config.py        — 两层合并、校验、${VAR} 展开、ServerConfig、load_mcp_servers
@@ -391,5 +391,5 @@ tests/
 | 权限泛化范围 | 放宽正则 + 工具名 `*` 通配 + allow_always 落盘裸名规则 | 兑现 AC11；泛化后未来加新 MCP 工具零改 permission |
 | 超时变量可调 | `connect_timeout`/`call_timeout`/`close_timeout` 为模块级变量非字面常量 | 单测临时改小并 restore，避免长超时拖慢测试 |
 | 关闭兜底 | 单层 `wait_for(gather(*close), 5)` | 简洁；个别 server 卡死不拖死退出。spec F11/N7 |
-| 握手报版本 | `client_info=Implementation(name="mewcode", version=__version__)` | 便于 server 端识别来源 |
+| 握手报版本 | `client_info=Implementation(name="newcode", version=__version__)` | 便于 server 端识别来源 |
 | 不做的协议能力 | resources / prompts / sampling / roots / 工具变更通知 / 重连 | spec「不做的事」明确；ch07 范围可控 |

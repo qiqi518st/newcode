@@ -9,12 +9,12 @@
 
 import os
 
-from mewcode.context.autogate import AutoCompactGate
-from mewcode.context.manager import ContextManager
-from mewcode.context.replacement import ContentReplacementState
-from mewcode.permission.checker import PermissionChecker
-from mewcode.permission.modes import PermissionMode
-from mewcode.permission.rules import RULE_FILE_LOCAL, RuleLayers
+from newcode.context.autogate import AutoCompactGate
+from newcode.context.manager import ContextManager
+from newcode.context.replacement import ContentReplacementState
+from newcode.permission.checker import PermissionChecker
+from newcode.permission.modes import PermissionMode
+from newcode.permission.rules import RULE_FILE_LOCAL, RuleLayers
 
 
 def _checker(tmp: str) -> PermissionChecker:

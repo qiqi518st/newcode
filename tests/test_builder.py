@@ -1,7 +1,7 @@
 """PromptBuilder 拼装测试（ch05）"""
 
-from mewcode.prompt.builder import PromptBuilder, Section
-from mewcode.prompt.sections import fixed_sections, optional_sections
+from newcode.prompt.builder import PromptBuilder, Section
+from newcode.prompt.sections import fixed_sections, optional_sections
 
 
 class TestBuildOrdering:

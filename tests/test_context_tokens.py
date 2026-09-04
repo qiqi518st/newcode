@@ -5,13 +5,13 @@
 
 from types import SimpleNamespace
 
-from mewcode.context.tokens import (
+from newcode.context.tokens import (
     estimate_messages,
     estimate_tokens,
     message_chars,
     usage_to_anchor,
 )
-from mewcode.provider.base import Message
+from newcode.provider.base import Message
 
 
 def _usage(inp=0, out=0, cc=0, cr=0) -> SimpleNamespace:

@@ -15,11 +15,11 @@ from pathlib import Path
 
 import pytest
 
-import mewcode.team.manager as manager_mod
-from mewcode.team.mailbox import Box, Message
-from mewcode.team.manager import Manager
-from mewcode.team.persistence import sanitize
-from mewcode.team.types import (
+import newcode.team.manager as manager_mod
+from newcode.team.mailbox import Box, Message
+from newcode.team.manager import Manager
+from newcode.team.persistence import sanitize
+from newcode.team.types import (
     BackendType,
     MemberNotFoundError,
     TeamHasActiveMembersError,
@@ -39,7 +39,7 @@ def _make_mgr(tmp_path, monkeypatch):
 
 
 def test_sanitize_guards_traversal():
-    # 防的 bug：`..` 原样通过 → ~/.mewcode/teams/../ 逃逸（N6）
+    # 防的 bug：`..` 原样通过 → ~/.newcode/teams/../ 逃逸（N6）
     assert sanitize("foo bar/baz") == "foo-bar-baz"
     for bad in ("", "   ", ".", ".."):
         with pytest.raises(ValueError):
@@ -65,7 +65,7 @@ def test_scan_restore_skips_corrupt(tmp_path, monkeypatch, capsys):
     async def main():
         m1 = _make_mgr(tmp_path, monkeypatch)
         await m1.create("demo")
-        bad = Path(tmp_path) / "home" / ".mewcode" / "teams" / "bad"
+        bad = Path(tmp_path) / "home" / ".newcode" / "teams" / "bad"
         bad.mkdir(parents=True)
         (bad / "config.json").write_text("{ not json", encoding="utf-8")
         m2 = _make_mgr(tmp_path, monkeypatch)

@@ -1,35 +1,35 @@
-# MewCode TUI 多轮对话 — 任务拆分 (task.md)
+# NewCode TUI 多轮对话 — 任务拆分 (task.md)
 
 ## 文件清单
 
 | 操作 | 文件 | 职责 |
 |------|------|------|
 | 新建 | `pyproject.toml` | 项目元数据、依赖声明、入口点 |
-| 新建 | `mewcode/__init__.py` | 包初始化 |
-| 新建 | `mewcode/__main__.py` | `python -m mewcode` 入口 |
-| 新建 | `mewcode/main.py` | CLI 入口：argparse、流程编排、banner 打印 |
-| 新建 | `mewcode/config/__init__.py` | config 包初始化 |
-| 新建 | `mewcode/config/schema.py` | ProviderConfig、Config 数据类（Literal、Optional） |
-| 新建 | `mewcode/config/loader.py` | load()：YAML 加载、校验、${ENV_VAR} 解析 |
-| 新建 | `mewcode/provider/__init__.py` | 空（工厂函数定义在 base.py） |
-| 新建 | `mewcode/provider/base.py` | Provider Protocol、StreamEvent、Message、new_provider() |
-| 新建 | `mewcode/provider/anthropic.py` | AnthropicProvider：SSE 流式、thinking 丢弃、StreamEvent |
-| 新建 | `mewcode/provider/openai.py` | OpenAIProvider：SSE 流式、StreamEvent |
-| 新建 | `mewcode/conversation/__init__.py` | conversation 包初始化 |
-| 新建 | `mewcode/conversation/manager.py` | ConversationManager：滑动窗口、上下文管理 |
-| 新建 | `mewcode/prompt/__init__.py` | prompt 包初始化 |
-| 新建 | `mewcode/prompt/resources.py` | SYSTEM_PROMPT、DOG_BANNER、render_banner() |
-| 新建 | `mewcode/tui/__init__.py` | tui 包初始化 |
-| 新建 | `mewcode/tui/app.py` | REPL 类：状态机、prompt_toolkit 循环、流式消费、计时、ESC 中断、重试 |
-| 新建 | `mewcode/tui/renderer.py` | RichRenderer：流式 Markdown 渲染 |
-| 新建 | `mewcode/utils/__init__.py` | utils 包初始化 |
-| 新建 | `mewcode/utils/error.py` | MewCodeError、ConfigError、ProviderError |
+| 新建 | `newcode/__init__.py` | 包初始化 |
+| 新建 | `newcode/__main__.py` | `python -m newcode` 入口 |
+| 新建 | `newcode/main.py` | CLI 入口：argparse、流程编排、banner 打印 |
+| 新建 | `newcode/config/__init__.py` | config 包初始化 |
+| 新建 | `newcode/config/schema.py` | ProviderConfig、Config 数据类（Literal、Optional） |
+| 新建 | `newcode/config/loader.py` | load()：YAML 加载、校验、${ENV_VAR} 解析 |
+| 新建 | `newcode/provider/__init__.py` | 空（工厂函数定义在 base.py） |
+| 新建 | `newcode/provider/base.py` | Provider Protocol、StreamEvent、Message、new_provider() |
+| 新建 | `newcode/provider/anthropic.py` | AnthropicProvider：SSE 流式、thinking 丢弃、StreamEvent |
+| 新建 | `newcode/provider/openai.py` | OpenAIProvider：SSE 流式、StreamEvent |
+| 新建 | `newcode/conversation/__init__.py` | conversation 包初始化 |
+| 新建 | `newcode/conversation/manager.py` | ConversationManager：滑动窗口、上下文管理 |
+| 新建 | `newcode/prompt/__init__.py` | prompt 包初始化 |
+| 新建 | `newcode/prompt/resources.py` | SYSTEM_PROMPT、DOG_BANNER、render_banner() |
+| 新建 | `newcode/tui/__init__.py` | tui 包初始化 |
+| 新建 | `newcode/tui/app.py` | REPL 类：状态机、prompt_toolkit 循环、流式消费、计时、ESC 中断、重试 |
+| 新建 | `newcode/tui/renderer.py` | RichRenderer：流式 Markdown 渲染 |
+| 新建 | `newcode/utils/__init__.py` | utils 包初始化 |
+| 新建 | `newcode/utils/error.py` | NewCodeError、ConfigError、ProviderError |
 
 ---
 
 ## T1: 初始化 Python 项目骨架与依赖
 
-**文件：** `pyproject.toml`、`mewcode/__init__.py`、`mewcode/__main__.py`、`mewcode/main.py`（临时占位）
+**文件：** `pyproject.toml`、`newcode/__init__.py`、`newcode/__main__.py`、`newcode/main.py`（临时占位）
 
 **依赖：** 无
 
@@ -37,7 +37,7 @@
 1. 创建 `pyproject.toml`，关键字段：
    ```toml
    [project]
-   name = "mewcode"
+   name = "newcode"
    version = "0.1.0"
    requires-python = ">=3.10"
    dependencies = [
@@ -49,7 +49,7 @@
    ]
 
    [project.scripts]
-   mewcode = "mewcode.main:main"
+   newcode = "newcode.main:main"
 
    [build-system]
    requires = ["hatchling"]
@@ -58,34 +58,34 @@
    [dependency-groups]
    dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.10"]
    ```
-2. `mewcode/__init__.py`：定义 `__version__ = "0.1.0"`。
-3. `mewcode/__main__.py`：`from .main import main; main()`。
-4. `mewcode/main.py` 写一个临时 `main()`，打印 `f"mewcode {__version__}"` 并退出，确保可启动。
+2. `newcode/__init__.py`：定义 `__version__ = "0.1.0"`。
+3. `newcode/__main__.py`：`from .main import main; main()`。
+4. `newcode/main.py` 写一个临时 `main()`，打印 `f"newcode {__version__}"` 并退出，确保可启动。
 5. 创建所有子包的 `__init__.py` 文件（空文件）。
 6. 安装依赖：`pip install -e ".[dev]"`。
 
-**验证：** `python -m mewcode` 能打印版本号；`mewcode` 同样可用；`pip list` 能看到上述依赖。
+**验证：** `python -m newcode` 能打印版本号；`newcode` 同样可用；`pip list` 能看到上述依赖。
 
 ---
 
 ## T2: 错误类型定义
 
-**文件：** `mewcode/utils/error.py`
+**文件：** `newcode/utils/error.py`
 
 **依赖：** 无
 
 **步骤：**
-1. 定义 `MewCodeError(Exception)` 基类
-2. 定义 `ConfigError(MewCodeError)` — 配置相关错误（文件不存在、字段缺失、格式错误、protocol 非法）
-3. 定义 `ProviderError(MewCodeError)` — Provider 调用错误（API 错误、网络错误）
+1. 定义 `NewCodeError(Exception)` 基类
+2. 定义 `ConfigError(NewCodeError)` — 配置相关错误（文件不存在、字段缺失、格式错误、protocol 非法）
+3. 定义 `ProviderError(NewCodeError)` — Provider 调用错误（API 错误、网络错误）
 
-**验证：** `python -c "from mewcode.utils.error import ConfigError, ProviderError; raise ConfigError('test')"` 正常抛出
+**验证：** `python -c "from newcode.utils.error import ConfigError, ProviderError; raise ConfigError('test')"` 正常抛出
 
 ---
 
 ## T3: 配置数据类
 
-**文件：** `mewcode/config/schema.py`
+**文件：** `newcode/config/schema.py`
 
 **依赖：** 无
 
@@ -103,19 +103,19 @@
    - `system_prompt: str = ""`
    - `providers: list[ProviderConfig]`
 
-**验证：** `python -c "from mewcode.config.schema import Config, ProviderConfig; c = Config(provider='test', providers=[ProviderConfig(name='test', protocol='anthropic', model='x', api_key='x')])"` 无报错
+**验证：** `python -c "from newcode.config.schema import Config, ProviderConfig; c = Config(provider='test', providers=[ProviderConfig(name='test', protocol='anthropic', model='x', api_key='x')])"` 无报错
 
 ---
 
 ## T4: 配置加载器
 
-**文件：** `mewcode/config/loader.py`
+**文件：** `newcode/config/loader.py`
 
 **依赖：** T3
 
 **步骤：**
 1. 实现 `load(path: str) -> Config` 函数：
-   - 检查文件是否存在，不存在抛出 `ConfigError("配置文件不存在，请复制 .mewcode.yaml.example 为 .mewcode.yaml")`
+   - 检查文件是否存在，不存在抛出 `ConfigError("配置文件不存在，请复制 .newcode.yaml.example 为 .newcode.yaml")`
    - 用 `yaml.safe_load` 读取 YAML
    - 遍历所有 provider，解析 `api_key` 中的 `${ENV_VAR}` 占位符
    - 构造 `Config` 和 `ProviderConfig` 对象
@@ -133,24 +133,24 @@
 
 ## T5: 提示词与资源
 
-**文件：** `mewcode/prompt/resources.py`
+**文件：** `newcode/prompt/resources.py`
 
 **依赖：** 无
 
 **步骤：**
-1. 定义 `SYSTEM_PROMPT` 常量：`"你是一个 AI 编程助手 MewCode，运行在终端中。请用中文回复，回答简洁清晰。"`
+1. 定义 `SYSTEM_PROMPT` 常量：`"你是一个 AI 编程助手 NewCode，运行在终端中。请用中文回复，回答简洁清晰。"`
 2. 定义 `DOG_BANNER` 常量：ASCII 小狗图案（多行字符串）
 3. 实现 `render_banner(version: str, cwd: str) -> str`：
    - 拼接 `DOG_BANNER` + 应用名与版本号 + 当前工作目录
    - 返回完整启动横幅字符串
 
-**验证：** `python -c "from mewcode.prompt.resources import render_banner; print(render_banner('0.1.0', '/home/user'))"` 输出包含小狗、版本号、路径
+**验证：** `python -c "from newcode.prompt.resources import render_banner; print(render_banner('0.1.0', '/home/user'))"` 输出包含小狗、版本号、路径
 
 ---
 
 ## T6: 对话管理器
 
-**文件：** `mewcode/conversation/manager.py`
+**文件：** `newcode/conversation/manager.py`
 
 **依赖：** T5（SYSTEM_PROMPT）
 
@@ -168,7 +168,7 @@
 
 ## T7: LLM 基础类型与工厂
 
-**文件：** `mewcode/provider/base.py`
+**文件：** `newcode/provider/base.py`
 
 **依赖：** T3（ProviderConfig）
 
@@ -193,7 +193,7 @@
 
 ## T8: Anthropic Provider
 
-**文件：** `mewcode/provider/anthropic.py`
+**文件：** `newcode/provider/anthropic.py`
 
 **依赖：** T7
 
@@ -219,7 +219,7 @@
 
 ## T9: OpenAI Provider
 
-**文件：** `mewcode/provider/openai.py`
+**文件：** `newcode/provider/openai.py`
 
 **依赖：** T7
 
@@ -243,7 +243,7 @@
 
 ## T10: Rich 流式渲染器
 
-**文件：** `mewcode/tui/renderer.py`
+**文件：** `newcode/tui/renderer.py`
 
 **依赖：** 无
 
@@ -265,7 +265,7 @@
 
 ## T11: TUI REPL 循环
 
-**文件：** `mewcode/tui/app.py`
+**文件：** `newcode/tui/app.py`
 
 **依赖：** T4、T6、T7、T8、T9、T10
 
@@ -315,13 +315,13 @@
 
 **验证：**
 - 自动（接线测试）：用 mock provider 产出 `StreamEvent.text` 序列，驱动 `_consume_stream()`，用 `rich.console` capture 断言渲染后的文本出现在输出中 — 确认 `_consume_stream` 真的调用了渲染，而非只累积文本。
-- 交互（真实终端）：启动 `mewcode`，输入问题，验证流式回复、Markdown 渲染、计时显示、ESC 中断、重试展示。此步在真实终端执行，无法自动跑。
+- 交互（真实终端）：启动 `newcode`，输入问题，验证流式回复、Markdown 渲染、计时显示、ESC 中断、重试展示。此步在真实终端执行，无法自动跑。
 
 ---
 
 ## T12: CLI 入口
 
-**文件：** `mewcode/main.py`
+**文件：** `newcode/main.py`
 
 **依赖：** T4、T5、T6、T7、T11
 
@@ -329,7 +329,7 @@
 1. 实现 `main()` 函数：
    - 使用 `argparse` 定义参数：`-c/--command`（可选字符串）
    - 解析参数
-2. 加载配置：`config.load(os.path.join(os.getcwd(), ".mewcode.yaml"))`
+2. 加载配置：`config.load(os.path.join(os.getcwd(), ".newcode.yaml"))`
 3. 找到激活的 provider config：`next(p for p in config.providers if p.name == config.provider)`
 4. 创建 provider：`new_provider(provider_config)`
 5. 创建 conversation manager：`ConversationManager(config.system_prompt, config.max_turns)`
@@ -343,7 +343,7 @@
    - 创建 `REPL(provider, conversation, renderer)`
    - `asyncio.run(repl.run())`
 
-**验证：** `mewcode -c "你好"` 输出回复后退出；`mewcode` 打印 banner 后进入 TUI 对话
+**验证：** `newcode -c "你好"` 输出回复后退出；`newcode` 打印 banner 后进入 TUI 对话
 
 ---
 

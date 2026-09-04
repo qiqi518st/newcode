@@ -1,41 +1,41 @@
-# MewCode ch06 — 五层权限系统 任务拆解 (task.md)
+# NewCode ch06 — 五层权限系统 任务拆解 (task.md)
 
 ## 文件清单
 
 | 操作 | 文件 | 职责 |
 |------|------|------|
-| 新建 | `mewcode/permission/__init__.py` | 公开 API 导出 |
-| 新建 | `mewcode/permission/blocklist.py` | 危险命令黑名单（L1），不可配 |
-| 新建 | `mewcode/permission/sandbox.py` | 路径沙箱（L2），含祖先回退 |
-| 新建 | `mewcode/permission/rules.py` | 规则解析、加载、三层合并、match_pattern（L3） |
-| 新建 | `mewcode/permission/engine.py` | 规则引擎匹配（L3） |
-| 新建 | `mewcode/permission/modes.py` | 权限模式矩阵 + PermissionMode 枚举（L4） |
-| 新建 | `mewcode/permission/hitl.py` | HITL 请求/响应数据结构（L5） |
-| 新建 | `mewcode/permission/checker.py` | 权限检查器串联入口 + categorize + extract_target |
-| 新建 | `.mewcode/permissions.yaml.example` | 权限配置示例 |
+| 新建 | `newcode/permission/__init__.py` | 公开 API 导出 |
+| 新建 | `newcode/permission/blocklist.py` | 危险命令黑名单（L1），不可配 |
+| 新建 | `newcode/permission/sandbox.py` | 路径沙箱（L2），含祖先回退 |
+| 新建 | `newcode/permission/rules.py` | 规则解析、加载、三层合并、match_pattern（L3） |
+| 新建 | `newcode/permission/engine.py` | 规则引擎匹配（L3） |
+| 新建 | `newcode/permission/modes.py` | 权限模式矩阵 + PermissionMode 枚举（L4） |
+| 新建 | `newcode/permission/hitl.py` | HITL 请求/响应数据结构（L5） |
+| 新建 | `newcode/permission/checker.py` | 权限检查器串联入口 + categorize + extract_target |
+| 新建 | `.newcode/permissions.yaml.example` | 权限配置示例 |
 | 新建 | `tests/test_permission_blocklist.py` | 黑名单测试 |
 | 新建 | `tests/test_permission_sandbox.py` | 沙箱测试（含祖先回退/符号链接） |
 | 新建 | `tests/test_permission_rules.py` | 规则解析、匹配、加载降级测试 |
 | 新建 | `tests/test_permission_engine.py` | 规则引擎三层匹配测试 |
 | 新建 | `tests/test_permission_checker.py` | 检查器串联 + categorize + extract_target 测试 |
 | 新建 | `tests/test_permission_tui.py` | TUI HITL 交互 + 模式切换测试（mock 驱动） |
-| 修改 | `mewcode/agent/events.py` | 新增 HITL_REQUEST 事件类型 |
-| 修改 | `mewcode/agent/agent.py` | 插入权限检查 + HITL 阻塞等待 + resolve_hitl |
-| 修改 | `mewcode/tools/registry.py` | 友好名映射 + 工具分类 |
-| 修改 | `mewcode/tools/shell.py` | 移除 _WHITELIST 白名单 |
-| 修改 | `mewcode/tools/file_ops.py` | _check_path 对齐沙箱 |
-| 修改 | `mewcode/config/schema.py` | 新增 permission_mode 字段 |
-| 修改 | `mewcode/config/loader.py` | 新增 load_permission_rules |
-| 修改 | `mewcode/tui/app.py` | HITL 确认框、Shift+Tab、状态栏、全局取消覆盖 APPROVING |
-| 修改 | `mewcode/prompt/reminders.py` | plan 模式提醒调整 |
-| 修改 | `mewcode/main.py` | --mode 参数、权限系统初始化 |
-| 修改 | `.gitignore` | 追加 .mewcode/permissions.local.yaml |
+| 修改 | `newcode/agent/events.py` | 新增 HITL_REQUEST 事件类型 |
+| 修改 | `newcode/agent/agent.py` | 插入权限检查 + HITL 阻塞等待 + resolve_hitl |
+| 修改 | `newcode/tools/registry.py` | 友好名映射 + 工具分类 |
+| 修改 | `newcode/tools/shell.py` | 移除 _WHITELIST 白名单 |
+| 修改 | `newcode/tools/file_ops.py` | _check_path 对齐沙箱 |
+| 修改 | `newcode/config/schema.py` | 新增 permission_mode 字段 |
+| 修改 | `newcode/config/loader.py` | 新增 load_permission_rules |
+| 修改 | `newcode/tui/app.py` | HITL 确认框、Shift+Tab、状态栏、全局取消覆盖 APPROVING |
+| 修改 | `newcode/prompt/reminders.py` | plan 模式提醒调整 |
+| 修改 | `newcode/main.py` | --mode 参数、权限系统初始化 |
+| 修改 | `.gitignore` | 追加 .newcode/permissions.local.yaml |
 
 ---
 
 ## T1: permission 基础类型枚举
 
-**文件：** `mewcode/permission/__init__.py`、`mewcode/permission/modes.py`、`mewcode/permission/hitl.py`
+**文件：** `newcode/permission/__init__.py`、`newcode/permission/modes.py`、`newcode/permission/hitl.py`
 
 **依赖：** 无
 
@@ -46,11 +46,11 @@
 4. 在 `hitl.py` 中定义 `HITLRequest` 和 `HITLResponse` 数据类
 5. 在 `__init__.py` 中导出核心类型
 
-**验证：** `python -c "from mewcode.permission import Decision, PermissionMode, CheckResult, HITLRequest, HITLResponse; print(PermissionMode.parse('default')); print(PermissionMode.parse('x'))"` 输出 `PermissionMode.DEFAULT` 和 `None`
+**验证：** `python -c "from newcode.permission import Decision, PermissionMode, CheckResult, HITLRequest, HITLResponse; print(PermissionMode.parse('default')); print(PermissionMode.parse('x'))"` 输出 `PermissionMode.DEFAULT` 和 `None`
 
 ## T2: 危险命令黑名单（L1）
 
-**文件：** `mewcode/permission/blocklist.py`
+**文件：** `newcode/permission/blocklist.py`
 
 **依赖：** T1
 
@@ -69,7 +69,7 @@
 
 ## T3: 路径沙箱（L2）
 
-**文件：** `mewcode/permission/sandbox.py`
+**文件：** `newcode/permission/sandbox.py`
 
 **依赖：** T1
 
@@ -89,7 +89,7 @@
 
 ## T4: 规则数据结构与匹配
 
-**文件：** `mewcode/permission/rules.py`
+**文件：** `newcode/permission/rules.py`
 
 **依赖：** T1
 
@@ -112,7 +112,7 @@
 
 ## T5: 规则加载与配置映射
 
-**文件：** `mewcode/permission/rules.py`（同上文件，追加）、`mewcode/permission/checker.py`（追加 categorize + extract_target）
+**文件：** `newcode/permission/rules.py`（同上文件，追加）、`newcode/permission/checker.py`（追加 categorize + extract_target）
 
 **依赖：** T1, T4
 
@@ -124,7 +124,7 @@
    - 遍历 entries，各 `Rule.parse`；非法条目跳过
    - 分别入 allow/deny 列表
 3. 实现 `load_rules(project_root: str) -> RuleLayers`：
-   - 加载三层：user `~/.config/mewcode/permissions.yaml`、project `<root>/.mewcode/permissions.yaml`、local `<root>/.mewcode/permissions.local.yaml`
+   - 加载三层：user `~/.config/newcode/permissions.yaml`、project `<root>/.newcode/permissions.yaml`、local `<root>/.newcode/permissions.local.yaml`
    - 调用 `load_settings` → `build_rule_set`
 4. 在 `checker.py` 中实现 `friendly_name(internal: str) -> str`：
    - `bash→Bash, read_file→Read, write_file→Write, edit_file→Edit, glob→Glob, grep→Grep`；未知原样返回
@@ -144,7 +144,7 @@
 
 ## T6: 权限检查器（前四层流水线 + 规则引擎 + 模式矩阵）
 
-**文件：** `mewcode/permission/checker.py`（完整实现）、`mewcode/permission/engine.py`、`mewcode/permission/modes.py`
+**文件：** `newcode/permission/checker.py`（完整实现）、`newcode/permission/engine.py`、`newcode/permission/modes.py`
 
 **依赖：** T2, T3, T5
 
@@ -177,7 +177,7 @@
 
 ## T7: 工具分类与友好名映射（Registry 扩展）
 
-**文件：** `mewcode/tools/registry.py`
+**文件：** `newcode/tools/registry.py`
 
 **依赖：** T1
 
@@ -191,7 +191,7 @@
 
 ## T8: 事件系统扩展 + Agent 集成
 
-**文件：** `mewcode/agent/events.py`、`mewcode/agent/agent.py`
+**文件：** `newcode/agent/events.py`、`newcode/agent/agent.py`
 
 **依赖：** T6, T7
 
@@ -215,7 +215,7 @@
 
 ## T9: 配置系统扩展 + 工具适配
 
-**文件：** `mewcode/config/schema.py`、`mewcode/config/loader.py`、`mewcode/tools/shell.py`、`mewcode/tools/file_ops.py`、`mewcode/prompt/reminders.py`、`.gitignore`、`.mewcode/permissions.yaml.example`
+**文件：** `newcode/config/schema.py`、`newcode/config/loader.py`、`newcode/tools/shell.py`、`newcode/tools/file_ops.py`、`newcode/prompt/reminders.py`、`.gitignore`、`.newcode/permissions.yaml.example`
 
 **依赖：** T6
 
@@ -225,19 +225,19 @@
 3. `shell.py`：删除 `_WHITELIST` 常量、删除 `_get_command_token` 白名单检查逻辑
 4. `file_ops.py`：`_check_path` 更新为调用 `sandbox.check_path`（符号链接感知）
 5. `reminders.py`：plan 模式提醒新增「若为单纯询问无需代码改动，直接回答，不生成计划文件」
-6. `.gitignore`：追加 `.mewcode/permissions.local.yaml`
-7. `.mewcode/permissions.yaml.example`：创建配置文件示例
+6. `.gitignore`：追加 `.newcode/permissions.local.yaml`
+7. `.newcode/permissions.yaml.example`：创建配置文件示例
 
 **验证：** 运行现有 shell/file_ops 测试确认不因移除白名单而失败；prompt 文本含新增指令
 
 ## T10: TUI 集成（HITL 确认框 + 模式切换 + 状态栏）
 
-**文件：** `mewcode/tui/app.py`
+**文件：** `newcode/tui/app.py`
 
 **依赖：** T8
 
 **步骤：**
-1. `MewCodeModel` 新增 `permission` 属性；构造时从 `agent.permission` 获取；`mode` 初值 `engine.start_mode`
+1. `NewCodeModel` 新增 `permission` 属性；构造时从 `agent.permission` 获取；`mode` 初值 `engine.start_mode`
 2. 新增 `APPROVING` 状态；新增 `pending: HITLRequest | None`、`approve_cursor: int` 属性
 3. **HITL 确认框**：`_consume_agent_events` 收到 `HITL_REQUEST` 事件：
    - 保存 `pending`、`approve_cursor = 0`、切 `APPROVING` 态
@@ -255,11 +255,11 @@
 6. **状态栏**：左侧常驻权限模式名（取代 provider 名）：DEFAULT→`DEFAULT`（灰/绿）、ACCEPT_EDITS→`ACCEPT EDITS`、PLAN→`PLAN`（黄）、BYPASS→`BYPASS`（红）；右侧模型名+token 用量不变
 7. 保留 `/plan`（→Mode.PLAN）、`/do`（→Mode.DEFAULT + 注入执行指令）、`/delete-plan`；不新增 `/mode` 命令
 
-**验证：** `python -m mewcode` 能正常启动进 TUI
+**验证：** `python -m newcode` 能正常启动进 TUI
 
 ## T11: main.py 接线 + smoke 适配
 
-**文件：** `mewcode/main.py`
+**文件：** `newcode/main.py`
 
 **依赖：** T6, T9, T10
 
@@ -269,7 +269,7 @@
 3. 非交互模式（`-c`）：`is_interactive=False`；默认模式取自 `--mode` 或配置，未指定则 `default`
 4. `-c -p` 保留：直接生成计划文件，不弹确认
 
-**验证：** `mewcode -c "echo test" --mode bypassPermissions` 不触发权限确认；`mewcode --help` 显示 `--mode` 选项
+**验证：** `newcode -c "echo test" --mode bypassPermissions` 不触发权限确认；`newcode --help` 显示 `--mode` 选项
 
 ## T12: 测试——permission 包
 
@@ -329,9 +329,9 @@
 1. `ruff format .` 无错误
 2. `ruff check .` 无告警（含 permission 子包）
 3. `pytest tests/ -v --timeout=30` 全部通过（重点守护人在回路阻塞/取消）
-4. （可选）`mypy mewcode/` 通过
-5. `python -m mewcode --version` 正常输出版本号
-6. `git check-ignore .mewcode/permissions.local.yaml` 命中（本地层已 gitignore）
+4. （可选）`mypy newcode/` 通过
+5. `python -m newcode --version` 正常输出版本号
+6. `git check-ignore .newcode/permissions.local.yaml` 命中（本地层已 gitignore）
 7. 端到端实跑：
    - default 下写文件触发 Ask 弹窗；选「允许本次」后文件被写
    - Shift+Tab 循环到 bypassPermissions 后不再 Ask、状态栏显示 `BYPASS`

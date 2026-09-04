@@ -12,10 +12,10 @@ from pathlib import Path
 
 import pytest
 
-from mewcode.tui.app import REPL
-from mewcode.tui.worktree_adapter import WorktreeAdapter
-from mewcode.worktree.config import WorktreesConfig
-from mewcode.worktree.manager import Manager
+from newcode.tui.app import REPL
+from newcode.tui.worktree_adapter import WorktreeAdapter
+from newcode.worktree.config import WorktreesConfig
+from newcode.worktree.manager import Manager
 
 pytestmark = pytest.mark.anyio
 

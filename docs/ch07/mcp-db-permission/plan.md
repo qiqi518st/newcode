@@ -1,4 +1,4 @@
-# MewCode ch07 — MCP 对接数据库的权限管理 Plan
+# NewCode ch07 — MCP 对接数据库的权限管理 Plan
 
 ## 架构概览
 
@@ -25,14 +25,14 @@
 ```
 
 组件划分：
-- **`mewcode.permission` 扩展**：`mcp_blocklist`（高危名单）、`resource_scope`（资源边界 + SQL 规范化）、`rules.RuleLayers.dynamic`（内存动态层）、`checker`（L1/L2 扩展 + 注入 API）。
-- **`mewcode.mcp` 扩展**：`privilege`（快照获取/翻译/Guard）、`config`（permissions 声明）、`conn`（认证失败标记）。
-- **`mewcode.tools.registry`**：工具可见性过滤。
-- **`mewcode.main`**：装配。
+- **`newcode.permission` 扩展**：`mcp_blocklist`（高危名单）、`resource_scope`（资源边界 + SQL 规范化）、`rules.RuleLayers.dynamic`（内存动态层）、`checker`（L1/L2 扩展 + 注入 API）。
+- **`newcode.mcp` 扩展**：`privilege`（快照获取/翻译/Guard）、`config`（permissions 声明）、`conn`（认证失败标记）。
+- **`newcode.tools.registry`**：工具可见性过滤。
+- **`newcode.main`**：装配。
 
 ## 核心数据结构
 
-### MCPServerPermissions（mewcode/mcp/config.py）
+### MCPServerPermissions（newcode/mcp/config.py）
 
 ```python
 @dataclass
@@ -46,7 +46,7 @@ class MCPServerPermissions:
 
 `ServerConfig` 增加 `permissions: MCPServerPermissions | None`。
 
-### PrivilegeSnapshot（mewcode/mcp/privilege.py）
+### PrivilegeSnapshot（newcode/mcp/privilege.py）
 
 ```python
 @dataclass
@@ -58,7 +58,7 @@ class PrivilegeSnapshot:
     read_only: bool
 ```
 
-### ResourceScope（mewcode/permission/resource_scope.py）
+### ResourceScope（newcode/permission/resource_scope.py）
 
 ```python
 @dataclass
@@ -69,38 +69,38 @@ class ResourceScope:
 
 `Ref = tuple[str, str]` 归一化资源（db, table，全部小写）。
 
-### RuleLayers.dynamic（mewcode/permission/rules.py）
+### RuleLayers.dynamic（newcode/permission/rules.py）
 
 `RuleLayers` 增加 `dynamic: RuleSet`——**独立内存层，不落盘**；`load_rules` 不读它；match 顺序 `dynamic > local > project > user`。
 
 ## 模块设计
 
-### mewcode/permission/mcp_blocklist.py（新）
+### newcode/permission/mcp_blocklist.py（新）
 **职责：** 内置高危 SQL 名单（不可配置，对标 `blocklist.py`）。
 - `DANGEROUS_SQL_PATTERNS: list[re.Pattern]`：自由 SQL 文本匹配——库表级删除/清空（`DROP DATABASE|TABLE`、`TRUNCATE`）、无条件删除/更新（`DELETE|UPDATE` 后无 `WHERE`，轻量判断：`\bWHERE\b` 是否出现在目标表之后）。
 - `hits_dangerous_sql(sql: str) -> bool`：任一命中返回 True。
 - `is_unconditional_where(where_arg: str) -> bool`：结构化工具危险判定——where 缺失/空白 → True。
 
-### mewcode/permission/resource_scope.py（新）
+### newcode/permission/resource_scope.py（新）
 **职责：** 资源边界判定 + SQL 规范化清洗。
 - `normalize_sql(sql) -> str`：去注释（`--`、`#`、`/* */`）、去字符串字面量、去反引号包裹、多语句按 `;` 分割逐句、大小写归一——**对标 `sandbox.py` 的 realpath/symlink 解析，是 SQL 型资源判定的信任前提**。
 - `extract_table_refs(sql, default_db) -> set[Ref]`：从清洗后 SQL 提取 `FROM/JOIN/INTO/UPDATE/DELETE/TRUNCATE/ALTER TABLE` 后的库表引用；裸表名用 default_db 补全为绝对资源。
 - `extract_table_arg(arg, default_db) -> Ref | None`：结构化工具 table 参数直取（`db.table` / `db.*` / 裸表名）。
 - `check_resource(ref, scope) -> bool`：资源 ∈ 授权集（`db.*` 或裸库通配全表）——对标 `startswith(root + os.sep)` 前缀比较。
 
-### mewcode/permission/rules.py（改）
+### newcode/permission/rules.py（改）
 - `RuleLayers` 加 `dynamic: RuleSet`；`match` 顺序改为 dynamic→local→project→user。
 
-### mewcode/permission/checker.py（改）
-- 构造参数增加：`mcp_sql_args: dict[str, str]`（server→自由 SQL 参数名）、`mcp_danger_args: dict[str, str]`（server→危险判定参数名）、`mcp_table_args: dict[str, str]`（server→表参数名）、`mcp_resource_scopes: dict[str, ResourceScope]`（server→授权资源）。**permission 不 import mewcode.mcp**。
+### newcode/permission/checker.py（改）
+- 构造参数增加：`mcp_sql_args: dict[str, str]`（server→自由 SQL 参数名）、`mcp_danger_args: dict[str, str]`（server→危险判定参数名）、`mcp_table_args: dict[str, str]`（server→表参数名）、`mcp_resource_scopes: dict[str, ResourceScope]`（server→授权资源）。**permission 不 import newcode.mcp**。
 - **L1 扩展**（在既有 bash 黑名单之后、BYPASS 判断之前）：tool 以 `mcp__` 开头且属于预检 server → 取对应参数（sql_arg 文本 or where_arg）→ `hits_dangerous_sql` / `is_unconditional_where` 命中 → DENY。
 - **L2 扩展**：预检 server 且非只读工具 → 提取资源（table 参数 or SQL 文本）→ `check_resource` 不通过 → DENY。
 - **公开方法**：`inject_rules(rules, layer="dynamic")`（append 到 `_layers.dynamic`，实时生效）、`clear_dynamic_rules()`（清空 dynamic，供刷新时先清再注入）。
 
-### mewcode/mcp/config.py（改）
+### newcode/mcp/config.py（改）
 - `ServerConfig` 加 `permissions: MCPServerPermissions | None`；YAML `permissions` 段解析。
 
-### mewcode/mcp/privilege.py（新）
+### newcode/mcp/privilege.py（新）
 **职责：** 权限快照获取、翻译、Guard。
 - `fetch_snapshot(conn, probe_tool, default_db) -> PrivilegeSnapshot | None`：调 `conn.call_tool(probe_tool, {})`，解析远端返回（约定结构化格式含 grants/dbs/tables/read_only；default_db 从配置 env 或快照取）；解析失败 → stderr 告警一次 + None（不阻断）。
 - `translate_to_rules(server_name, tools, snapshot, privilege_map) -> list[Rule]`：内置「工具→所需操作」映射（基于 mysql-mcp-server 真实工具：mysql_insert↔INSERT、mysql_update↔UPDATE、mysql_delete↔DELETE、mysql_query↔EXECUTE/SELECT；只读类 listTables/describeTable/sampleData/summarizeTable/tableRelations/listIndexes/listDatabases/explain/ping/version/generateSchemaDiagram↔SELECT/SHOW）；快照缺操作 → deny 规则 `mcp__<server>__<tool>`；privilege_map 覆盖内置。
@@ -109,13 +109,13 @@ class ResourceScope:
   - `refresh_all()`：启动时对启用 probe 的 server 查快照 → `clear_dynamic_rules()` 后 `inject_rules` 全部规则；产出 `disabled_tools: set[str]` 与 `scopes: dict[str, ResourceScope]`。
   - `on_call_failed(server_name)`：调用失败（远端拒绝）→ 重查该 server 快照 → 更新规则。
 
-### mewcode/mcp/conn.py（改）
+### newcode/mcp/conn.py（改）
 - `call_tool` 远端错误含认证失败特征（`Access denied for user` / `ER_ACCESS_DENIED`）→ 置 `self._auth_failed = True`；后续调用直接返回 `ToolResult(status="error", error="该 server 凭据异常，已停止重试...")`，stderr 告警一次。
 
-### mewcode/tools/registry.py（改）
+### newcode/tools/registry.py（改）
 - `to_definitions(disabled: set[str] | None = None)`：过滤 disabled 中的工具，不进入 LLM 可见列表。
 
-### mewcode/main.py（改）
+### newcode/main.py（改）
 - `load_mcp_servers` 后构建 `mcp_sql_args`/`mcp_danger_args`/`mcp_table_args` 传入 `PermissionChecker`；`start_all` 后 `guard.refresh_all()` → 把 `guard.scopes` 传给 checker、`disabled_tools` 给 agent 组装工具列表、边界摘要进 `env_segment`；`McpTool.execute` 失败路径接 `guard.on_call_failed`。
 
 ## 模块交互
@@ -140,7 +140,7 @@ main._amain
 ## 文件组织
 
 ```
-mewcode/
+newcode/
 ├── permission/
 │   ├── mcp_blocklist.py   — 新：高危 SQL 名单（自由 SQL 文本 + 结构化 where 空判定）
 │   ├── resource_scope.py  — 新：ResourceScope / SQL 规范化 / 表引用提取 / check_resource
@@ -175,5 +175,5 @@ tests/
 | 裸表名补全 | 用连接默认库补全为绝对资源 | 对标 resolve_root 绝对化 |
 | LLM 感知 | 禁用工具从 to_definitions 过滤 + 边界摘要进 env_segment | 工具级 deny 剔除可见性；内容级用提示词引导；安全靠判定层兜底 |
 | 认证抑制 | _auth_failed 标记，停止自动重试，告警一次 | 防账号锁定；作用域限该 server |
-| 依赖方向 | permission 不 import mewcode.mcp（接收 mcp_* 构造参数）；mcp.privilege → permission | 保持解耦无环 |
+| 依赖方向 | permission 不 import newcode.mcp（接收 mcp_* 构造参数）；mcp.privilege → permission | 保持解耦无环 |
 | 认证快照格式 | 远端 probe_tool 返回结构化 grants/dbs/tables/read_only | 约定协议，解析失败降级不阻断 |

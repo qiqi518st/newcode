@@ -1,4 +1,4 @@
-# MewCode 工具系统 — 任务拆解 (task.md)
+# NewCode 工具系统 — 任务拆解 (task.md)
 
 > 基于已批准的 spec.md 和 plan.md。Python 3.12+。
 
@@ -6,23 +6,23 @@
 
 | 操作 | 文件 | 职责 |
 |------|------|------|
-| 修改 | `mewcode/provider/base.py` | 扩展 Message/StreamEvent；新增 ToolCall、ToolDefinition、ToolResult |
-| 修改 | `mewcode/utils/error.py` | 新增 ToolError、CommandNotAllowedError |
-| 新建 | `mewcode/tools/base.py` | Tool Protocol |
-| 新建 | `mewcode/tools/registry.py` | Registry 类、default() 工厂 |
-| 新建 | `mewcode/tools/file_ops.py` | ReadFileTool、WriteFileTool、EditFileTool |
-| 新建 | `mewcode/tools/shell.py` | ExecuteCommandTool（含白名单） |
-| 新建 | `mewcode/tools/search.py` | ListFilesTool、SearchCodeTool |
-| 新建 | `mewcode/tools/__init__.py` | 包导出 |
-| 修改 | `mewcode/conversation/manager.py` | 新增 add_tool_call、add_tool_result |
-| 修改 | `mewcode/prompt/resources.py` | SYSTEM_PROMPT 增补 Agent 角色与工具约定 |
-| 修改 | `mewcode/provider/anthropic.py` | 注入 tools、解析 tool_use streaming、回灌 tool_result |
-| 修改 | `mewcode/provider/openai.py` | 注入 tools、解析 function_call streaming、回灌 function 结果 |
-| 新建 | `mewcode/agent/events.py` | EventType、Event |
-| 新建 | `mewcode/agent/agent.py` | Agent 类、单轮闭环编排 |
-| 新建 | `mewcode/agent/__init__.py` | 包导出 |
-| 修改 | `mewcode/tui/app.py` | _process_input 改走 agent.run、消费 AgentEvent |
-| 修改 | `mewcode/main.py` | 构造 Registry.default() 注入 REPL/oneshot |
+| 修改 | `newcode/provider/base.py` | 扩展 Message/StreamEvent；新增 ToolCall、ToolDefinition、ToolResult |
+| 修改 | `newcode/utils/error.py` | 新增 ToolError、CommandNotAllowedError |
+| 新建 | `newcode/tools/base.py` | Tool Protocol |
+| 新建 | `newcode/tools/registry.py` | Registry 类、default() 工厂 |
+| 新建 | `newcode/tools/file_ops.py` | ReadFileTool、WriteFileTool、EditFileTool |
+| 新建 | `newcode/tools/shell.py` | ExecuteCommandTool（含白名单） |
+| 新建 | `newcode/tools/search.py` | ListFilesTool、SearchCodeTool |
+| 新建 | `newcode/tools/__init__.py` | 包导出 |
+| 修改 | `newcode/conversation/manager.py` | 新增 add_tool_call、add_tool_result |
+| 修改 | `newcode/prompt/resources.py` | SYSTEM_PROMPT 增补 Agent 角色与工具约定 |
+| 修改 | `newcode/provider/anthropic.py` | 注入 tools、解析 tool_use streaming、回灌 tool_result |
+| 修改 | `newcode/provider/openai.py` | 注入 tools、解析 function_call streaming、回灌 function 结果 |
+| 新建 | `newcode/agent/events.py` | EventType、Event |
+| 新建 | `newcode/agent/agent.py` | Agent 类、单轮闭环编排 |
+| 新建 | `newcode/agent/__init__.py` | 包导出 |
+| 修改 | `newcode/tui/app.py` | _process_input 改走 agent.run、消费 AgentEvent |
+| 修改 | `newcode/main.py` | 构造 Registry.default() 注入 REPL/oneshot |
 | 新建 | `tests/test_tools.py` | 工具单元测试 |
 | 新建 | `tests/test_agent.py` | Agent 闭环测试（mock provider + mock tool） |
 | 新建 | `tests/test_provider_tools.py` | Provider 工具解析测试 |
@@ -32,7 +32,7 @@
 
 ## T1: Provider 基础类型扩展
 
-**文件：** `mewcode/provider/base.py`
+**文件：** `newcode/provider/base.py`
 **依赖：** 无
 **步骤：**
 1. `Message` 增加 `role="tool"`，新增字段 `tool_call_id: str | None = None`、`name: str | None = None`
@@ -42,13 +42,13 @@
 5. 新增 `ToolResult` dataclass：`status: Literal["ok","error"]`, `output: str`, `error: str`, `truncated: bool`
 6. `Provider.stream` 签名扩展为 `stream(self, msgs, tools=None)`，现有调用方不受影响（新增参数有默认值）
 
-**验证：** `python -c "from mewcode.provider.base import Message, StreamEvent, ToolCall, ToolDefinition, ToolResult; print('OK')"`
+**验证：** `python -c "from newcode.provider.base import Message, StreamEvent, ToolCall, ToolDefinition, ToolResult; print('OK')"`
 
 ---
 
 ## T2: 工具相关异常类型
 
-**文件：** `mewcode/utils/error.py`
+**文件：** `newcode/utils/error.py`
 **依赖：** 无
 **步骤：**
 1. 新增 `ToolError(Exception)`：工具执行失败的基类
@@ -56,29 +56,29 @@
 3. 新增 `PathTraversalError(ToolError)`：路径越界
 4. 新增 `ToolTimeoutError(ToolError)`：工具执行超时
 
-**验证：** `python -c "from mewcode.utils.error import ToolError, CommandNotAllowedError; print('OK')"`
+**验证：** `python -c "from newcode.utils.error import ToolError, CommandNotAllowedError; print('OK')"`
 
 ---
 
 ## T3: Tool 协议定义
 
-**文件：** `mewcode/tools/base.py`
+**文件：** `newcode/tools/base.py`
 **依赖：** T1（需要 `ToolResult`）
 **步骤：**
-1. `from mewcode.provider.base import ToolResult`
+1. `from newcode.provider.base import ToolResult`
 2. 定义 `Tool` Protocol：`name`、`description`、`parameters`、`execute(self, arguments) -> ToolResult`
 3. 所有属性均为 `property`，`execute` 为 `async`
 
-**验证：** `python -c "from mewcode.tools.base import Tool; print('OK')"`
+**验证：** `python -c "from newcode.tools.base import Tool; print('OK')"`
 
 ---
 
 ## T4: 工具注册中心
 
-**文件：** `mewcode/tools/registry.py`
+**文件：** `newcode/tools/registry.py`
 **依赖：** T3
 **步骤：**
-1. `from mewcode.provider.base import ToolDefinition`
+1. `from newcode.provider.base import ToolDefinition`
 2. 实现 `Registry` 类：
    - `_tools: dict[str, Tool]` 存储注册的工具
    - `register(tool)`：按 `tool.name` 注册
@@ -87,13 +87,13 @@
    - `execute(name, arguments)`：查找工具并 `await tool.execute(arguments)`
    - `@staticmethod default()`：返回预装六个核心工具的 Registry（此时六个工具类尚未实现，先用 `pass` 占位或 TODO 注释）
 
-**验证：** `python -c "from mewcode.tools.registry import Registry; r = Registry(); print(type(r))"`
+**验证：** `python -c "from newcode.tools.registry import Registry; r = Registry(); print(type(r))"`
 
 ---
 
 ## T5: 文件操作工具 — read_file
 
-**文件：** `mewcode/tools/file_ops.py`
+**文件：** `newcode/tools/file_ops.py`
 **依赖：** T2, T3
 **步骤：**
 1. 实现 `ReadFileTool`：
@@ -104,10 +104,10 @@
 
 **验证：** `export PYTHONIOENCODING=utf-8 && python -c "
 import asyncio
-from mewcode.tools.file_ops import ReadFileTool
+from newcode.tools.file_ops import ReadFileTool
 async def test():
     t = ReadFileTool()
-    r = await t.execute({'path': 'mewcode/main.py'})
+    r = await t.execute({'path': 'newcode/main.py'})
     print(r.status, len(r.output))
 asyncio.run(test())
 "`
@@ -116,7 +116,7 @@ asyncio.run(test())
 
 ## T6: 文件操作工具 — write_file
 
-**文件：** `mewcode/tools/file_ops.py`
+**文件：** `newcode/tools/file_ops.py`
 **依赖：** T5（同文件追加）
 **步骤：**
 1. 在 `file_ops.py` 中追加 `WriteFileTool`：
@@ -127,7 +127,7 @@ asyncio.run(test())
 
 **验证：** `export PYTHONIOENCODING=utf-8 && python -c "
 import asyncio, os
-from mewcode.tools.file_ops import WriteFileTool
+from newcode.tools.file_ops import WriteFileTool
 async def test():
     t = WriteFileTool()
     r = await t.execute({'path': '/tmp/mew_test_write.txt', 'content': 'hello'})
@@ -139,7 +139,7 @@ asyncio.run(test())
 
 ## T7: 文件操作工具 — edit_file
 
-**文件：** `mewcode/tools/file_ops.py`
+**文件：** `newcode/tools/file_ops.py`
 **依赖：** T6（同文件追加）
 **步骤：**
 1. 在 `file_ops.py` 中追加 `EditFileTool`：
@@ -152,7 +152,7 @@ asyncio.run(test())
 
 **验证：** `export PYTHONIOENCODING=utf-8 && python -c "
 import asyncio
-from mewcode.tools.file_ops import EditFileTool
+from newcode.tools.file_ops import EditFileTool
 async def test():
     t = EditFileTool()
     # 测试唯一匹配成功
@@ -168,7 +168,7 @@ asyncio.run(test())
 
 ## T8: Shell 命令工具
 
-**文件：** `mewcode/tools/shell.py`
+**文件：** `newcode/tools/shell.py`
 **依赖：** T2, T3
 **步骤：**
 1. 实现 `ExecuteCommandTool`：
@@ -180,7 +180,7 @@ asyncio.run(test())
 
 **验证：** `export PYTHONIOENCODING=utf-8 && python -c "
 import asyncio
-from mewcode.tools.shell import ExecuteCommandTool
+from newcode.tools.shell import ExecuteCommandTool
 async def test():
     t = ExecuteCommandTool()
     r = await t.execute({'command': 'python --version'})
@@ -194,7 +194,7 @@ asyncio.run(test())
 
 ## T9: 搜索工具
 
-**文件：** `mewcode/tools/search.py`
+**文件：** `newcode/tools/search.py`
 **依赖：** T3
 **步骤：**
 1. 实现 `ListFilesTool`：
@@ -208,13 +208,13 @@ asyncio.run(test())
 
 **验证：** `export PYTHONIOENCODING=utf-8 && python -c "
 import asyncio
-from mewcode.tools.search import ListFilesTool, SearchCodeTool
+from newcode.tools.search import ListFilesTool, SearchCodeTool
 async def test():
     t1 = ListFilesTool()
-    r1 = await t1.execute({'pattern': 'mewcode/**/*.py'})
+    r1 = await t1.execute({'pattern': 'newcode/**/*.py'})
     print('list:', r1.status, len(r1.output.split()))
     t2 = SearchCodeTool()
-    r2 = await t2.execute({'pattern': 'class.*Tool', 'glob': 'mewcode/tools/*.py'})
+    r2 = await t2.execute({'pattern': 'class.*Tool', 'glob': 'newcode/tools/*.py'})
     print('search:', r2.status, 'Tool' in r2.output)
 asyncio.run(test())
 "`
@@ -223,14 +223,14 @@ asyncio.run(test())
 
 ## T10: tools 包导出 + Registry.default() 完成
 
-**文件：** `mewcode/tools/__init__.py`、`mewcode/tools/registry.py`
+**文件：** `newcode/tools/__init__.py`、`newcode/tools/registry.py`
 **依赖：** T4, T5~T9
 **步骤：**
 1. `__init__.py` 导出 `Tool`、`ToolResult`（从 provider.base 再导出）、`Registry`、`ReadFileTool` 等六个工具类
 2. `registry.py` 中完成 `Registry.default()`：实例化并注册六个工具
 
 **验证：** `export PYTHONIOENCODING=utf-8 && python -c "
-from mewcode.tools import Registry
+from newcode.tools import Registry
 r = Registry.default()
 print('tools:', [d.name for d in r.to_definitions()])
 "`
@@ -239,7 +239,7 @@ print('tools:', [d.name for d in r.to_definitions()])
 
 ## T11: ConversationManager 扩展工具消息
 
-**文件：** `mewcode/conversation/manager.py`
+**文件：** `newcode/conversation/manager.py`
 **依赖：** T1
 **步骤：**
 1. 新增 `add_tool_call(self, tool_call: ToolCall)`：
@@ -249,8 +249,8 @@ print('tools:', [d.name for d in r.to_definitions()])
 3. `get_context()` 保持透传所有消息（含 `role="tool"`）
 
 **验证：** `export PYTHONIOENCODING=utf-8 && python -c "
-from mewcode.conversation.manager import ConversationManager
-from mewcode.provider.base import ToolCall, ToolResult
+from newcode.conversation.manager import ConversationManager
+from newcode.provider.base import ToolCall, ToolResult
 cm = ConversationManager('', 20)
 cm.add_user('test')
 cm.add_tool_call(ToolCall('read_file', {'path': 'x'}))
@@ -263,7 +263,7 @@ print('roles:', [m.role for m in msgs])
 
 ## T12: System Prompt 增补
 
-**文件：** `mewcode/prompt/resources.py`
+**文件：** `newcode/prompt/resources.py`
 **依赖：** 无
 **步骤：**
 1. 在现有 `SYSTEM_PROMPT` 末尾追加 Agent 角色与工具使用约定：
@@ -273,13 +273,13 @@ print('roles:', [m.role for m in msgs])
    - 强调一次只调用一个工具
    - 如果不需要工具，直接回答
 
-**验证：** `export PYTHONIOENCODING=utf-8 && python -c "from mewcode.prompt.resources import SYSTEM_PROMPT; print('tool' in SYSTEM_PROMPT.lower())"`
+**验证：** `export PYTHONIOENCODING=utf-8 && python -c "from newcode.prompt.resources import SYSTEM_PROMPT; print('tool' in SYSTEM_PROMPT.lower())"`
 
 ---
 
 ## T13: Anthropic Provider 工具扩展
 
-**文件：** `mewcode/provider/anthropic.py`
+**文件：** `newcode/provider/anthropic.py`
 **依赖：** T1, T11
 **步骤：**
 1. `stream(self, msgs, tools=None)`：
@@ -292,13 +292,13 @@ print('roles:', [m.role for m in msgs])
    - 普通文本仍 yield `StreamEvent(text=...)`
 3. 内部保存 `tool_use_id`，需要在某处传递给 Conversation 用于回灌（通过 ToolCall 扩展或 Agent 层处理）
 
-**验证：** 编写 mock 测试（T22），先保证代码能编译通过：`export PYTHONIOENCODING=utf-8 && python -c "from mewcode.provider.anthropic import AnthropicProvider; print('OK')"`
+**验证：** 编写 mock 测试（T22），先保证代码能编译通过：`export PYTHONIOENCODING=utf-8 && python -c "from newcode.provider.anthropic import AnthropicProvider; print('OK')"`
 
 ---
 
 ## T14: OpenAI Provider 工具扩展
 
-**文件：** `mewcode/provider/openai.py`
+**文件：** `newcode/provider/openai.py`
 **依赖：** T1, T11
 **步骤：**
 1. `stream(self, msgs, tools=None)`：
@@ -309,25 +309,25 @@ print('roles:', [m.role for m in msgs])
    - 当某个 index 的 `arguments` 拼接完成 → `json.loads()` 组装 `ToolCall`，yield `StreamEvent(tool_call=...)`
 3. 回灌时构造 `{"role":"tool", "tool_call_id":..., "name":..., "content":...}`
 
-**验证：** `export PYTHONIOENCODING=utf-8 && python -c "from mewcode.provider.openai import OpenAIProvider; print('OK')"`
+**验证：** `export PYTHONIOENCODING=utf-8 && python -c "from newcode.provider.openai import OpenAIProvider; print('OK')"`
 
 ---
 
 ## T15: Agent 事件类型
 
-**文件：** `mewcode/agent/events.py`
+**文件：** `newcode/agent/events.py`
 **依赖：** T1
 **步骤：**
 1. `EventType` Enum：`TEXT`、`TOOL_CALL`、`TOOL_RESULT`、`DONE`、`ERROR`
 2. `Event` dataclass：`type: EventType`, `payload: str | ToolCall | ToolResult | Exception`
 
-**验证：** `export PYTHONIOENCODING=utf-8 && python -c "from mewcode.agent.events import EventType, Event; print([e.value for e in EventType])"`
+**验证：** `export PYTHONIOENCODING=utf-8 && python -c "from newcode.agent.events import EventType, Event; print([e.value for e in EventType])"`
 
 ---
 
 ## T16: Agent 单轮闭环编排
 
-**文件：** `mewcode/agent/agent.py`
+**文件：** `newcode/agent/agent.py`
 **依赖：** T1, T3, T4, T10, T11, T15
 **步骤：**
 1. `Agent.__init__(provider, conversation, registry)`
@@ -339,24 +339,24 @@ print('roles:', [m.role for m in msgs])
    - 消费流：text → yield Event(TEXT)；done → yield Event(DONE)；err → yield Event(ERROR)
    - 防御：请求#2 中出现 tool_call 则忽略日志警告，继续消费文本
 
-**验证：** 先编译通过：`export PYTHONIOENCODING=utf-8 && python -c "from mewcode.agent.agent import Agent; print('OK')"`。详细测试在 T21。
+**验证：** 先编译通过：`export PYTHONIOENCODING=utf-8 && python -c "from newcode.agent.agent import Agent; print('OK')"`。详细测试在 T21。
 
 ---
 
 ## T17: agent 包导出
 
-**文件：** `mewcode/agent/__init__.py`
+**文件：** `newcode/agent/__init__.py`
 **依赖：** T15, T16
 **步骤：**
 1. 导出 `Agent`、`EventType`、`Event`
 
-**验证：** `export PYTHONIOENCODING=utf-8 && python -c "from mewcode.agent import Agent, EventType; print('OK')"`
+**验证：** `export PYTHONIOENCODING=utf-8 && python -c "from newcode.agent import Agent, EventType; print('OK')"`
 
 ---
 
 ## T18: TUI 改走 Agent.run
 
-**文件：** `mewcode/tui/app.py`
+**文件：** `newcode/tui/app.py`
 **依赖：** T15, T16, T17
 **步骤：**
 1. `REPL.__init__` 改为接收 `Agent` 而非 `Provider`
@@ -369,23 +369,23 @@ print('roles:', [m.role for m in msgs])
    - `ERROR` → 红色展示错误
 4. 重试逻辑：若请求#1 或请求#2 出错，沿用 ch02 的 3 次重试
 
-**验证：** `export PYTHONIOENCODING=utf-8 && python -c "from mewcode.tui.app import REPL; print('OK')"`
+**验证：** `export PYTHONIOENCODING=utf-8 && python -c "from newcode.tui.app import REPL; print('OK')"`
 
 ---
 
 ## T19: main.py 扩展注入 Registry
 
-**文件：** `mewcode/main.py`
+**文件：** `newcode/main.py`
 **依赖：** T10, T17, T18
 **步骤：**
-1. `from mewcode.tools import Registry`
-2. `from mewcode.agent import Agent`
+1. `from newcode.tools import Registry`
+2. `from newcode.agent import Agent`
 3. `main()` 中构造 `registry = Registry.default()`
 4. `agent = Agent(provider, conversation, registry)`
 5. `REPL` 改为接收 `agent`
 6. `_oneshot` 同样构造 `Agent` 并消费 `Event` 流
 
-**验证：** `export PYTHONIOENCODING=utf-8 && python -m mewcode --version` 正常输出版本号
+**验证：** `export PYTHONIOENCODING=utf-8 && python -m newcode --version` 正常输出版本号
 
 ---
 

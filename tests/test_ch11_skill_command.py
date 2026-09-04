@@ -14,11 +14,11 @@ ch11 变更：on/off 已合并进 load/unload（方向 A，持久化）：
 import asyncio
 from pathlib import Path
 
-from mewcode.skills import ActiveSkills, Catalog, Executor
-from mewcode.slash import CommandContext, CommandRegistry, RecordingUI
-from mewcode.slash.commands.skill import handle_skill
-from mewcode.slash.commands.skill_register import register_skills_as_commands
-from mewcode.tools import Registry
+from newcode.skills import ActiveSkills, Catalog, Executor
+from newcode.slash import CommandContext, CommandRegistry, RecordingUI
+from newcode.slash.commands.skill import handle_skill
+from newcode.slash.commands.skill_register import register_skills_as_commands
+from newcode.tools import Registry
 
 USER_SKILL = "---\nname: demo\ndescription: A demo skill\n---\nDEMO BODY"
 

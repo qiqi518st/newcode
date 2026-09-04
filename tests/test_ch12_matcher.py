@@ -15,8 +15,8 @@ from __future__ import annotations
 
 import pytest
 
-from mewcode.permission import rules as R
-from mewcode.permission.matcher import (
+from newcode.permission import rules as R
+from newcode.permission.matcher import (
     ExactMatcher,
     GlobMatcher,
     NotMatcher,

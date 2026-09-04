@@ -5,12 +5,12 @@ import tempfile
 
 from rich.console import Console
 
-from mewcode.agent.events import Event, EventType, StopReason
-from mewcode.context.summarize import CompactOutcome
-from mewcode.permission.modes import PermissionMode
-from mewcode.plans import PlanManager
-from mewcode.tools.registry import Registry
-from mewcode.tui.app import REPL, AppMode, SessionState
+from newcode.agent.events import Event, EventType, StopReason
+from newcode.context.summarize import CompactOutcome
+from newcode.permission.modes import PermissionMode
+from newcode.plans import PlanManager
+from newcode.tools.registry import Registry
+from newcode.tui.app import REPL, AppMode, SessionState
 
 
 class CompactAgent:
@@ -35,9 +35,9 @@ class CompactAgent:
 
 
 def make_repl(agent):
-    from mewcode.slash import CommandContext, CommandRegistry
-    from mewcode.slash.commands import register_all
-    from mewcode.tui.app import RichUIController
+    from newcode.slash import CommandContext, CommandRegistry
+    from newcode.slash.commands import register_all
+    from newcode.tui.app import RichUIController
 
     repl = object.__new__(REPL)
     repl.agent = agent

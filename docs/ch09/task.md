@@ -1,27 +1,27 @@
-# MewCode ch09 - 项目记忆与会话持久化 Tasks
+# NewCode ch09 - 项目记忆与会话持久化 Tasks
 
 ## 文件清单
 
 | 操作 | 文件 | 职责 |
 |---|---|---|
-| 新建 | mewcode/instructions/__init__.py | 指令加载包导出 |
-| 新建 | mewcode/instructions/loader.py | 三层 MEWCODE.md、include、安全边界 |
-| 新建 | mewcode/session/__init__.py | 会话 API 导出 |
-| 新建 | mewcode/session/writer.py | JSONL Writer、Entry 序列化、compact |
-| 新建 | mewcode/session/archive.py | 会话概要扫描、路径校验、过期清理 |
-| 新建 | mewcode/session/recovery.py | JSONL 恢复、工具配对、超限降级 |
-| 新建 | mewcode/session/runtime.py | 当前会话、Writer 和恢复切换 |
-| 新建 | mewcode/memory/__init__.py | 记忆 API 导出 |
-| 新建 | mewcode/memory/models.py | NoteType、MemoryNote、MemoryOperation |
-| 新建 | mewcode/memory/store.py | 单级笔记文件和 MEMORY.md |
-| 新建 | mewcode/memory/prompts.py | 无工具记忆更新 prompt 和 JSON schema 约束 |
-| 新建 | mewcode/memory/manager.py | 两级索引、LLM 更新、异步任务 |
-| 修改 | mewcode/context/session.py | 新 session ID、session_dir、conversation_path |
-| 修改 | mewcode/conversation/manager.py | on_append/on_replace 回调、恢复构造 |
-| 修改 | mewcode/prompt/builder.py | custom-instructions 和 long-term-memory section |
-| 修改 | mewcode/agent/agent.py | 自然 Done、关键词、每 5 轮记忆触发 |
-| 修改 | mewcode/main.py | 启动装配和退出清理 |
-| 修改 | mewcode/tui/app.py | /resume、/session、/memory、RESUMING |
+| 新建 | newcode/instructions/__init__.py | 指令加载包导出 |
+| 新建 | newcode/instructions/loader.py | 三层 NEWCODE.md、include、安全边界 |
+| 新建 | newcode/session/__init__.py | 会话 API 导出 |
+| 新建 | newcode/session/writer.py | JSONL Writer、Entry 序列化、compact |
+| 新建 | newcode/session/archive.py | 会话概要扫描、路径校验、过期清理 |
+| 新建 | newcode/session/recovery.py | JSONL 恢复、工具配对、超限降级 |
+| 新建 | newcode/session/runtime.py | 当前会话、Writer 和恢复切换 |
+| 新建 | newcode/memory/__init__.py | 记忆 API 导出 |
+| 新建 | newcode/memory/models.py | NoteType、MemoryNote、MemoryOperation |
+| 新建 | newcode/memory/store.py | 单级笔记文件和 MEMORY.md |
+| 新建 | newcode/memory/prompts.py | 无工具记忆更新 prompt 和 JSON schema 约束 |
+| 新建 | newcode/memory/manager.py | 两级索引、LLM 更新、异步任务 |
+| 修改 | newcode/context/session.py | 新 session ID、session_dir、conversation_path |
+| 修改 | newcode/conversation/manager.py | on_append/on_replace 回调、恢复构造 |
+| 修改 | newcode/prompt/builder.py | custom-instructions 和 long-term-memory section |
+| 修改 | newcode/agent/agent.py | 自然 Done、关键词、每 5 轮记忆触发 |
+| 修改 | newcode/main.py | 启动装配和退出清理 |
+| 修改 | newcode/tui/app.py | /resume、/session、/memory、RESUMING |
 | 新建 | tests/test_instructions_loader.py | 指令加载测试 |
 | 新建 | tests/test_context_session.py | session ID、目录和兼容边界测试 |
 | 修改 | tests/test_builder.py | PromptBuilder 新 section 测试 |
@@ -35,7 +35,7 @@
 
 ## T1：稳定 session ID 和目录契约
 
-**文件：** mewcode/context/session.py、tests/test_context_session.py
+**文件：** newcode/context/session.py、tests/test_context_session.py
 
 **依赖：** 无
 
@@ -52,14 +52,14 @@
 
 ## T2：实现 InstructionLoader
 
-**文件：** mewcode/instructions/loader.py、mewcode/instructions/__init__.py、tests/test_instructions_loader.py
+**文件：** newcode/instructions/loader.py、newcode/instructions/__init__.py、tests/test_instructions_loader.py
 
 **依赖：** 无
 
 **步骤：**
 
 1. 定义 InstructionLoader(project_root, user_home, max_depth=5) 和 InstructionDocument。
-2. 按项目根、项目 .mewcode、用户 .mewcode 顺序发现 MEWCODE.md。
+2. 按项目根、项目 .newcode、用户 .newcode 顺序发现 NEWCODE.md。
 3. 实现独占行 include 解析，非独占文本保持原样。
 4. 使用 canonical path、visited 集合和递归深度处理环路、重复和深度上限。
 5. 使用 Path.resolve 和 is_relative_to 校验项目/用户根边界，拒绝目录穿越和符号链接越界。
@@ -70,7 +70,7 @@
 
 ## T3：接入 PromptBuilder 模块
 
-**文件：** mewcode/prompt/builder.py、mewcode/prompt/__init__.py、tests/test_builder.py
+**文件：** newcode/prompt/builder.py、newcode/prompt/__init__.py、tests/test_builder.py
 
 **依赖：** T2
 
@@ -86,7 +86,7 @@
 
 ## T4：定义 Entry 和 Message 序列化
 
-**文件：** mewcode/session/writer.py、mewcode/provider/base.py（必要时仅新增适配函数）、tests/test_session_writer.py
+**文件：** newcode/session/writer.py、newcode/provider/base.py（必要时仅新增适配函数）、tests/test_session_writer.py
 
 **依赖：** T1
 
@@ -102,7 +102,7 @@
 
 ## T5：实现 SessionWriter
 
-**文件：** mewcode/session/writer.py、tests/test_session_writer.py
+**文件：** newcode/session/writer.py、tests/test_session_writer.py
 
 **依赖：** T1、T4
 
@@ -119,7 +119,7 @@
 
 ## T6：给 ConversationManager 增加持久化回调 API
 
-**文件：** mewcode/conversation/manager.py、tests/test_conversation_manager.py
+**文件：** newcode/conversation/manager.py、tests/test_conversation_manager.py
 
 **依赖：** T1
 
@@ -136,7 +136,7 @@
 
 ## T7：实现 SessionArchive 和列表概要
 
-**文件：** mewcode/session/archive.py、mewcode/session/__init__.py、tests/test_session_archive.py
+**文件：** newcode/session/archive.py、newcode/session/__init__.py、tests/test_session_archive.py
 
 **依赖：** T1、T4
 
@@ -153,9 +153,9 @@
 
 ## T8：实现 SessionRecovery
 
-**文件：** mewcode/session/recovery.py、tests/test_session_recovery.py
+**文件：** newcode/session/recovery.py、tests/test_session_recovery.py
 
-**依赖：** T4、T7、现有 mewcode/context/manager.py
+**依赖：** T4、T7、现有 newcode/context/manager.py
 
 **步骤：**
 
@@ -171,7 +171,7 @@
 
 ## T9：实现 SessionRuntime 和恢复切换
 
-**文件：** mewcode/session/runtime.py、mewcode/main.py、tests/test_ch09_integration.py
+**文件：** newcode/session/runtime.py、newcode/main.py、tests/test_ch09_integration.py
 
 **依赖：** T5、T6、T8
 
@@ -187,7 +187,7 @@
 
 ## T10：实现 MemoryNote、MemoryOperation 和 MemoryStore
 
-**文件：** mewcode/memory/models.py、mewcode/memory/store.py、mewcode/memory/__init__.py、tests/test_memory_manager.py
+**文件：** newcode/memory/models.py、newcode/memory/store.py、newcode/memory/__init__.py、tests/test_memory_manager.py
 
 **依赖：** T1
 
@@ -204,7 +204,7 @@
 
 ## T11：实现 MemoryManager 和记忆更新请求
 
-**文件：** mewcode/memory/manager.py、mewcode/memory/prompts.py、tests/test_memory_manager.py
+**文件：** newcode/memory/manager.py、newcode/memory/prompts.py、tests/test_memory_manager.py
 
 **依赖：** T10
 
@@ -222,7 +222,7 @@
 
 ## T12：接入 Prompt 与启动加载
 
-**文件：** mewcode/main.py、mewcode/prompt/builder.py、tests/test_ch09_integration.py
+**文件：** newcode/main.py、newcode/prompt/builder.py、tests/test_ch09_integration.py
 
 **依赖：** T2、T3、T9、T11
 
@@ -239,7 +239,7 @@
 
 ## T13：接入 Agent 自动记忆触发
 
-**文件：** mewcode/agent/agent.py、mewcode/session/runtime.py、tests/test_ch09_integration.py
+**文件：** newcode/agent/agent.py、newcode/session/runtime.py、tests/test_ch09_integration.py
 
 **依赖：** T9、T11、T12
 
@@ -256,7 +256,7 @@
 
 ## T14：实现 TUI /resume 状态和会话命令
 
-**文件：** mewcode/tui/app.py、tests/test_tui_resume.py
+**文件：** newcode/tui/app.py、tests/test_tui_resume.py
 
 **依赖：** T7、T9、T12
 
@@ -273,7 +273,7 @@
 
 ## T15：实现 TUI /memory 命令
 
-**文件：** mewcode/tui/app.py、mewcode/memory/manager.py、tests/test_tui_resume.py、tests/test_memory_manager.py
+**文件：** newcode/tui/app.py、newcode/memory/manager.py、tests/test_tui_resume.py、tests/test_memory_manager.py
 
 **依赖：** T10、T11、T12
 
@@ -289,7 +289,7 @@
 
 ## T16：补齐清理、诊断和兼容边界
 
-**文件：** mewcode/session/archive.py、mewcode/session/runtime.py、mewcode/main.py、tests/test_session_archive.py
+**文件：** newcode/session/archive.py、newcode/session/runtime.py、newcode/main.py、tests/test_session_archive.py
 
 **依赖：** T7、T9、T12
 

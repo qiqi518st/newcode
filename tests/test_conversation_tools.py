@@ -2,8 +2,8 @@
 
 import pytest
 
-from mewcode.conversation.manager import ConversationManager
-from mewcode.provider.base import ToolCall, ToolResult
+from newcode.conversation.manager import ConversationManager
+from newcode.provider.base import ToolCall, ToolResult
 
 
 @pytest.mark.anyio

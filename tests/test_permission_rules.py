@@ -11,8 +11,8 @@ import os
 import pytest
 import yaml
 
-from mewcode.permission import rules as R
-from mewcode.permission.types import Decision
+from newcode.permission import rules as R
+from newcode.permission.types import Decision
 
 
 class TestRuleParse:
@@ -210,12 +210,12 @@ class TestLoadRules:
             user,
             {"permissions": {"allow": ["Bash(git *)"], "deny": ["Write(**/*.log)"]}},
         )
-        project = tmp_path / ".mewcode" / "permissions.yaml"
+        project = tmp_path / ".newcode" / "permissions.yaml"
         self._write(
             project,
             {"permissions": {"deny": ["Bash(git push *)"]}},
         )
-        local = tmp_path / ".mewcode" / "permissions.local.yaml"
+        local = tmp_path / ".newcode" / "permissions.local.yaml"
         self._write(local, {"permissions": {"allow": ["Bash(git push origin main)"]}})
 
         monkeypatch.setattr(R, "RULE_FILE_USER", str(user))
@@ -232,7 +232,7 @@ class TestLoadRules:
     def test_load_mcp_wildcard_rule_from_yaml(self, tmp_path, monkeypatch):
         """防回归：项目权限 YAML 中的 MCP 通配规则应实际命中工具。"""
         monkeypatch.setattr(R, "RULE_FILE_USER", str(tmp_path / "user.yaml"))
-        project = tmp_path / ".mewcode" / "permissions.yaml"
+        project = tmp_path / ".newcode" / "permissions.yaml"
         self._write(
             project,
             {"permissions": {"allow": ["mcp__mysql-server__*"]}},
@@ -245,7 +245,7 @@ class TestLoadRules:
 
     def test_invalid_yaml_degrades_gracefully(self, tmp_path, monkeypatch, capsys):
         monkeypatch.setattr(R, "RULE_FILE_USER", str(tmp_path / "user.yaml"))
-        bad = tmp_path / ".mewcode" / "permissions.yaml"
+        bad = tmp_path / ".newcode" / "permissions.yaml"
         os.makedirs(bad.parent, exist_ok=True)
         bad.write_text(": : bad yaml :\n\t", encoding="utf-8")
         layers = R.load_rules(str(tmp_path))
@@ -256,7 +256,7 @@ class TestLoadRules:
 
     def test_invalid_rule_skipped(self, tmp_path, monkeypatch, capsys):
         monkeypatch.setattr(R, "RULE_FILE_USER", str(tmp_path / "user.yaml"))
-        project = tmp_path / ".mewcode" / "permissions.yaml"
+        project = tmp_path / ".newcode" / "permissions.yaml"
         self._write(
             project,
             {

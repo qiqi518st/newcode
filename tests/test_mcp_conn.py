@@ -11,9 +11,9 @@ from types import SimpleNamespace
 
 import pytest
 
-import mewcode.mcp.conn as conn_mod
-from mewcode.mcp.config import ServerConfig
-from mewcode.mcp.conn import MCPConnection, MCPStartupError
+import newcode.mcp.conn as conn_mod
+from newcode.mcp.config import ServerConfig
+from newcode.mcp.conn import MCPConnection, MCPStartupError
 
 
 def _stdio_server(name: str = "demo") -> ServerConfig:

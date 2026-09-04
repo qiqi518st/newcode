@@ -1,15 +1,15 @@
-# MewCode ch08 — 上下文管理 验收清单 (checklist.md)
+# NewCode ch08 — 上下文管理 验收清单 (checklist.md)
 
 > 每一项通过运行代码或观察行为来验证，聚焦系统行为。验证方式写在每项末尾括号内。
 > 凡需真实 LLM API key / 真实终端 / 网络才能验证的行为，列为「待人工验证」，**不混入「通过」**（CLAUDE.md「验证受阻必上报」纪律）。
-> 本文件是 mew-spec 流程产物，本身允许写入；除此之外测试/验证过程不改动 docs/ 下任何已存在文件。
+> 本文件是 new-spec 流程产物，本身允许写入；除此之外测试/验证过程不改动 docs/ 下任何已存在文件。
 
 ## 实现完整性（context 子包各组件已实现且可被调用）
 
-- [ ] **子包门面可导入**：`from mewcode.context import ContextManager, AutoCompactGate, estimate_tokens, get_context_window_for_model, ContentReplacementState, FileTracker, Skill, SkillRegistry` 不报错。（验证：`python -c "from mewcode.context import ContextManager, AutoCompactGate, estimate_tokens, get_context_window_for_model, ContentReplacementState, FileTracker, Skill, SkillRegistry; print('ok')"` 输出 `ok`）【T18、AC 全集基础】
+- [ ] **子包门面可导入**：`from newcode.context import ContextManager, AutoCompactGate, estimate_tokens, get_context_window_for_model, ContentReplacementState, FileTracker, Skill, SkillRegistry` 不报错。（验证：`python -c "from newcode.context import ContextManager, AutoCompactGate, estimate_tokens, get_context_window_for_model, ContentReplacementState, FileTracker, Skill, SkillRegistry; print('ok')"` 输出 `ok`）【T18、AC 全集基础】
 - [ ] **Token 估算纯函数**：`usage_to_anchor` 四字段求和；`estimate_tokens(anchor, all_msgs, anchor_msg_len)` 只算锚点之后增量；`anchor=0` 退化纯字符；`estimate_messages` 纯字符。（验证：`python -m pytest tests/test_context_tokens.py -q` 全过，含 `test_usage_anchor_sum` / `test_estimate_tokens_delta_only` / `test_estimate_tokens_zero_anchor`）【F13/F14、AC23】
 - [ ] **Context Window 四级解析**：env 覆盖 → `[1m]` 后缀 → 能力表(≥100K) → 协议默认；查表 miss / 异常不抛落默认。（验证：`python -m pytest tests/test_context_window.py -q` 全过，含 env 覆盖 / `[1m]` / 能力表 / 协议默认 / 非法 env 跳级用例）【F29、AC21】
-- [ ] **会话目录**：`.mewcode/sessions/<unix_ts>-<short_random>/tool-results/` 按需创建、幂等；空 id 兜底命名不抛。（验证：`python -m pytest tests/test_context_session.py -q` 全过，含格式 / 落盘路径 / 幂等 / 兜底用例）【F33、AC22】
+- [ ] **会话目录**：`.newcode/sessions/<unix_ts>-<short_random>/tool-results/` 按需创建、幂等；空 id 兜底命名不抛。（验证：`python -m pytest tests/test_context_session.py -q` 全过，含格式 / 落盘路径 / 幂等 / 兜底用例）【F33、AC22】
 - [ ] **替换决策账本**：`decide_once` 一次完成查账本→决策→写账本；kept/replaced/skip 三态；同 id 永不翻转、预览复用不重造；并发原子无中间态。（验证：`python -m pytest tests/test_context_replacement.py -q` 全过，含冻结 / skip 不记账 / 并发恰好调一次用例）【F5、AC4、AC24a】
 - [ ] **自动闸**：连续 3 轮自动失败停自动触发；成功清零；手动成功解除；仅自动路径无跨种类接口。（验证：`python -m pytest tests/test_context_autogate.py -q` 全过）【F28、AC20a】
 - [ ] **文件追踪**：record 覆盖更新、recent 倒序、并发无重复/错乱、返回拷贝。（验证：`python -m pytest tests/test_context_files.py -q` 全过）【F19/F20、AC9、AC24b】
@@ -39,23 +39,23 @@
 - [ ] **Agent 文件追踪回填**：read_file 成功 → file_tracker.record 被调（同 task、add_tool_result 前）；主对话成功后 update_anchor 被调。（验证：`test_agent_context.py` 含 `test_read_file_tracks_recovery` / `test_update_anchor_after_main_stream`）【F19a、AC9】
 - [ ] **压缩状态事件 emit**：自动路径 BEFORE/AFTER 事件顺序 + before>after。（验证：`test_agent_context.py::test_emit_compact_events`）【F24a/F24b、AC16】
 - [ ] **TUI /compact 路由**：`/compact` 走命令路径、不触发 LLM 普通请求、`run_force_compact` 被调；`/unknown` 友好提示含可用命令、不发 LLM；成功显示前后 token；自动压缩显示「正在压缩上下文...」；`/exit`/`/plan`/`/do` 迁移后行为不回归。（验证：`python -m pytest tests/test_tui_compact.py -q` 全过）【F21/F22/F24/F24a、AC12/AC15/AC16/AC28】
-- [ ] **装配注入**：`main._amain` 构造 ContextManager 注入 Agent，`_oneshot` 路径同样生效。（验证：`python -c "import mewcode.main; print('import ok')"` import 链不断；`git diff mewcode/main.py` 仅见构造 + 注入）【F9、AC28】
+- [ ] **装配注入**：`main._amain` 构造 ContextManager 注入 Agent，`_oneshot` 路径同样生效。（验证：`python -c "import newcode.main; print('import ok')"` import 链不断；`git diff newcode/main.py` 仅见构造 + 注入）【F9、AC28】
 
 ## 编译与测试
 
-- [ ] **包可导入、版本正确**：`mewcode.__version__` 为 `0.8.0`；`pyproject.toml` 的 `version` 与之一致。（验证：`python -c "import mewcode; print(mewcode.__version__)"` 输出 `0.8.0`）【T26】
+- [ ] **包可导入、版本正确**：`newcode.__version__` 为 `0.8.0`；`pyproject.toml` 的 `version` 与之一致。（验证：`python -c "import newcode; print(newcode.__version__)"` 输出 `0.8.0`）【T26】
 - [ ] **格式规范**：`ruff format --check .` 无 diff。（验证：`ruff format --check .` 退出码 0）【N12、AC30】
 - [ ] **静态检查**：`ruff check .` 无告警。（验证：`ruff check .` 退出码 0）【N12、AC30】
 - [ ] **单元测试全过**：`python -m pytest -q` 全过，含 `tests/test_context_*.py`、`tests/test_agent_context.py`、`tests/test_tui_compact.py`、`tests/test_provider_ptl.py`、`tests/test_conversation_manager.py` 及 ch01–ch07 既有测试。（验证：`python -m pytest -q` 退出码 0）【N7/N12、AC28/AC30】
 - [ ] **并发/收尾无竞态**：replacement / files / manager 测试的并发用例无数据竞争、无「已 Seen 但 replacement 未写」中间态、同 id 无两个预览版本。（验证：`python -m pytest tests/test_context_replacement.py tests/test_context_files.py tests/test_context_manager.py -q` 退出码 0）【N2/N3、AC24a/AC24b】
-- [ ] **探测脚本独立可用（自动侧）**：`scripts/probe_context_window.py --help` 正常打印用法退出 0；脚本不被 Agent 主流程 import。（验证：`python scripts/probe_context_window.py --help` 退出码 0；`grep -rn "probe_context_window" mewcode/` 无命中）【F30、AC27】
-- [ ] **.gitignore 生效**：`.mewcode/sessions/` 不入库。（验证：启动后跑一次工具调用，`git status` 不出现 sessions 子目录）【F33】
-- [ ] **docs 保护自检**：测试/验证过程未改动 docs/ 下任何已存在文件，仅 `docs/ch08/` 四份 mew-spec 流程文档为交付物。（验证：`git status docs/` 仅显示 `docs/ch08/` 新增，`git diff docs/` 对既有文档无修改）【CLAUDE.md docs 保护规则】
+- [ ] **探测脚本独立可用（自动侧）**：`scripts/probe_context_window.py --help` 正常打印用法退出 0；脚本不被 Agent 主流程 import。（验证：`python scripts/probe_context_window.py --help` 退出码 0；`grep -rn "probe_context_window" newcode/` 无命中）【F30、AC27】
+- [ ] **.gitignore 生效**：`.newcode/sessions/` 不入库。（验证：启动后跑一次工具调用，`git status` 不出现 sessions 子目录）【F33】
+- [ ] **docs 保护自检**：测试/验证过程未改动 docs/ 下任何已存在文件，仅 `docs/ch08/` 四份 new-spec 流程文档为交付物。（验证：`git status docs/` 仅显示 `docs/ch08/` 新增，`git diff docs/` 对既有文档无修改）【CLAUDE.md docs 保护规则】
 
 ## 端到端场景
 
 - [ ] **场景 1（长会话自动压缩不瘫）**：连续多轮对话使估算 token 逼近窗口 → 每轮前自动摘要触发、TUI 显示「正在压缩上下文...」→「已压缩，token 从 X 降至 Y」，对话持续不因上下文超长被 provider 拒绝。（验证：配小窗口如 `CLAUDE_CODE_MAX_CONTEXT_TOKENS=80000` 手动冒烟；自动侧由 `test_context_manager.py::test_auto_triggers_on_threshold` + `test_agent_context.py::test_emit_compact_events` 覆盖）【G1、F7/F24a、AC5/AC16】
-- [ ] **场景 2（大工具结果落盘可重读）**：一次返回 60000 字节以上的工具调用 → 对话中该结果变预览体（含字节数/头部/路径/重读提示四项）；`.mewcode/sessions/<id>/tool-results/<tool_use_id>` 下有完整原文；模型可用文件读取工具显式重读。（验证：`test_context_offload.py::test_single_result_offload` + AC1 端侧见待人工验证）【G4、F3/F4、AC1】
+- [ ] **场景 2（大工具结果落盘可重读）**：一次返回 60000 字节以上的工具调用 → 对话中该结果变预览体（含字节数/头部/路径/重读提示四项）；`.newcode/sessions/<id>/tool-results/<tool_use_id>` 下有完整原文；模型可用文件读取工具显式重读。（验证：`test_context_offload.py::test_single_result_offload` + AC1 端侧见待人工验证）【G4、F3/F4、AC1】
 - [ ] **场景 3（撞墙紧急压缩续命）**：provider 返回 `prompt_too_long` → TUI 显示「上下文撞墙，自动压缩中...」→ 压缩后用新历史重试成功、用户最新输入不丢。（验证：`test_agent_context.py::test_ptl_triggers_force_compact_retry_once` 自动侧；真实端侧见待人工验证）【G6、F25、AC17】
 
 ## 待人工验证（依赖真实 API / 真实终端，不混入「通过」）
@@ -65,7 +65,7 @@
   - **替代验证**：T31/T32/T34 用 mock provider 覆盖摘要流程、合并 user 消息、PTL 重试、agent 集成；真实 LLM 调用与真实 TUI 渲染未在 CI 验证。
   - **风险**：摘要请求真实 max_output_tokens=8192 是否够、真实 Anthropic user/assistant 交替约束、`<summary>` 标签解析稳定性 若有 bug 单测测不到。
   - **补验**：开发者按 task T36 步骤执行（配 80000 窗口触发自动摘要、大文件 ReadFile 落盘、/compact、/unknown、迁移命令回归）。
-- [ ] **真实大结果落盘 + 重读**——80KB 文件 ReadFile 后 `.mewcode/sessions/<id>/tool-results/` 出现对应文件、下一轮请求该结果展示预览体、模型可重读。
+- [ ] **真实大结果落盘 + 重读**——80KB 文件 ReadFile 后 `.newcode/sessions/<id>/tool-results/` 出现对应文件、下一轮请求该结果展示预览体、模型可重读。
   - **受阻原因**：需真实终端观察落盘与预览体。
   - **替代验证**：T30 `test_single_result_offload` 用 `tmp_path` 覆盖落盘与预览构造。
   - **风险**：真实 read_file 结果字节数、截断提示剥离的真实效果未在 CI 验证。

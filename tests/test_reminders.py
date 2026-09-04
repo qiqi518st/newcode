@@ -1,6 +1,6 @@
 """system-reminder 与规划模式按轮注入测试（ch05，spec F5/F6）"""
 
-from mewcode.prompt.reminders import (
+from newcode.prompt.reminders import (
     PLAN_MODE_FULL,
     PLAN_MODE_LEAN,
     plan_mode_reminder,

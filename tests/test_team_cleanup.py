@@ -13,12 +13,12 @@ from __future__ import annotations
 
 import asyncio
 
-import mewcode.team.manager as manager_mod
-from mewcode.team.cleanup import TEAM_CLEANUP_DISCIPLINE, guard_team_git_cleanup
-from mewcode.team.manager import Manager
-from mewcode.team.tools import new_team_create_tool, new_team_delete_tool
-from mewcode.team.types import BackendType
-from mewcode.tools.shell import ExecuteCommandTool
+import newcode.team.manager as manager_mod
+from newcode.team.cleanup import TEAM_CLEANUP_DISCIPLINE, guard_team_git_cleanup
+from newcode.team.manager import Manager
+from newcode.team.tools import new_team_create_tool, new_team_delete_tool
+from newcode.team.types import BackendType
+from newcode.tools.shell import ExecuteCommandTool
 
 
 class FakeWT:
@@ -63,7 +63,7 @@ def test_guard_blocks_existing_team(tmp_path, monkeypatch):
         for cmd in (
             "git branch -D worktree-team-demo+alice",
             "git branch -d worktree-team-demo+alice worktree-team-demo+bob",
-            "git worktree remove --force .mewcode/worktrees/team-demo+alice",
+            "git worktree remove --force .newcode/worktrees/team-demo+alice",
         ):
             hint = guard_team_git_cleanup(mgr, cmd)
             assert hint and "/team delete demo" in hint, cmd

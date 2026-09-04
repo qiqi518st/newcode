@@ -18,9 +18,9 @@ import shutil
 import httpx
 import pytest
 
-from mewcode.hooks import executor as executor_mod
-from mewcode.hooks.executor import Executor
-from mewcode.hooks.types import (
+from newcode.hooks import executor as executor_mod
+from newcode.hooks.executor import Executor
+from newcode.hooks.types import (
     Action,
     ActionType,
     AgentAction,

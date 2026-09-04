@@ -2,9 +2,9 @@
 
 from types import SimpleNamespace
 
-from mewcode.provider.anthropic import _to_usage as anthropic_usage
-from mewcode.provider.base import TokenUsage
-from mewcode.provider.openai import _to_usage as openai_usage
+from newcode.provider.anthropic import _to_usage as anthropic_usage
+from newcode.provider.base import TokenUsage
+from newcode.provider.openai import _to_usage as openai_usage
 
 
 def _anthropic_usage(has_cache=True):

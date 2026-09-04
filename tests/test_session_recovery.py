@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from mewcode.context.session import new_session_context
-from mewcode.session.recovery import recover_session, recover_session_async
+from newcode.context.session import new_session_context
+from newcode.session.recovery import recover_session, recover_session_async
 
 
 @pytest.fixture

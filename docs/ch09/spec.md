@@ -1,8 +1,8 @@
-# MewCode ch09 - 项目记忆与会话持久化 Spec
+# NewCode ch09 - 项目记忆与会话持久化 Spec
 
 ## 背景
 
-MewCode 当前每次启动都是全新会话。ch08 解决了单进程内长时间工作的上下文窗口问题，但进程退出后，对话历史、项目规范、用户偏好和未完成工作都会丢失。本章增加三套相互独立、分层协作的机制：项目指令文件提供静态规范，会话存档提供可恢复的工作记忆，自动笔记提供项目级和用户级长期记忆。
+NewCode 当前每次启动都是全新会话。ch08 解决了单进程内长时间工作的上下文窗口问题，但进程退出后，对话历史、项目规范、用户偏好和未完成工作都会丢失。本章增加三套相互独立、分层协作的机制：项目指令文件提供静态规范，会话存档提供可恢复的工作记忆，自动笔记提供项目级和用户级长期记忆。
 
 ## 目标
 
@@ -10,7 +10,7 @@ MewCode 当前每次启动都是全新会话。ch08 解决了单进程内长时�
 - **G2 会话可恢复**：JSONL 只追加写入，崩溃最多丢最后一行；恢复可处理坏行、孤立工具调用和 token 超限。
 - **G3 用户可选择恢复**：通过 `/resume` 进入支持搜索和上下键选择的历史会话列表；`/session` 提供会话管理子命令。
 - **G4 记忆自动演进**：Agent 自然完成一轮后异步调用 LLM 提取四类长期笔记，不阻塞下一条输入。
-- **G5 指令加载受控**：`MEWCODE.md` 支持安全 `@include`，有深度、环路、大小和路径边界限制。
+- **G5 指令加载受控**：`NEWCODE.md` 支持安全 `@include`，有深度、环路、大小和路径边界限制。
 - **G6 低侵入集成**：新增机制接入现有 `PromptBuilder`、`ConversationManager`、`ContextManager`、`Agent` 和 `REPL`，关闭记忆时保持原有行为。
 - **G7 磁盘可控**：启动后台清理超过 30 天的新格式会话，旧格式目录不误删。
 - **G8 ID 统一**：`YYYYMMDD-HHMMSS-xxxx` 同时用于 ch08 工具结果目录和本章会话目录。
@@ -19,11 +19,11 @@ MewCode 当前每次启动都是全新会话。ch08 解决了单进程内长时�
 
 ### 本章包含
 
-- 三层 `MEWCODE.md` 的发现、优先级拼接和 `@include` 展开。
-- `.mewcode/sessions/<session_id>/conversation.jsonl` 会话存档和 `tool-results/` 目录。
+- 三层 `NEWCODE.md` 的发现、优先级拼接和 `@include` 展开。
+- `.newcode/sessions/<session_id>/conversation.jsonl` 会话存档和 `tool-results/` 目录。
 - `/resume` 恢复 UI、`/session` 管理命令、JSONL 扫描和 30 天清理。
 - 坏行跳过、工具调用配对截断、一次性压缩和时间跨度提醒。
-- `.mewcode/memory/`、`~/.mewcode/memory/` 两级记忆、`MEMORY.md` 索引和异步更新。
+- `.newcode/memory/`、`~/.newcode/memory/` 两级记忆、`MEMORY.md` 索引和异步更新。
 - Prompt 模块、Conversation 回调和 Agent 生命周期的最小集成。
 
 ### 本章不包含
@@ -31,7 +31,7 @@ MewCode 当前每次启动都是全新会话。ch08 解决了单进程内长时�
 - 向量数据库、RAG、embedding 或本地相似度算法。
 - 团队同步、云端会话、多设备冲突合并。
 - 启动时自动恢复最近会话；启动永远创建新会话，恢复必须由用户触发。
-- 会话合并、会话原文重写、`MEWCODE.md` 热更新。
+- 会话合并、会话原文重写、`NEWCODE.md` 热更新。
 - 笔记全文搜索和记忆质量评分。
 - 独立会话 `meta` 文件；列表概要从 JSONL 扫描计算。
 
@@ -54,9 +54,9 @@ MewCode 当前每次启动都是全新会话。ch08 解决了单进程内长时�
 
 启动时按以下顺序扫描，存在且可读才加载：
 
-1. `<project_root>/MEWCODE.md`，项目级，优先级最高。
-2. `<project_root>/.mewcode/MEWCODE.md`，项目配置级。
-3. `~/.mewcode/MEWCODE.md`，用户级，优先级最低。
+1. `<project_root>/NEWCODE.md`，项目级，优先级最高。
+2. `<project_root>/.newcode/NEWCODE.md`，项目配置级。
+3. `~/.newcode/NEWCODE.md`，用户级，优先级最低。
 
 按上述顺序拼接，各层之间保留空行；高优先级内容始终在前。缺失文件静默跳过，空文件不产生内容，二进制文件（前 512 字节包含 `\x00`）跳过并记录警告。
 
@@ -66,10 +66,10 @@ MewCode 当前每次启动都是全新会话。ch08 解决了单进程内长时�
 
 #### F3 include 安全边界
 
-- 项目级文件的允许根边界为 `<project_root>`；用户级文件的允许根边界为 `~/.mewcode/`。
+- 项目级文件的允许根边界为 `<project_root>`；用户级文件的允许根边界为 `~/.newcode/`。
 - 规范化绝对路径后必须仍在允许根边界内；拒绝绝对路径、目录穿越、符号链接越界和不存在目标。
 - 使用 canonical path 的 `visited` 集合防环；同一文件在一次加载中最多展开一次。
-- 最大嵌套深度为 5 层，根 `MEWCODE.md` 算第 1 层。超过深度时保留原 include 行，并追加：`<!-- @include 超过最大嵌套深度，已跳过: <path> -->`。
+- 最大嵌套深度为 5 层，根 `NEWCODE.md` 算第 1 层。超过深度时保留原 include 行，并追加：`<!-- @include 超过最大嵌套深度，已跳过: <path> -->`。
 - 环路时跳过 include 行，并追加：`<!-- @include 检测到环路，已跳过: <path> -->`。
 - 越界时跳过 include 行，并追加：`<!-- @include 路径超出允许范围，已跳过: <path> -->`。
 - 单文件和展开总大小有硬上限；超限拒绝超出部分并记录来源和原因。
@@ -77,7 +77,7 @@ MewCode 当前每次启动都是全新会话。ch08 解决了单进程内长时�
 #### F4 Prompt 注入和缓存
 
 - 加载结果注入现有 `PromptBuilder` 的 `custom-instructions` 模块，priority 为 80。
-- 项目根、项目 `.mewcode`、用户级内容在同一个模块中按高到低拼接；模块内容不执行 Markdown 中的代码或命令。
+- 项目根、项目 `.newcode`、用户级内容在同一个模块中按高到低拼接；模块内容不执行 Markdown 中的代码或命令。
 - 指令加载在进程启动时执行一次，缓存到模块 content；运行期间不监听文件变化。
 - 加载失败时模块为空或包含可诊断警告，不阻塞启动。
 
@@ -87,11 +87,11 @@ MewCode 当前每次启动都是全新会话。ch08 解决了单进程内长时�
 
 - ID 格式为 `YYYYMMDD-HHMMSS-xxxx`，时间部分取进程启动时的本地时间，`xxxx` 为 4 个随机十六进制字符。
 - ID 生成必须处理同秒碰撞；旧格式 `<unix_ts>-<random>` 只保留兼容读取，不参与新建、列表或清理。
-- 当前仓库的实际集成入口是 `mewcode/context/session.py` 的 `_new_session_id()`、`SessionContext` 和 `SessionPaths`。
+- 当前仓库的实际集成入口是 `newcode/context/session.py` 的 `_new_session_id()`、`SessionContext` 和 `SessionPaths`。
 - 目录结构固定为：
 
 ```text
-<workspace>/.mewcode/sessions/<session_id>/
+<workspace>/.newcode/sessions/<session_id>/
 ├── conversation.jsonl
 └── tool-results/
 ```
@@ -116,7 +116,7 @@ MewCode 当前每次启动都是全新会话。ch08 解决了单进程内长时�
 
 #### F7 追加写入和压缩标记
 
-- 当前仓库 `mewcode/conversation/manager.py` 的 `ConversationManager.add_user`、`add_assistant`、`add_assistant_with_tool_calls`、`add_tool_results` 和 `replace_history` 都支持通过可选回调持久化。
+- 当前仓库 `newcode/conversation/manager.py` 的 `ConversationManager.add_user`、`add_assistant`、`add_assistant_with_tool_calls`、`add_tool_results` 和 `replace_history` 都支持通过可选回调持久化。
 - `on_append(message)` 在单条消息加入后调用；`on_replace(messages)` 在整体替换后调用。未设置回调时行为与 ch08 完全一致。
 - `replace_history` 被调用时先追加 `{"type":"compact","ts":<unix_ts>}`，再逐条追加压缩后的消息。原始 JSONL 不重写。
 - Writer 持有文件句柄和锁（asyncio 或线程锁均可）；append 时保证单行原子顺序，随后 `flush` + `fsync`。
@@ -126,8 +126,8 @@ MewCode 当前每次启动都是全新会话。ch08 解决了单进程内长时�
 
 #### F8 `/resume` 和 `/session`
 
-- `/resume` 仅在 `mewcode/tui/app.py` 的 `SessionState.IDLE` 可用；运行中输入时返回“请等待当前任务完成”，不得发送给 LLM。
-- `/resume` 扫描 `.mewcode/sessions/*/conversation.jsonl`，按最后有效消息时间倒序排列。
+- `/resume` 仅在 `newcode/tui/app.py` 的 `SessionState.IDLE` 可用；运行中输入时返回“请等待当前任务完成”，不得发送给 LLM。
+- `/resume` 扫描 `.newcode/sessions/*/conversation.jsonl`，按最后有效消息时间倒序排列。
 - 会话列表复用 Textual `OptionList` 或等价选择组件：上下键导航、输入搜索过滤、Enter 选择、Esc 取消；新增 `SessionState.RESUMING`。
 - 每项展示：首个 user 消息标题（最多 50 字符）、相对时间、第一条消息的模型标签、JSONL 文件大小。
 - `/session list` 展示同一列表；`/session resume <id>` 等价于选择指定会话；`/session new` 创建新会话；`/session path [id]` 定位文件；`/session clean` 清理过期会话；删除命令必须二次确认。
@@ -144,7 +144,7 @@ MewCode 当前每次启动都是全新会话。ch08 解决了单进程内长时�
 
 #### F10 过期清理
 
-- 启动时后台扫描 `.mewcode/sessions/`，解析新格式 ID 的时间部分；超过 30 天且不是当前活动 session 的目录整体删除，包括 `conversation.jsonl` 和 `tool-results/`。
+- 启动时后台扫描 `.newcode/sessions/`，解析新格式 ID 的时间部分；超过 30 天且不是当前活动 session 的目录整体删除，包括 `conversation.jsonl` 和 `tool-results/`。
 - 旧格式 ID、无法解析的目录和当前活动目录不删除，也不进入 `/resume` 列表。
 - 单个目录删除失败只记录并继续其他目录；清理不阻塞 TUI 启动。
 
@@ -154,8 +154,8 @@ MewCode 当前每次启动都是全新会话。ch08 解决了单进程内长时�
 
 四类固定类型为：`user_preference`、`correction_feedback`、`project_knowledge`、`reference_material`。
 
-- 项目级目录：`<workspace>/.mewcode/memory/`，只保存项目知识和参考资料。
-- 用户级目录：`~/.mewcode/memory/`，只保存用户偏好和纠正反馈。
+- 项目级目录：`<workspace>/.newcode/memory/`，只保存项目知识和参考资料。
+- 用户级目录：`~/.newcode/memory/`，只保存用户偏好和纠正反馈。
 - 每条笔记一个 Markdown 文件，文件名为 `<type>_<short_slug>.md`，slug 小写、下划线分隔；文件名和标题必须经过路径安全校验，不能由 LLM 写出目录分隔符。
 - 每级一个 `MEMORY.md` 索引，每行格式为 `- [<type>] <title> — <一句话描述>`。
 - 每条笔记 frontmatter 至少包含 `type`、`title`、`created`、`updated`、`scope`、`source_session` 和 `status`。
@@ -194,7 +194,7 @@ LLM 必须返回合法 JSON 数组，空数组表示无需更新：
 ### 第五层：生命周期集成
 
 - 启动顺序为：确定 workspace 和新 session ID -> 加载三层指令 -> 初始化两级记忆 -> 后台启动过期清理 -> 创建 Writer/ConversationManager -> 将两个 Prompt 模块传入现有 prompt 组装 -> 接受用户输入。
-- 当前实现应接入 `mewcode/prompt/builder.py` 的 `Section/PromptBuilder`，而不是硬编码一个不存在的 `build_system_prompt` 函数；如需增加门面函数，必须保持现有调用兼容。
+- 当前实现应接入 `newcode/prompt/builder.py` 的 `Section/PromptBuilder`，而不是硬编码一个不存在的 `build_system_prompt` 函数；如需增加门面函数，必须保持现有调用兼容。
 - `ConversationManager` 的持久化回调与 `ContextManager.replace_history` 兼容；压缩只修改内存窗口并追加 compact 记录，记忆更新只读快照、只写 memory 目录，两者可并发。
 - `/resume` 期间不允许新的 Agent run；Agent run 期间不进入恢复选择列表。
 
@@ -236,14 +236,14 @@ status: active
 
 ### 项目指令
 
-- **AC1 三层加载**：三份文件同时存在时，`custom-instructions` 内容顺序为项目根、项目 `.mewcode`、用户级；缺失层静默跳过。
+- **AC1 三层加载**：三份文件同时存在时，`custom-instructions` 内容顺序为项目根、项目 `.newcode`、用户级；缺失层静默跳过。
 - **AC2 include 展开**：独占行的相对 include 被替换，普通段落中的 `@include` 保持原文。
 - **AC3 include 安全**：6 层链不展开第 6 层；A -> B -> A 命中环路；`../../etc/passwd`、绝对路径、符号链接越界均被拒绝并追加对应警告。
-- **AC4 指令缓存**：启动后修改 `MEWCODE.md` 不改变当前进程已缓存的模块内容。
+- **AC4 指令缓存**：启动后修改 `NEWCODE.md` 不改变当前进程已缓存的模块内容。
 
 ### 会话存档
 
-- **AC5 ID 和目录**：新 session ID 匹配 `YYYYMMDD-HHMMSS-xxxx`，并创建 `.mewcode/sessions/<id>/conversation.jsonl` 和 `tool-results/`。
+- **AC5 ID 和目录**：新 session ID 匹配 `YYYYMMDD-HHMMSS-xxxx`，并创建 `.newcode/sessions/<id>/conversation.jsonl` 和 `tool-results/`。
 - **AC6 JSONL 写入**：一轮 user/assistant/tool 消息各自形成合法 JSON 行；第一条消息可展示模型。
 - **AC7 追加和崩溃安全**：已有行不被改写，模拟截断尾行后重新打开时前面的行全部可解析。
 - **AC8 compact 标记**：执行上下文压缩时先写 compact 标记，再写压缩后的消息。
@@ -279,7 +279,7 @@ status: active
 ## 已确认的设计决策
 
 - 不维护独立会话 meta 文件；概要直接扫描 JSONL。
-- 会话和项目记忆统一位于 workspace 的 `.mewcode/` 下。
+- 会话和项目记忆统一位于 workspace 的 `.newcode/` 下。
 - `/resume` 是恢复快捷命令，`/session` 负责完整会话管理并提供等价恢复入口。
 - 会话 ID 使用本地时间生成；JSONL 内的 `ts` 使用 Unix 秒，时间跨度计算使用 UTC。
 - 时间跨度提醒阈值为 6 小时，过期清理阈值为 30 天。

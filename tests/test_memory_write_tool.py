@@ -9,10 +9,10 @@ MEMORY 权限类别四档免确认。
 
 import asyncio
 
-from mewcode.memory.manager import MemoryManager
-from mewcode.permission.checker import PermissionChecker, categorize
-from mewcode.permission.modes import PermissionMode, ToolCategory
-from mewcode.tools.memory_write import WriteMemoryTool
+from newcode.memory.manager import MemoryManager
+from newcode.permission.checker import PermissionChecker, categorize
+from newcode.permission.modes import PermissionMode, ToolCategory
+from newcode.tools.memory_write import WriteMemoryTool
 
 
 def _tool(tmp_path):
@@ -123,7 +123,7 @@ def test_write_memory_category_allow_all_modes(tmp_path):
     tool, _ = _tool(tmp_path)
     assert categorize("write_memory", tool.read_only) == ToolCategory.MEMORY
     assert categorize("read_memory", True) == ToolCategory.READONLY
-    from mewcode.permission.modes import resolve_mode
+    from newcode.permission.modes import resolve_mode
 
     for mode in PermissionMode:
         decision = resolve_mode(mode, ToolCategory.MEMORY)
@@ -134,7 +134,7 @@ def test_write_memory_not_readonly_and_executes_through_checker(tmp_path):
     """防 bug：write_memory 必须非只读，且经 PermissionChecker 流水线应 ALLOW。"""
     tool, _manager = _tool(tmp_path)
     assert tool.read_only is False
-    from mewcode.provider.base import ToolCall
+    from newcode.provider.base import ToolCall
 
     checker = PermissionChecker.create(str(tmp_path))
     call = ToolCall(tool_name="write_memory", arguments={"type": "user_preference"})

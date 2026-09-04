@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import pytest
 
-from mewcode.agent import Agent
-from mewcode.conversation.manager import ConversationManager
-from mewcode.provider.base import StreamEvent, TokenUsage
-from mewcode.tools.registry import Registry
+from newcode.agent import Agent
+from newcode.conversation.manager import ConversationManager
+from newcode.provider.base import StreamEvent, TokenUsage
+from newcode.tools.registry import Registry
 
 pytestmark = pytest.mark.anyio
 
@@ -39,7 +39,7 @@ class DummyCatalog:
 
 async def test_run_fork_agent_uses_run_to_completion_and_counts_tokens():
     """F10 核心：_run_fork_agent 走 run_to_completion（共用主循环）+ observer 聚合 token。"""
-    from mewcode.skills import executor as exec_mod
+    from newcode.skills import executor as exec_mod
 
     agent = Agent(
         SeqProvider("out"),
@@ -58,13 +58,13 @@ async def test_run_fork_agent_uses_run_to_completion_and_counts_tokens():
 
 async def test_run_fork_agent_preserves_partial_text_on_max_turns():
     """达 maxTurns 保留部分文本（与 ch11 旧行为一致，不静默丢）。"""
-    from mewcode.skills import executor as exec_mod
+    from newcode.skills import executor as exec_mod
 
     class MaxTurnsAgent(Agent):
         async def run_to_completion(
             self, task, *, already_injected=False, observer=None
         ):
-            from mewcode.subagent.errors import MaxTurnsReached
+            from newcode.subagent.errors import MaxTurnsReached
 
             raise MaxTurnsReached("partial", None, 2)
 

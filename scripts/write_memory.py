@@ -3,10 +3,10 @@ from pathlib import Path
 
 sys.path.insert(0, r"D:\code\newcode")
 
-from mewcode.memory.models import MemoryOperation
-from mewcode.memory.store import MemoryStore
+from newcode.memory.models import MemoryOperation
+from newcode.memory.store import MemoryStore
 
-store = MemoryStore(Path.home() / ".mewcode" / "memory")
+store = MemoryStore(Path.home() / ".newcode" / "memory")
 op = MemoryOperation(
     action="create",
     level="user",

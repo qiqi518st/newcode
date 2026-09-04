@@ -1,4 +1,4 @@
-# MewCode ch11 - Skill 技能包系统 Checklist
+# NewCode ch11 - Skill 技能包系统 Checklist
 
 > 每一项通过运行代码或观察行为来验证，聚焦系统行为。验证方式写在括号里。
 > AC 编号与 spec.md 一一对应；AC22-AC24 为 plan 层补充的集成验证点。
@@ -46,9 +46,9 @@
 
 - [ ] **E2E1**（spec E2E1）: 用户说「帮我提交一下这些改动」→ Agent 经 `load_skill` 激活 commit（inline）→ 逐个 add + conventional commit → 完成后对话继续；`/skill list` 显示 commit 已激活（验证：集成测试 mock provider 断言 + 真实 TUI 人工确认）
 - [ ] **E2E2**（spec E2E2）: 用户说「审查一下这段代码」→ Agent 激活 review（fork）→ 独立对话五维审查 → 分级报告摘要回流主对话（验证：集成测试 mock provider 断言 + 真实 TUI 人工确认）
-- [ ] **E2E3**（spec E2E3）: `/skill off review` → review 从摘要与可用列表移除、立即失活；重启 MewCode → review 仍禁用（验证：自动断言 + 重启人工确认）
+- [ ] **E2E3**（spec E2E3）: `/skill off review` → review 从摘要与可用列表移除、立即失活；重启 NewCode → review 仍禁用（验证：自动断言 + 重启人工确认）
 - [ ] **E2E4**（spec E2E4）: 用户自己写 skill（改 `$ARGUMENTS` 替换模板），编辑源文件后不重启再触发即生效（验证：集成测试断言热更新 + 真实 TUI 人工确认）
-- [ ] **E2E5**（待人工验证）: T22 手动冒烟五步——`/help` 列出 `/test-skill` 与 `/skill` → `/test-skill` 加载 SOP → 编辑源文件不重启再触发新内容生效 → 自然语言触发 `load_skill` 后 env 出现完整 SOP → `/clear` 后 env 不再出现旧 SOP（验证：真实终端 `python -m mewcode` 人工操作；自动环境无法执行，替代验证见 AC6a/AC6b/AC20 单测覆盖）
+- [ ] **E2E5**（待人工验证）: T22 手动冒烟五步——`/help` 列出 `/test-skill` 与 `/skill` → `/test-skill` 加载 SOP → 编辑源文件不重启再触发新内容生效 → 自然语言触发 `load_skill` 后 env 出现完整 SOP → `/clear` 后 env 不再出现旧 SOP（验证：真实终端 `python -m newcode` 人工操作；自动环境无法执行，替代验证见 AC6a/AC6b/AC20 单测覆盖）
 
 ## 验收报告格式（阶段六使用）
 

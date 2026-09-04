@@ -7,14 +7,14 @@ import os
 
 import pytest
 
-from mewcode.context.constants import (
+from newcode.context.constants import (
     PREVIEW_MAX_BYTES,
     PREVIEW_MAX_LINES,
 )
-from mewcode.context.offload import _head_preview, build_preview, offload_and_snip
-from mewcode.context.replacement import ContentReplacementState
-from mewcode.context.session import SessionContext, SessionPaths
-from mewcode.provider.base import Message
+from newcode.context.offload import _head_preview, build_preview, offload_and_snip
+from newcode.context.replacement import ContentReplacementState
+from newcode.context.session import SessionContext, SessionPaths
+from newcode.provider.base import Message
 
 
 def _setup(tmp_path):
@@ -138,7 +138,7 @@ async def test_spill_failure_retryable(tmp_path, monkeypatch):
     state = ContentReplacementState()
 
     # monkeypatch _spill_to_path 抛 OSError
-    import mewcode.context.offload as offload_mod
+    import newcode.context.offload as offload_mod
 
     original = offload_mod._spill_to_path
 
@@ -166,7 +166,7 @@ async def test_three_step_atomic(tmp_path, monkeypatch):
     _sc, sp = _setup(tmp_path)
     state = ContentReplacementState()
 
-    import mewcode.context.offload as offload_mod
+    import newcode.context.offload as offload_mod
 
     def fail(path, content):
         raise OSError("fail")

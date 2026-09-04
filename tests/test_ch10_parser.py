@@ -4,7 +4,7 @@
 以及 dispatch 消费退化形态时拼出 `"未知命令: /, ..."` 悬空斜杠文案。
 """
 
-from mewcode.slash.parser import parse_command
+from newcode.slash.parser import parse_command
 
 CASES = [
     # (输入, 期望 (name, args) 或 None)

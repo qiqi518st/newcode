@@ -15,17 +15,17 @@ import json
 
 import pytest
 
-from mewcode.agent import Agent, EventType
-from mewcode.conversation.manager import ConversationManager
-from mewcode.permission.checker import PermissionChecker
-from mewcode.permission.modes import PermissionMode
-from mewcode.provider.base import StreamEvent, TokenUsage, ToolCall
-from mewcode.subagent.catalog import load_catalog
-from mewcode.subagent.config import AgentConfig
-from mewcode.subagent.launcher import SubAgentLauncher
-from mewcode.subagent.manager import Status, TaskManager
-from mewcode.tools.agent_tool import AgentTool
-from mewcode.tools.registry import Registry
+from newcode.agent import Agent, EventType
+from newcode.conversation.manager import ConversationManager
+from newcode.permission.checker import PermissionChecker
+from newcode.permission.modes import PermissionMode
+from newcode.provider.base import StreamEvent, TokenUsage, ToolCall
+from newcode.subagent.catalog import load_catalog
+from newcode.subagent.config import AgentConfig
+from newcode.subagent.launcher import SubAgentLauncher
+from newcode.subagent.manager import Status, TaskManager
+from newcode.tools.agent_tool import AgentTool
+from newcode.tools.registry import Registry
 
 pytestmark = pytest.mark.anyio
 
@@ -128,7 +128,7 @@ async def test_fork_background_notification_and_continue():
     assert conv[0].content == "父消息"
     assert any("<fork_boilerplate>" in m.content for m in conv if m.role == "user")
     # 完成通知可经 TUI drain 注入（模拟：build_task_notification 内容）
-    from mewcode.subagent.manager import build_task_notification
+    from newcode.subagent.manager import build_task_notification
 
     xml = build_task_notification(bt)
     assert "<task-notification>" in xml and "completed" in xml
@@ -166,7 +166,7 @@ async def test_agent_tool_via_main_loop_fork_path():
 
 async def test_nesting_guard_all_layers():
     """嵌套防护：子 Agent 工具集无 agent；Fork 子 Agent 调 agent 工具被标记检查拦截。"""
-    from mewcode.subagent.fork import FORK_BOILERPLATE
+    from newcode.subagent.fork import FORK_BOILERPLATE
 
     mgr = TaskManager()
     catalog = load_catalog("/tmp", AgentConfig())
@@ -182,7 +182,7 @@ async def test_nesting_guard_all_layers():
 
     # 层 2（B2 层 1）：主 conv 含 fork 标记 → AgentTool 拒绝
     parent.conv.add_user(FORK_BOILERPLATE + "t")
-    from mewcode.tools.agent_tool import AgentTool as AT
+    from newcode.tools.agent_tool import AgentTool as AT
 
     tool = AT(catalog, launcher, lambda: parent)
     r = await tool.execute({"prompt": "x", "subagent_type": "explore"})

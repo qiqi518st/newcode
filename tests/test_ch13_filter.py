@@ -9,7 +9,7 @@
 
 from __future__ import annotations
 
-from mewcode.tools.filter import (
+from newcode.tools.filter import (
     ASYNC_AGENT_ALLOWED_TOOLS,
     GLOBAL_DENY,
     TEAMMATE_EXTRA_TOOLS,

@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from mewcode.team.registry import AgentNameRegistry
+from newcode.team.registry import AgentNameRegistry
 
 
 def test_register_resolve_name_of():

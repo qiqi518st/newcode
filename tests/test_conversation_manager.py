@@ -3,8 +3,8 @@
 防 bug：get_messages_ref 返回内部引用、replace_history 隔离、_trim 拆 tool 对致 API 报错。
 """
 
-from mewcode.conversation.manager import ConversationManager
-from mewcode.provider.base import Message, ToolCall, ToolResult
+from newcode.conversation.manager import ConversationManager
+from newcode.provider.base import Message, ToolCall, ToolResult
 
 
 def test_get_messages_ref_same_object():

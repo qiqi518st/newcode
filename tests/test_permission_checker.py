@@ -5,17 +5,17 @@
 错配、extract_target 解析失败未安全拒绝、create 无法解析根时崩溃。
 """
 
-from mewcode.permission.checker import (
+from newcode.permission.checker import (
     PermissionChecker,
     categorize,
     extract_target,
     friendly_name,
     internal_name,
 )
-from mewcode.permission.modes import PermissionMode, ToolCategory
-from mewcode.permission.rules import Rule, RuleLayers
-from mewcode.permission.types import Decision
-from mewcode.provider.base import ToolCall
+from newcode.permission.modes import PermissionMode, ToolCategory
+from newcode.permission.rules import Rule, RuleLayers
+from newcode.permission.types import Decision
+from newcode.provider.base import ToolCall
 
 
 def _call(name: str, args: dict | None = None) -> ToolCall:
@@ -257,7 +257,7 @@ class TestCheckerMisc:
         # HITL「永久放行」写入本地级规则文件（F7）
         c = _checker(PermissionMode.DEFAULT, _empty_layers(), str(tmp_path))
         c.persist_local_allow(_call("execute_command", {"command": "git status"}))
-        local = tmp_path / ".mewcode" / "permissions.local.yaml"
+        local = tmp_path / ".newcode" / "permissions.local.yaml"
         assert local.exists()
         content = local.read_text(encoding="utf-8")
         assert "Bash(git status)" in content
@@ -275,7 +275,7 @@ class TestPersistMcpAllow:
         c.persist_local_allow(
             _call("mcp__github__create_issue", {"repo": "x", "title": "t"})
         )
-        local = tmp_path / ".mewcode" / "permissions.local.yaml"
+        local = tmp_path / ".newcode" / "permissions.local.yaml"
         assert local.exists()
         content = local.read_text(encoding="utf-8")
         # 裸工具名精确规则（无括号、无 target），匹配该工具全部调用
@@ -288,7 +288,7 @@ class TestPersistMcpAllow:
         call = _call("mcp__github__create_issue", {"repo": "x"})
         c.persist_local_allow(call)
         c.persist_local_allow(call)
-        local = tmp_path / ".mewcode" / "permissions.local.yaml"
+        local = tmp_path / ".newcode" / "permissions.local.yaml"
         content = local.read_text(encoding="utf-8")
         assert content.count("mcp__github__create_issue") == 1
 
@@ -296,11 +296,11 @@ class TestPersistMcpAllow:
         # 落盘的裸名规则可被 Rule.parse 重新加载并命中（重启后不再弹 Ask 的依据）
         import yaml
 
-        from mewcode.permission.rules import Rule, RuleSet
+        from newcode.permission.rules import Rule, RuleSet
 
         c = _checker(PermissionMode.DEFAULT, _empty_layers(), str(tmp_path))
         c.persist_local_allow(_call("mcp__github__create_issue", {}))
-        local = tmp_path / ".mewcode" / "permissions.local.yaml"
+        local = tmp_path / ".newcode" / "permissions.local.yaml"
         data = yaml.safe_load(local.read_text(encoding="utf-8"))
         entries = data["permissions"]["allow"]
         assert entries == ["mcp__github__create_issue"]
@@ -314,6 +314,6 @@ class TestPersistMcpAllow:
         # 防泛化破坏内置落盘：Bash 仍走带括号/转义路径
         c = _checker(PermissionMode.DEFAULT, _empty_layers(), str(tmp_path))
         c.persist_local_allow(_call("execute_command", {"command": "git push *"}))
-        local = tmp_path / ".mewcode" / "permissions.local.yaml"
+        local = tmp_path / ".newcode" / "permissions.local.yaml"
         content = local.read_text(encoding="utf-8")
         assert "Bash(git push [*])" in content

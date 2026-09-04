@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from mewcode.session.runtime import SessionRuntime
+from newcode.session.runtime import SessionRuntime
 
 pytestmark = pytest.mark.anyio
 

@@ -1,6 +1,6 @@
 """ch09 记忆读取闭环接线测试（spec F13 加载闭环的端到端）
 
-背景：read_file 被沙箱锁在工作区内，用户级记忆（~/.mewcode/memory/）读不到。
+背景：read_file 被沙箱锁在工作区内，用户级记忆（~/.newcode/memory/）读不到。
 新增 read_memory 工具后，Agent 在对话中看到索引行、判定相关、调用 read_memory
 拉取全文这条真实代码路径必须工作——工具结果要进入对话历史，供后续轮次使用。
 防 bug：工具未注册导致 Agent 收到「未知工具」；工具结果未回填对话导致下一轮
@@ -9,13 +9,13 @@ payload 里没有记忆内容。
 
 import pytest
 
-from mewcode.agent import Agent, EventType
-from mewcode.conversation.manager import ConversationManager
-from mewcode.memory.manager import MemoryManager
-from mewcode.memory.models import MemoryOperation
-from mewcode.provider.base import StreamEvent, TokenUsage, ToolCall
-from mewcode.tools.memory_read import ReadMemoryTool
-from mewcode.tools.registry import Registry
+from newcode.agent import Agent, EventType
+from newcode.conversation.manager import ConversationManager
+from newcode.memory.manager import MemoryManager
+from newcode.memory.models import MemoryOperation
+from newcode.provider.base import StreamEvent, TokenUsage, ToolCall
+from newcode.tools.memory_read import ReadMemoryTool
+from newcode.tools.registry import Registry
 
 
 class _MemProvider:
@@ -77,7 +77,7 @@ async def test_agent_reads_user_memory_via_tool(tmp_path):
         provider,
         conv,
         registry,
-        "你是 MewCode。长期记忆索引：\n"
+        "你是 NewCode。长期记忆索引：\n"
         "- [user_preference] python 水平 (user_preference_python-level.md) - 用户 python 水平：中级\n",
         "mock-env",
     )

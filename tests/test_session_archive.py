@@ -11,12 +11,12 @@ from pathlib import Path
 
 import pytest
 
-from mewcode.context.session import _new_session_id, is_valid_session_id
-from mewcode.session.archive import SessionArchive, clean_expired, list_sessions
+from newcode.context.session import _new_session_id, is_valid_session_id
+from newcode.session.archive import SessionArchive, clean_expired, list_sessions
 
 
 def _make_session(workspace: Path, session_id: str, lines: list[dict]) -> Path:
-    d = workspace / ".mewcode" / "sessions" / session_id
+    d = workspace / ".newcode" / "sessions" / session_id
     (d / "tool-results").mkdir(parents=True, exist_ok=True)
     with (d / "conversation.jsonl").open("w", encoding="utf-8") as fh:
         for line in lines:
@@ -109,7 +109,7 @@ def test_cleanup_keeps_recent(tmp_path):
     _make_session(tmp_path, sid, [{"role": "user", "content": "fresh", "ts": 1}])
     now = time.time() + 10 * 86400
     assert clean_expired(tmp_path, days=30, now=now) == []
-    assert (tmp_path / ".mewcode" / "sessions" / sid).exists()
+    assert (tmp_path / ".newcode" / "sessions" / sid).exists()
 
 
 def test_cleanup_keeps_active_session(tmp_path):
@@ -147,7 +147,7 @@ def test_cleanup_single_failure_continues(tmp_path, monkeypatch):
     monkeypatch.setattr("shutil.rmtree", flaky)
     removed = clean_expired(tmp_path, days=30, now=now)
     assert removed == [b]
-    assert (tmp_path / ".mewcode" / "sessions" / a).exists()
+    assert (tmp_path / ".newcode" / "sessions" / a).exists()
 
 
 def test_modified_at_falls_back_to_mtime(tmp_path):
@@ -163,5 +163,5 @@ def test_modified_at_falls_back_to_mtime(tmp_path):
 
 
 def test_no_sessions_dir_returns_empty(tmp_path):
-    """防 bug：没有 .mewcode/sessions 时返回空列表而非报错。"""
+    """防 bug：没有 .newcode/sessions 时返回空列表而非报错。"""
     assert list_sessions(tmp_path) == []

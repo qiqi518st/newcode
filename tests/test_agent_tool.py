@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import pytest
 
-from mewcode.subagent.launcher import LaunchResult
-from mewcode.subagent.types import AgentDefinition, Source
-from mewcode.tools.agent_tool import AgentTool
-from mewcode.worktree.config import WorktreesConfig
-from mewcode.worktree.manager import Manager
+from newcode.subagent.launcher import LaunchResult
+from newcode.subagent.types import AgentDefinition, Source
+from newcode.tools.agent_tool import AgentTool
+from newcode.worktree.config import WorktreesConfig
+from newcode.worktree.manager import Manager
 
 pytestmark = pytest.mark.anyio
 
@@ -149,7 +149,7 @@ async def test_fork_path_unaffected(git_repo):
 
 async def test_dynamic_isolation_param_routes_to_worktree(git_repo):
     """F9：调用 isolation='worktree' 动态覆盖角色（角色未声明）→ worktree 分支。"""
-    from mewcode.permission.modes import PermissionMode
+    from newcode.permission.modes import PermissionMode
 
     m = Manager(str(git_repo), WorktreesConfig())
     launcher = _FakeLauncher()
@@ -165,7 +165,7 @@ async def test_dynamic_isolation_param_routes_to_worktree(git_repo):
     # 隔离构造参数：acceptEdits + 沙箱根=worktree（worktree 内写自动放行）
     _role_name, pm, root = launcher.made_calls[0]
     assert pm == PermissionMode.ACCEPT_EDITS
-    assert "/.mewcode/worktrees/agent-a" in root
+    assert "/.newcode/worktrees/agent-a" in root
 
 
 async def test_dynamic_isolation_none_overrides_role(git_repo):

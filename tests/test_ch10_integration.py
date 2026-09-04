@@ -12,12 +12,12 @@ import asyncio
 
 from rich.console import Console
 
-from mewcode.agent.events import Event, EventType, StopReason
-from mewcode.session.archive import SessionArchive
-from mewcode.session.runtime import SessionRuntime
-from mewcode.slash import CommandRegistry
-from mewcode.slash.commands import register_all
-from mewcode.tui.app import REPL, AppMode, SessionState
+from newcode.agent.events import Event, EventType, StopReason
+from newcode.session.archive import SessionArchive
+from newcode.session.runtime import SessionRuntime
+from newcode.slash import CommandRegistry
+from newcode.slash.commands import register_all
+from newcode.tui.app import REPL, AppMode, SessionState
 
 
 def _reg() -> CommandRegistry:
@@ -29,7 +29,7 @@ def _reg() -> CommandRegistry:
 def test_startup_conflict_detection():
     """防 AC15：注册期重复名字必须抛 RuntimeError 且消息含冲突名。"""
     reg = _reg()
-    from mewcode.slash.registry import CommandDef, CommandKind
+    from newcode.slash.registry import CommandDef, CommandKind
 
     duplicate = CommandDef(
         name="help",
@@ -46,7 +46,7 @@ def test_startup_conflict_detection():
 
 def _make_repl(agent, runtime):
     """最小 REPL 桩：接真实 RichUIController（同 test_ch10_tui._make_repl）。"""
-    from mewcode.tui.app import RichUIController
+    from newcode.tui.app import RichUIController
 
     repl = object.__new__(REPL)
     repl._console = Console(record=True, width=80)
@@ -56,7 +56,7 @@ def _make_repl(agent, runtime):
     repl.session_runtime = runtime
     repl.session_archive = None
     repl.memory_manager = None
-    from mewcode.slash import CommandContext
+    from newcode.slash import CommandContext
 
     repl.command_ctx = CommandContext(
         registry=repl.command_registry,

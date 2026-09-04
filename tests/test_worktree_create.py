@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from mewcode.worktree.config import WorktreesConfig
-from mewcode.worktree.manager import Manager
+from newcode.worktree.config import WorktreesConfig
+from newcode.worktree.manager import Manager
 
 pytestmark = pytest.mark.anyio
 
@@ -42,14 +42,14 @@ def _git(repo: Path, *args: str) -> str:
 
 
 async def test_setup_a_copies_local_config(git_repo):
-    """AC5：主仓库 .mewcode/config.local.yaml → worktree 内同位置出现。"""
-    cfg = git_repo / ".mewcode" / "config.local.yaml"
+    """AC5：主仓库 .newcode/config.local.yaml → worktree 内同位置出现。"""
+    cfg = git_repo / ".newcode" / "config.local.yaml"
     cfg.parent.mkdir(parents=True, exist_ok=True)
     cfg.write_text("worktrees:\n  enable: false\n", encoding="utf-8")
     m = _manager(git_repo)
     await m.create("alice", "HEAD", manual=True)
     copied = (
-        git_repo / ".mewcode" / "worktrees" / "alice" / ".mewcode" / "config.local.yaml"
+        git_repo / ".newcode" / "worktrees" / "alice" / ".newcode" / "config.local.yaml"
     )
     assert copied.exists()
     assert "enable: false" in copied.read_text(encoding="utf-8")
@@ -62,7 +62,7 @@ async def test_setup_b_hooks_husky(git_repo):
     (husky / "pre-commit").write_text("#!/bin/sh\n", encoding="utf-8")
     m = _manager(git_repo)
     await m.create("alice", "HEAD", manual=True)
-    wt = git_repo / ".mewcode" / "worktrees" / "alice"
+    wt = git_repo / ".newcode" / "worktrees" / "alice"
     got = _git(wt, "config", "--get", "core.hooksPath")
     assert got == str(husky.resolve())
 
@@ -73,7 +73,7 @@ async def test_setup_c_symlink_node_modules(git_repo):
     (git_repo / "node_modules" / "pkg").write_text("x\n", encoding="utf-8")
     m = _manager(git_repo)
     await m.create("alice", "HEAD", manual=True)
-    link = git_repo / ".mewcode" / "worktrees" / "alice" / "node_modules"
+    link = git_repo / ".newcode" / "worktrees" / "alice" / "node_modules"
     assert link.is_symlink()
     assert (link / "pkg").read_text(encoding="utf-8") == "x\n"
 
@@ -85,15 +85,15 @@ async def test_setup_d_worktreeinclude(git_repo):
     (git_repo / ".env").write_text("SECRET=1\n", encoding="utf-8")
     m = _manager(git_repo)
     await m.create("alice", "HEAD", manual=True)
-    env = git_repo / ".mewcode" / "worktrees" / "alice" / ".env"
+    env = git_repo / ".newcode" / "worktrees" / "alice" / ".env"
     assert env.exists()
     assert env.read_text(encoding="utf-8") == "SECRET=1\n"
 
 
 async def test_setup_failures_do_not_block_create(git_repo):
     """N2：任一 setup 子步骤失败仅警告，不中断 create。"""
-    # 无 .husky / 无 node_modules / 无 .worktreeinclude / 无 .mewcode → 全部跳过
+    # 无 .husky / 无 node_modules / 无 .worktreeinclude / 无 .newcode → 全部跳过
     m = _manager(git_repo)
     wt = await m.create("alice", "HEAD", manual=True)
     assert wt.branch == "worktree-alice"
-    assert (git_repo / ".mewcode" / "worktrees" / "alice").is_dir()
+    assert (git_repo / ".newcode" / "worktrees" / "alice").is_dir()

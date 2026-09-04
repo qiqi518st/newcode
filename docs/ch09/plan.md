@@ -1,4 +1,4 @@
-# MewCode ch09 - 项目记忆与会话持久化技术设计
+# NewCode ch09 - 项目记忆与会话持久化技术设计
 
 ## 架构概览
 
@@ -7,14 +7,14 @@
     main.py
       |
       +-- InstructionLoader ----------------> PromptBuilder
-      |       (三层 MEWCODE.md + include)      custom-instructions (80)
+      |       (三层 NEWCODE.md + include)      custom-instructions (80)
       |
       +-- MemoryManager ---------------------> PromptBuilder
       |       (MEMORY.md + note files)          long-term-memory (100)
       |
       +-- SessionRuntime
       |       +-- SessionWriter <------------ ConversationManager callbacks
-      |       +-- SessionArchive ------------> .mewcode/sessions/<id>/conversation.jsonl
+      |       +-- SessionArchive ------------> .newcode/sessions/<id>/conversation.jsonl
       |       +-- SessionRecovery ------------> ConversationManager + ContextManager
       |
       +-- Agent.run -------------------------> MemoryManager.update_async()
@@ -28,27 +28,27 @@
 
 | 模块 | 文件 | 职责 | 依赖 |
 |---|---|---|---|
-| 指令加载 | mewcode/instructions/loader.py | 发现三层 MEWCODE.md、展开 include、校验路径/大小 | pathlib、re、os |
-| 记忆模型 | mewcode/memory/models.py | 定义记忆类型、frontmatter、更新操作和索引条目 | dataclasses、datetime |
-| 记忆存储 | mewcode/memory/store.py | 管理单级笔记文件、MEMORY.md 和作用域锁 | pathlib、threading、models.py |
-| 记忆管理 | mewcode/memory/manager.py | 编排两级 memory、索引拼接、结构化 LLM 更新 | Provider、store.py |
-| 会话 Writer | mewcode/session/writer.py | JSONL 追加、compact 记录、锁、flush/fsync、close | Message、SessionContext |
-| 会话存档 | mewcode/session/archive.py | 会话扫描、概要计算、ID 校验、30 天清理 | pathlib、json |
-| 会话恢复 | mewcode/session/recovery.py | 坏行、compact 起点、工具配对、token 和时间降级 | Message、ContextManager |
-| 会话门面 | mewcode/session/runtime.py | 绑定当前 session、切换 Writer/Conversation、关闭后台任务 | writer、archive、recovery |
+| 指令加载 | newcode/instructions/loader.py | 发现三层 NEWCODE.md、展开 include、校验路径/大小 | pathlib、re、os |
+| 记忆模型 | newcode/memory/models.py | 定义记忆类型、frontmatter、更新操作和索引条目 | dataclasses、datetime |
+| 记忆存储 | newcode/memory/store.py | 管理单级笔记文件、MEMORY.md 和作用域锁 | pathlib、threading、models.py |
+| 记忆管理 | newcode/memory/manager.py | 编排两级 memory、索引拼接、结构化 LLM 更新 | Provider、store.py |
+| 会话 Writer | newcode/session/writer.py | JSONL 追加、compact 记录、锁、flush/fsync、close | Message、SessionContext |
+| 会话存档 | newcode/session/archive.py | 会话扫描、概要计算、ID 校验、30 天清理 | pathlib、json |
+| 会话恢复 | newcode/session/recovery.py | 坏行、compact 起点、工具配对、token 和时间降级 | Message、ContextManager |
+| 会话门面 | newcode/session/runtime.py | 绑定当前 session、切换 Writer/Conversation、关闭后台任务 | writer、archive、recovery |
 
 ### 现有模块修改
 
 | 文件 | 修改职责 |
 |---|---|
-| mewcode/context/session.py | 将 _new_session_id 改为 YYYYMMDD-HHMMSS-xxxx；SessionContext 增加 session_dir 和 conversation_path；保留 spill_dir 兼容 ch08 |
-| mewcode/conversation/manager.py | 构造器增加可选 on_append、on_replace；追加和 replace_history 触发回调 |
-| mewcode/prompt/builder.py | 保持 Section/PromptBuilder API；增加按名称替换或构造两个新 section 的窄辅助函数 |
-| mewcode/agent/agent.py | 自然 Done 后发出可选 on_turn_complete；异常、取消和最大轮数不误记为自然完成 |
-| mewcode/tui/app.py | 增加 RESUMING 状态、/resume、/session、/memory 及 OptionList/搜索/确认交互 |
-| mewcode/main.py | 启动装配 InstructionLoader、MemoryManager、SessionRuntime 和后台清理 |
-| mewcode/context/manager.py | 保持 replace_history 压缩路径，由 Conversation 回调追加 compact 和消息 |
-| mewcode/provider/base.py | 不改变 Message、ToolCall、ToolResult；增加持久化边界的序列化/反序列化适配 |
+| newcode/context/session.py | 将 _new_session_id 改为 YYYYMMDD-HHMMSS-xxxx；SessionContext 增加 session_dir 和 conversation_path；保留 spill_dir 兼容 ch08 |
+| newcode/conversation/manager.py | 构造器增加可选 on_append、on_replace；追加和 replace_history 触发回调 |
+| newcode/prompt/builder.py | 保持 Section/PromptBuilder API；增加按名称替换或构造两个新 section 的窄辅助函数 |
+| newcode/agent/agent.py | 自然 Done 后发出可选 on_turn_complete；异常、取消和最大轮数不误记为自然完成 |
+| newcode/tui/app.py | 增加 RESUMING 状态、/resume、/session、/memory 及 OptionList/搜索/确认交互 |
+| newcode/main.py | 启动装配 InstructionLoader、MemoryManager、SessionRuntime 和后台清理 |
+| newcode/context/manager.py | 保持 replace_history 压缩路径，由 Conversation 回调追加 compact 和消息 |
+| newcode/provider/base.py | 不改变 Message、ToolCall、ToolResult；增加持久化边界的序列化/反序列化适配 |
 
 ### 测试模块
 
@@ -56,9 +56,9 @@
 
 ### 文件组织
 
-仓库使用根目录下的 mewcode 包，不引入 src/ 前缀：
+仓库使用根目录下的 newcode 包，不引入 src/ 前缀：
 
-    mewcode/
+    newcode/
     ├── instructions/
     │   ├── __init__.py
     │   └── loader.py
@@ -185,18 +185,18 @@ MemoryStore 只管理一个作用域目录；MemoryManager 负责选择 user/pro
 
 ## 核心接口
 
-    # mewcode/context/session.py
+    # newcode/context/session.py
     def _new_session_id(started_at: datetime | None = None) -> str: ...
     def new_session_context(workspace: str) -> SessionContext: ...
 
-    # mewcode/instructions/loader.py
+    # newcode/instructions/loader.py
     class InstructionLoader:
         def __init__(self, project_root: str | Path,
                      user_home: str | Path | None = None,
                      max_depth: int = 5) -> None: ...
         def load(self) -> tuple[str, list[InstructionDocument]]: ...
 
-    # mewcode/session/writer.py
+    # newcode/session/writer.py
     class SessionWriter:
         def __init__(self, session_dir: str) -> None: ...
         @classmethod
@@ -209,7 +209,7 @@ MemoryStore 只管理一个作用域目录；MemoryManager 负责选择 user/pro
         def __enter__(self) -> "SessionWriter": ...
         def __exit__(self, exc_type, exc, tb) -> None: ...
 
-    # mewcode/session/archive.py
+    # newcode/session/archive.py
     class SessionArchive:
         def list(self) -> list[SessionSummary]: ...
         def read(self, session_id: str) -> list[dict[str, object]]: ...
@@ -217,18 +217,18 @@ MemoryStore 只管理一个作用域目录；MemoryManager 负责选择 user/pro
                         active_session_id: str | None = None) -> CleanupResult: ...
         def path_for(self, session_id: str) -> Path: ...
 
-    # mewcode/session/__init__.py 提供给 TUI 的函数式门面
+    # newcode/session/__init__.py 提供给 TUI 的函数式门面
     def list_sessions(sessions_dir: str) -> list[SessionInfo]: ...
     def load_session(session_dir: str) -> list[Message]: ...
     def clean_expired(sessions_dir: str, max_age: timedelta,
                       active_session_id: str | None = None) -> CleanupResult: ...
 
-    # mewcode/session/recovery.py
+    # newcode/session/recovery.py
     class SessionRecovery:
         def recover(self, records: Iterable[dict[str, object]], *, now: datetime,
                     context_window: int, compressor: Callable[..., Awaitable[list[Message]]]) -> RecoveryResult: ...
 
-    # mewcode/memory/manager.py
+    # newcode/memory/manager.py
     class MemoryManager:
         def load_indexes(self) -> str: ...
         def list_notes(self, scope: str = "all") -> list[MemoryNote]: ...
@@ -238,7 +238,7 @@ MemoryStore 只管理一个作用域目录；MemoryManager 负责选择 user/pro
         def edit_path(self, filename: str, scope: str) -> Path: ...
         def clear(self, scope: Literal["user", "project", "all"]) -> int: ...
 
-    # mewcode/memory/store.py
+    # newcode/memory/store.py
     class MemoryStore:
         def apply(self, actions: list[MemoryOperation], source_session: str) -> None: ...
 
@@ -268,7 +268,7 @@ on_replace 的顺序固定为 compact 行 -> 新消息行；如果任一步失�
 
 ### session.archive
 
-- iter_session_dirs 只接受 .mewcode/sessions/<id>/conversation.jsonl。
+- iter_session_dirs 只接受 .newcode/sessions/<id>/conversation.jsonl。
 - parse_session_id 只接受新格式；旧格式返回 None。
 - summarize_file 逐行解析，统计消息数、首个 user 标题、模型和最后有效 ts；坏行计入 diagnostics。
 - read 保留记录顺序，跳过 schema 不合法的行；尾部半行自然由 JSONDecodeError 跳过。
@@ -380,7 +380,7 @@ RESUMING 状态期间只处理搜索、上下键、Enter、Esc；Agent run 期�
 
 | 决策点 | 选择 | 理由 |
 |---|---|---|
-| 会话目录 | .mewcode/sessions/<id>/conversation.jsonl | 与 ch08 工具结果目录共享 session 生命周期 |
+| 会话目录 | .newcode/sessions/<id>/conversation.jsonl | 与 ch08 工具结果目录共享 session 生命周期 |
 | 会话列表概要 | 流式扫描 JSONL，不维护 meta | 单一事实来源，符合已确认约束 |
 | ID 时间 | 生成使用本地时间，记录 ts 使用 Unix 秒 | 满足展示格式，同时用 Unix ts 做可靠时间计算 |
 | 指令优先级 | 单一 `custom-instructions` section 为 80，来源按项目根、项目配置、用户级拼接 | 保持 spec 的模块优先级，同时保留来源顺序 |
@@ -388,7 +388,7 @@ RESUMING 状态期间只处理搜索、上下键、Enter、Esc；Agent run 期�
 | 工具消息 | 保持现有 Message 字段和 tool ID | 防止 Anthropic/OpenAI 工具配对语义被破坏 |
 | Writer 锁 | 同步 threading.Lock | ConversationManager 追加接口同步，避免异步改变顺序 |
 | 压缩恢复 | 最多一次 LLM 压缩，失败后整组降级 | 保护工具调用对并控制恢复延迟 |
-| 指令包边界 | 独立 mewcode/instructions 包 | 指令加载是安全边界，不与长期记忆 CRUD 混合 |
+| 指令包边界 | 独立 newcode/instructions 包 | 指令加载是安全边界，不与长期记忆 CRUD 混合 |
 | 记忆作用域 | type 到 scope 的本地白名单 | 防止跨项目泄漏 |
 | 旧 session | 不展示、不清理、只读保留 | 避免误删 ch08 遗留数据 |
 

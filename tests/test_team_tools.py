@@ -11,14 +11,14 @@ from __future__ import annotations
 import asyncio
 import json
 
-import mewcode.team.manager as manager_mod
-from mewcode.agent.team_hook import (
+import newcode.team.manager as manager_mod
+from newcode.agent.team_hook import (
     TeammateContext,
     current_teammate,
     set_current_teammate,
 )
-from mewcode.team.manager import Manager
-from mewcode.team.tools import (
+from newcode.team.manager import Manager
+from newcode.team.tools import (
     new_send_message_tool,
     new_task_create_tool,
     new_task_get_tool,
@@ -27,8 +27,8 @@ from mewcode.team.tools import (
     new_team_create_tool,
     new_team_delete_tool,
 )
-from mewcode.team.types import BackendType, TeammateInfo
-from mewcode.tools.filter import GLOBAL_DENY, TEAMMATE_EXTRA_TOOLS
+from newcode.team.types import BackendType, TeammateInfo
+from newcode.tools.filter import GLOBAL_DENY, TEAMMATE_EXTRA_TOOLS
 
 
 def _make_mgr(tmp_path, monkeypatch):

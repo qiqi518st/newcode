@@ -7,7 +7,7 @@ validate_tools 漏报引用不存在工具的 Skill（F2.7）；disabled 不落�
 
 from pathlib import Path
 
-from mewcode.skills.catalog import Catalog
+from newcode.skills.catalog import Catalog
 
 
 def _skill_md(name: str, description: str, body: str = "BODY") -> str:
@@ -23,11 +23,11 @@ class _FakeReg:
 
 
 def _make_roots(tmp_path: Path):
-    """构造 项目级(.mewcode/skills) / 用户级(直接) / 内置级 三个根，返回 (proj, user, builtin)。"""
+    """构造 项目级(.newcode/skills) / 用户级(直接) / 内置级 三个根，返回 (proj, user, builtin)。"""
     proj = tmp_path / "proj"
     user = tmp_path / "user"
     builtin = tmp_path / "builtin"
-    (proj / ".mewcode" / "skills").mkdir(parents=True)
+    (proj / ".newcode" / "skills").mkdir(parents=True)
     user.mkdir()
     builtin.mkdir()
     return proj, user, builtin
@@ -45,7 +45,7 @@ def test_three_level_load(tmp_path):
 
 def test_project_overrides_user_overrides_builtin(tmp_path):
     proj, user, builtin = _make_roots(tmp_path)
-    (proj / ".mewcode" / "skills" / "dup.md").write_text(
+    (proj / ".newcode" / "skills" / "dup.md").write_text(
         _skill_md("dup", "project level", "PROJECT BODY"), encoding="utf-8"
     )
     (user / "dup.md").write_text(

@@ -8,8 +8,8 @@
 
 from __future__ import annotations
 
-from mewcode.config.features import FeaturesConfig
-from mewcode.coordinator import (
+from newcode.config.features import FeaturesConfig
+from newcode.coordinator import (
     allowed_tools,
     env_truthy,
     is_enabled,
@@ -20,12 +20,12 @@ from mewcode.coordinator import (
 def test_double_lock(monkeypatch):
     cfg_on = FeaturesConfig(enable=True, coordinator_mode=True)
     cfg_off = FeaturesConfig(enable=True, coordinator_mode=False)
-    monkeypatch.delenv("MEWCODE_COORDINATOR_MODE", raising=False)
+    monkeypatch.delenv("NEWCODE_COORDINATOR_MODE", raising=False)
     assert not is_enabled(cfg_on)  # flag 开 env 关 → False
-    monkeypatch.setenv("MEWCODE_COORDINATOR_MODE", "1")
+    monkeypatch.setenv("NEWCODE_COORDINATOR_MODE", "1")
     assert is_enabled(cfg_on)  # 双开 → True
     assert not is_enabled(cfg_off)  # env 开 flag 关 → False
-    monkeypatch.setenv("MEWCODE_COORDINATOR_MODE", "0")
+    monkeypatch.setenv("NEWCODE_COORDINATOR_MODE", "0")
     assert not is_enabled(cfg_on)
 
 

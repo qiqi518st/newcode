@@ -1,4 +1,4 @@
-# MewCode 工具系统 — 技术设计 (plan.md)
+# NewCode 工具系统 — 技术设计 (plan.md)
 
 > 基于已批准的 spec.md。本文档与语言相关（Python 3.12+）。SDK 调用方式已对 `anthropic`（`AsyncAnthropic`，支持 tool_use streaming）、`openai`（`AsyncOpenAI`，支持 chat.completions tool_calls streaming）实测核对。
 
@@ -6,13 +6,13 @@
 
 在 ch02「provider → conversation → tui」三件套之上，新增两个包并扩展三处：
 
-- **`mewcode.tool`（新建）**：统一工具抽象 `Tool`、执行结果 `Result`、注册中心 `Registry`、6 个核心工具。零外部依赖，不感知 LLM 协议。
-- **`mewcode.agent`（新建）**：承载「单轮闭环」编排——请求#1（带工具）→ 收集工具调用 → 注册中心执行 → 结果回灌进 `Conversation` → 请求#2（续答）→ 最终文本 → 停。对外吐出一条 `Event` async generator 供 TUI 渲染。只依赖 `llm`、`tool`、`conversation`，不 import anthropic/openai，保持协议无关。
-- **`mewcode.llm`（扩展）**：`Message`/`StreamEvent` 增加工具字段；新增协议无关类型 `ToolCall`/`ToolResult`/`ToolDefinition` 与 `ROLE_TOOL` 常量；`Provider.stream` 增加 `tools` 参数；两个适配器注入工具定义、解析流式工具调用、回灌工具结果。
-- **`mewcode.conversation`（扩展）**：新增「assistant 工具调用回合」与「工具结果回合」的追加方法。
-- **`mewcode.prompt`（扩展）**：`SYSTEM_PROMPT` 增补 Agent 角色与工具使用约定。
-- **`mewcode.tui`（扩展）**：`submit` 改走 `Agent.run`；事件消费 task 处理工具事件；渲染 Claude Code 风格工具行与执行指示。
-- **`mewcode/main.py`（扩展）**：构造 `tool.new_default_registry()` 并注入 `REPL`。
+- **`newcode.tool`（新建）**：统一工具抽象 `Tool`、执行结果 `Result`、注册中心 `Registry`、6 个核心工具。零外部依赖，不感知 LLM 协议。
+- **`newcode.agent`（新建）**：承载「单轮闭环」编排——请求#1（带工具）→ 收集工具调用 → 注册中心执行 → 结果回灌进 `Conversation` → 请求#2（续答）→ 最终文本 → 停。对外吐出一条 `Event` async generator 供 TUI 渲染。只依赖 `llm`、`tool`、`conversation`，不 import anthropic/openai，保持协议无关。
+- **`newcode.llm`（扩展）**：`Message`/`StreamEvent` 增加工具字段；新增协议无关类型 `ToolCall`/`ToolResult`/`ToolDefinition` 与 `ROLE_TOOL` 常量；`Provider.stream` 增加 `tools` 参数；两个适配器注入工具定义、解析流式工具调用、回灌工具结果。
+- **`newcode.conversation`（扩展）**：新增「assistant 工具调用回合」与「工具结果回合」的追加方法。
+- **`newcode.prompt`（扩展）**：`SYSTEM_PROMPT` 增补 Agent 角色与工具使用约定。
+- **`newcode.tui`（扩展）**：`submit` 改走 `Agent.run`；事件消费 task 处理工具事件；渲染 Claude Code 风格工具行与执行指示。
+- **`newcode/main.py`（扩展）**：构造 `tool.new_default_registry()` 并注入 `REPL`。
 
 依赖方向（无环）：
 ```
@@ -23,7 +23,7 @@ tui → {agent, tool, conversation, llm, prompt}
 llm → {config, prompt}
 ```
 
-> **包名映射说明**：`mewcode.llm` 对应现有代码中的 `mewcode/provider/` 目录，本次不强制重命名，新增类型与扩展逻辑仍放在 `mewcode/provider/` 中；`mewcode.tool` 对应新建目录 `mewcode/tools/`；`mewcode.agent` 对应新建目录 `mewcode/agent/`。
+> **包名映射说明**：`newcode.llm` 对应现有代码中的 `newcode/provider/` 目录，本次不强制重命名，新增类型与扩展逻辑仍放在 `newcode/provider/` 中；`newcode.tool` 对应新建目录 `newcode/tools/`；`newcode.agent` 对应新建目录 `newcode/agent/`。
 
 ---
 
@@ -132,7 +132,7 @@ class Event:
 
 ## 模块设计
 
-### `mewcode.tool` 包
+### `newcode.tool` 包
 
 **职责**：定义工具协议、实现六个核心工具、提供注册中心。零外部依赖，不感知 LLM 协议。
 
@@ -207,7 +207,7 @@ class Registry:
 - **路径遍历防护**：所有涉及文件路径的工具，先 `os.path.abspath()` 解析，再检查是否在项目工作目录（`os.getcwd()`）内。越界则返回 `status="error", error="路径超出项目范围"`。
 - **超时**：`asyncio.wait_for()` 包裹执行体，超时后取消并返回超时错误。
 
-### `mewcode.agent` 包
+### `newcode.agent` 包
 
 **职责**：单轮闭环编排。接收用户问题，输出统一 `Event` async generator。
 
@@ -282,7 +282,7 @@ run(user_input):
 - 不循环：请求#2 中即使有 tool_call 也不处理（spec 明确不做 Agent Loop）。
 - TUI 和单次调用共用同一 `Agent.run()`，各自消费 `Event` 流即可。
 
-### `mewcode.llm` 包（扩展现有 `mewcode/provider/`）
+### `newcode.llm` 包（扩展现有 `newcode/provider/`）
 
 #### `llm.base` 扩展
 
@@ -368,7 +368,7 @@ run(user_input):
   }
   ```
 
-### `mewcode.conversation` 包（扩展）
+### `newcode.conversation` 包（扩展）
 
 #### `conversation.manager` 扩展
 
@@ -406,7 +406,7 @@ def add_tool_result(self, result: ToolResult) -> None:
 - `get_context()` 透传这些字段。
 - Provider 适配器的 `stream()` 方法内部将 `Message` 列表转译为 SDK 所需的字典格式时，识别 `tool_calls` 和 `tool_call_id` 字段并正确构造。
 
-### `mewcode.prompt` 包（扩展）
+### `newcode.prompt` 包（扩展）
 
 #### `prompt.resources` 扩展
 
@@ -428,7 +428,7 @@ def add_tool_result(self, result: ToolResult) -> None:
 - 具体措辞在实现时微调，确保模型理解每个工具的用途和参数规范。
 - 特别需要强调 `edit_file` 的"唯一匹配"约束，减少模型因重复匹配而失败。
 
-### `mewcode.tui` 包（扩展）
+### `newcode.tui` 包（扩展）
 
 #### `tui.app` 扩展
 
@@ -494,7 +494,7 @@ def add_tool_result(self, result: ToolResult) -> None:
 ## 文件组织
 
 ```
-mewcode/
+newcode/
 ├── __init__.py
 ├── __main__.py
 ├── main.py                    # 扩展：构造 Registry 注入 REPL/oneshot

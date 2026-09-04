@@ -1,4 +1,4 @@
-# MewCode 结构化 System Prompt 与 Prompt Cache 优化 — 技术设计 (plan.md)
+# NewCode 结构化 System Prompt 与 Prompt Cache 优化 — 技术设计 (plan.md)
 
 ## 架构概览
 
@@ -160,7 +160,7 @@ def assemble_payload(stable, env, history, reminders, tools) -> PromptPayload: .
   - `Agent(builder, env_segment, provider, conversation, registry)`
 
 ### 版本号（ch05 → 0.5.0）
-- `mewcode/__init__.py` 与 `pyproject.toml` 的版本从 0.4.5 → 0.5.0（独立提交，见版本号管理规则）
+- `newcode/__init__.py` 与 `pyproject.toml` 的版本从 0.4.5 → 0.5.0（独立提交，见版本号管理规则）
 
 ## 模块交互
 
@@ -180,7 +180,7 @@ Agent 消费 → 执行工具 → conv.add_assistant_with_tool_calls / conv.add_
 ## 文件组织
 
 ```
-mewcode/
+newcode/
 ├── prompt/
 │   ├── sections.py     新建 — 七个固定模块 + 可选模块（含优先级）
 │   ├── builder.py      新建 — Section、PromptBuilder、build()

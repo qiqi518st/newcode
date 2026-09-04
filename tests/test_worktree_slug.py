@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from mewcode.worktree.slug import (
+from newcode.worktree.slug import (
     branch_name,
     flat_slug,
     is_auto_name,

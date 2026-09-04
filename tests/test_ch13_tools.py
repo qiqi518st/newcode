@@ -15,13 +15,13 @@ import json
 
 import pytest
 
-from mewcode.conversation.manager import ConversationManager
-from mewcode.subagent.fork import FORK_BOILERPLATE
-from mewcode.subagent.launcher import LaunchResult
-from mewcode.subagent.manager import Status, TaskManager
-from mewcode.subagent.types import AgentDefinition, Source
-from mewcode.tools.agent_tool import AgentTool
-from mewcode.tools.task_tools import (
+from newcode.conversation.manager import ConversationManager
+from newcode.subagent.fork import FORK_BOILERPLATE
+from newcode.subagent.launcher import LaunchResult
+from newcode.subagent.manager import Status, TaskManager
+from newcode.subagent.types import AgentDefinition, Source
+from newcode.tools.agent_tool import AgentTool
+from newcode.tools.task_tools import (
     SendMessageTool,
     TaskGetTool,
     TaskListTool,

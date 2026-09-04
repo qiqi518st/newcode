@@ -5,7 +5,7 @@
 
 import pytest
 
-from mewcode.context.replacement import ContentReplacementState
+from newcode.context.replacement import ContentReplacementState
 
 
 @pytest.mark.anyio

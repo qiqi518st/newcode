@@ -1,4 +1,4 @@
-# MewCode ch13 - 多 Agent 分发架构 Checklist
+# NewCode ch13 - 多 Agent 分发架构 Checklist
 
 > 每一项通过运行代码或观察行为来验证，聚焦系统行为。逐项执行并记录证据（命令输出、观察到的行为）；受限项单独列「待人工验证」，不混入「通过」。
 >
@@ -10,7 +10,7 @@
 - [ ] AC1：`agent` 工具注册成功，且主 Agent 工具定义列表不随角色加载/调用而变化（验证：`registry.to_definitions()` 在加载角色前后数量与 schema 一致）
 - [ ] AC2：`agent(subagent_type="explore")` 定义式前台执行，tool_result 为子 Agent 最后一条 assistant 文本（验证：integration mock 驱动真实代码路径）
 - [ ] AC3：`subagent_type` 引用不存在角色 → 结构化错误「未知 subagent_type: X」，主 Agent 继续（验证：test_ch13_tools）
-- [ ] AC4：项目级 `.mewcode/agents/explore.md` 覆盖内置 explore；用户级与项目级同名 → 项目级生效；未覆盖名字正常可用（验证：test_ch13_catalog）
+- [ ] AC4：项目级 `.newcode/agents/explore.md` 覆盖内置 explore；用户级与项目级同名 → 项目级生效；未覆盖名字正常可用（验证：test_ch13_catalog）
 - [ ] AC5：用户/项目级 frontmatter 非法（未知 model/mode、缺 description）→ stderr 定位并降级缺省/跳过，不阻断启动；内置级失败直接 raise（验证：test_ch13_parser / test_ch13_catalog capsys）
 - [ ] AC6：`verifier` 默认 resolve 不到；`agents.enable_verifier: true` 后可用（验证：test_ch13_catalog）
 
@@ -55,17 +55,17 @@
 ## 集成（plan 层验证点）
 
 - [ ] `for_subagent()` 共享规则层——父对话 `persist_local_allow` 过的精确规则，子 Agent 同样命中，不重复问（验证：test_ch13_permission；integration——父批准 `git status` 后子 Agent 直接放行）
-- [ ] main.py 装配完整：agents_cfg → catalog → task_manager → launcher → tools（agent + Task 组）→ hook launcher → main Agent → REPL/tasks，退出 finally `clear_all()`（验证：`python -c "from mewcode.main import main"` 无错 + T21 冒烟）
+- [ ] main.py 装配完整：agents_cfg → catalog → task_manager → launcher → tools（agent + Task 组）→ hook launcher → main Agent → REPL/tasks，退出 finally `clear_all()`（验证：`python -c "from newcode.main import main"` 无错 + T21 冒烟）
 - [ ] `/tasks` 命令注册进 `register_all`，与 Task 工具组共用同一 `TaskManager` 底层（验证：test_ch13_tools + 冒烟 `/tasks`）
 - [ ] 循环依赖规避：`subagent` 包 import 方向无环（`subagent.launcher → agent` 单向，agent 不反向 import subagent；`tools.agent_tool → subagent`）（验证：启动 import 无循环导入错误）
 - [ ] 子 Agent 构造一次性过滤（F6.6）——前台→后台移交后工具集不变（验证：test_ch13_launcher 断言移交前后子 Registry 一致）
 
 ## 编译与测试
 
-- [ ] `export PYTHONIOENCODING=utf-8 && ruff check mewcode tests` 全绿（验证：T26）
-- [ ] `ruff format mewcode tests` 无差异（验证：T26；注意**禁止** `ruff format .`，防扫到 docs/）
+- [ ] `export PYTHONIOENCODING=utf-8 && ruff check newcode tests` 全绿（验证：T26）
+- [ ] `ruff format newcode tests` 无差异（验证：T26；注意**禁止** `ruff format .`，防扫到 docs/）
 - [ ] 全量 `python -m pytest tests/ -q` 全绿（含全部存量 ch01-ch12 测试）（验证：T26）
-- [ ] `mewcode --version` = 0.13.0，且 `mewcode/__init__.py` 与 `pyproject.toml` 两处一致（验证：T1/T26）
+- [ ] `newcode --version` = 0.13.0，且 `newcode/__init__.py` 与 `pyproject.toml` 两处一致（验证：T1/T26）
 - [ ] 文档保护：跑完批量命令后 `git status` 确认 docs/ 未被改动（验证：T26）
 
 ## 端到端场景

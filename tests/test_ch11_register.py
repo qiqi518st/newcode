@@ -7,10 +7,10 @@
 
 from pathlib import Path
 
-from mewcode.skills import ActiveSkills, Catalog, Executor
-from mewcode.slash import CommandRegistry
-from mewcode.slash.commands import register_all
-from mewcode.slash.commands.skill_register import (
+from newcode.skills import ActiveSkills, Catalog, Executor
+from newcode.slash import CommandRegistry
+from newcode.slash.commands import register_all
+from newcode.slash.commands.skill_register import (
     register_skills_as_commands,
     remove_skill_commands,
 )
@@ -43,7 +43,7 @@ def _setup(tmp_path: Path):
     executor = Executor(
         catalog,
         ActiveSkills(),
-        __import__("mewcode.tools", fromlist=["Registry"]).Registry(),
+        __import__("newcode.tools", fromlist=["Registry"]).Registry(),
         None,
     )
     return reg, catalog, executor

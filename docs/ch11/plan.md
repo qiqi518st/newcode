@@ -1,4 +1,4 @@
-# MewCode ch11 - Skill 技能包系统 Plan
+# NewCode ch11 - Skill 技能包系统 Plan
 
 ## 架构概览
 
@@ -16,7 +16,7 @@
                                                               fork 子 Agent 用 definitions_filtered 收窄工具集
 ```
 
-核心思路：**Skill 状态与 Agent 解耦**。`mewcode/skills/` 新包承载 Skill 全生命周期（解析/加载/执行/激活态），Agent 只持 `ActiveSkillStore` 引用，每轮动态合成 env segment。context 包（ch08）经 ActiveSkillStore 挂钩实现压缩预算淘汰，不反向依赖 agent。
+核心思路：**Skill 状态与 Agent 解耦**。`newcode/skills/` 新包承载 Skill 全生命周期（解析/加载/执行/激活态），Agent 只持 `ActiveSkillStore` 引用，每轮动态合成 env segment。context 包（ch08）经 ActiveSkillStore 挂钩实现压缩预算淘汰，不反向依赖 agent。
 
 **关键约束（A 决策）**：allowedTools 在 **inline 模式不真过滤**——只做 SOP 顶部提示 + 启动 fail-fast 校验；**仅 fork 模式真过滤**（子 Agent 用 `definitions_filtered`）。主对话工具集始终全量，避免动态切换工具集的生命周期复杂度。
 
@@ -24,19 +24,19 @@
 
 | 模块 | 文件 | 职责 |
 |------|------|------|
-| 数据模型 | `mewcode/skills/types.py` | SkillMeta / Skill / SkillSource / ActiveEntry |
-| 解析器 | `mewcode/skills/parser.py` | frontmatter+body 分离校验、名字归一化、render_body（$ARGUMENTS 替换 + 兜底） |
-| 加载器 | `mewcode/skills/catalog.py` | 三级路径扫描、同名覆盖、内存 cache 回退、热加载、validate_tools、catalog 构建 |
-| 激活状态 | `mewcode/skills/active.py` | ActiveSkills：激活/失活/列举/预算淘汰 |
-| 执行器 | `mewcode/skills/executor.py` | inline / fork 分发执行、fork token 写回 |
-| 适配桥 | `mewcode/skills/adapter.py` | catalog_to_prompt_items / active_to_prompt_entries（prompt 包零依赖 skills） |
-| 目录型工具 | `mewcode/skills/script_tool.py` | ScriptTool：tool.json 声明 → 子进程执行的 Tool 实例 |
-| 内置 Skill | `mewcode/skills/builtin/` | commit.md / review.md / test.md 三样板 |
-| LoadSkill 工具 | `mewcode/tools/load_skill.py` | 系统级只读工具：激活 body + 注册专属工具 + 返回确认 |
-| Agent 集成 | `mewcode/agent/agent.py` | 持 store、env 每轮合成、with_catalog 可选注入 |
-| 压缩挂钩 | `mewcode/context/recovery.py` | 压缩后激活 Skill 注入 + 4k 预算淘汰最旧 |
-| 动态命令注册 | `mewcode/slash/commands/skill_register.py` | 每个 Skill 注册为 `/名字`（描述标 `[skill]`） |
-| 管理命令 | `mewcode/slash/commands/skill.py` | `/skill` list/info/reload/load/on/off/unload |
+| 数据模型 | `newcode/skills/types.py` | SkillMeta / Skill / SkillSource / ActiveEntry |
+| 解析器 | `newcode/skills/parser.py` | frontmatter+body 分离校验、名字归一化、render_body（$ARGUMENTS 替换 + 兜底） |
+| 加载器 | `newcode/skills/catalog.py` | 三级路径扫描、同名覆盖、内存 cache 回退、热加载、validate_tools、catalog 构建 |
+| 激活状态 | `newcode/skills/active.py` | ActiveSkills：激活/失活/列举/预算淘汰 |
+| 执行器 | `newcode/skills/executor.py` | inline / fork 分发执行、fork token 写回 |
+| 适配桥 | `newcode/skills/adapter.py` | catalog_to_prompt_items / active_to_prompt_entries（prompt 包零依赖 skills） |
+| 目录型工具 | `newcode/skills/script_tool.py` | ScriptTool：tool.json 声明 → 子进程执行的 Tool 实例 |
+| 内置 Skill | `newcode/skills/builtin/` | commit.md / review.md / test.md 三样板 |
+| LoadSkill 工具 | `newcode/tools/load_skill.py` | 系统级只读工具：激活 body + 注册专属工具 + 返回确认 |
+| Agent 集成 | `newcode/agent/agent.py` | 持 store、env 每轮合成、with_catalog 可选注入 |
+| 压缩挂钩 | `newcode/context/recovery.py` | 压缩后激活 Skill 注入 + 4k 预算淘汰最旧 |
+| 动态命令注册 | `newcode/slash/commands/skill_register.py` | 每个 Skill 注册为 `/名字`（描述标 `[skill]`） |
+| 管理命令 | `newcode/slash/commands/skill.py` | `/skill` list/info/reload/load/on/off/unload |
 
 ## 核心数据结构
 
@@ -101,7 +101,7 @@ class Catalog:
     def is_disabled(self, name: str) -> bool
     def set_disabled(self, name: str, disabled: bool) -> None  # 落盘 disabled.json
 ```
-扫描顺序：内置 `mewcode/skills/builtin/` → 用户 `~/.mewcode/skills/` → 项目 `<work_dir>/.mewcode/skills/`；后扫同名覆盖前者（项目级 > 用户级 > 内置级）。`reload` 返回 `(added, removed)` 供调用方同步 slash 命令。
+扫描顺序：内置 `newcode/skills/builtin/` → 用户 `~/.newcode/skills/` → 项目 `<work_dir>/.newcode/skills/`；后扫同名覆盖前者（项目级 > 用户级 > 内置级）。`reload` 返回 `(added, removed)` 供调用方同步 slash 命令。
 
 ### ActiveSkills（`skills/active.py`）
 ```python
@@ -141,13 +141,13 @@ fork 分支：按 `fork_context` 构造独立 Conversation → 临时 Agent（`d
 
 ## 模块设计
 
-### mewcode/skills/parser.py
+### newcode/skills/parser.py
 **职责：** 解析 Skill 目录 → `Skill`；frontmatter 与 body 分离校验。
 **对外接口：** `parse_skill_dir(dir_path, source) -> Skill`、`parse_frontmatter_and_body(text) -> tuple[dict, str]`、`normalize_name(name) -> str`
 **依赖：** `pyyaml`（已在 pyproject）。
 **要点：** frontmatter 缺失/非法抛 `SkillParseError`（调用方跳过+warning）；`normalize_name` 转小写、非字母数字转 `-`（F1.4）；目录型额外读 `tool.json`（F9.2）。
 
-### mewcode/skills/render.py
+### newcode/skills/render.py
 **职责：** 把 Skill body 渲染为最终注入文本（inline 与 fork 都先经此层）。
 **对外接口：** `render_body(skill: Skill, args: str) -> str`
 **要点（F1.3/F3.4）：**
@@ -155,19 +155,19 @@ fork 分支：按 `fork_context` 构造独立 Conversation → 临时 Agent（`d
 2. 无占位符且 args 非空 → 末尾追加 `\n\n## User Request\n\n<args>`（兜底规则，参考模板）
 3. `allowed_tools` 非空 → body 顶部插入 ``This skill is designed to use only these tools: <list>. Prefer them over other tools when possible.\n\n---\n\n``（inline 提示，不真过滤）
 
-### mewcode/skills/catalog.py
+### newcode/skills/catalog.py
 **职责：** 三级路径扫描与覆盖管理 + 启动校验。
 **对外接口：** 见数据结构节。
 **依赖：** `parser`、`types`、`constants`（路径/预算）。
-**要点：** 扫描顺序内置→用户→项目，后扫覆盖（F2.1）；`get(name)` 每次重读源文件（热更新），失败回退内存 `_cache` 并 warning（F2.3/N7）；`validate_tools(registry)` 遍历所有 Skill 的 allowed_tools，引用不存在的工具 → 返回该 Skill 名（启动期调用方 warning + 从 catalog 移除，F2.7/B 决策）；disabled 集合读写 `~/.mewcode/skills/disabled.json`（F7.8）。
+**要点：** 扫描顺序内置→用户→项目，后扫覆盖（F2.1）；`get(name)` 每次重读源文件（热更新），失败回退内存 `_cache` 并 warning（F2.3/N7）；`validate_tools(registry)` 遍历所有 Skill 的 allowed_tools，引用不存在的工具 → 返回该 Skill 名（启动期调用方 warning + 从 catalog 移除，F2.7/B 决策）；disabled 集合读写 `~/.newcode/skills/disabled.json`（F7.8）。
 
-### mewcode/skills/active.py
+### newcode/skills/active.py
 **职责：** 单会话激活状态（F5.1）。
 **对外接口：** 见数据结构节。
 **依赖：** `types`。
 **要点：** `enforce_budget(4k)` 按激活顺序淘汰最旧直至 ≤ 预算（F8.1），压缩时由 ContextManager 调用；`total_tokens(estimator)` 兼容 ch08 `SkillRegistry` 接口（N10）。
 
-### mewcode/skills/executor.py
+### newcode/skills/executor.py
 **职责：** inline / fork 分发执行（F3.1）。
 **对外接口：** `Executor.execute(ctx, ui, name, args)`。
 **依赖：** `catalog`、`active`、`render`；`agent.Agent`（局部 import 避循环）。
@@ -190,23 +190,23 @@ fork 分支：按 `fork_context` 构造独立 Conversation → 临时 Agent（`d
 6. 取子对话最后一条 assistant 文本作 final_text → `ui.append_assistant_message(final_text)` 写回主对话
 7. 任一步出错 → `final_text = "[skill <name> failed: <reason>]"`，仍以 assistant 消息写回
 
-### mewcode/skills/script_tool.py
+### newcode/skills/script_tool.py
 **职责：** 目录型专属工具的子进程执行壳（F9.5）。
 **对外接口：** `ScriptTool(schema, skill_dir)`，实现 `Tool` 协议。
 **要点：** `execute(arguments)` 用 `asyncio.create_subprocess_exec` 起 entrypoint 子进程（参数 JSON 走 stdin），`asyncio.wait_for(..., timeout=30)`，stdout 捕获为 ToolResult.output；不 import 进主进程（N4）；`is_system = False`。
 
-### mewcode/tools/load_skill.py
+### newcode/tools/load_skill.py
 **职责：** 系统级只读 LoadSkill 工具（F4.2）。
 **对外接口：** `LoadSkillTool(catalog, active, registry)`，`name="load_skill"`。
 **要点：** `read_only=True`（READONLY 类不弹权限，N5）、`is_system=True`（豁免 allowedTools，F3.5）；`execute({name})`：`catalog.get` → 重读 body → 目录型注册工具 → `active.activate` → 返回简短确认（不返回完整 SOP，F4.2.3）；未知名 → 错误结果。
 
-### mewcode/tools/registry.py（修改）
+### newcode/tools/registry.py（修改）
 **要点：** Tool 协议新增 `is_system: bool`（默认 False，`getattr` 兼容旧工具）；`Registry.system_definitions()`（仅系统工具）；`Registry.definitions_filtered(allowed: list[str])`（系统工具豁免 + 白名单过滤，返回新定义列表；allowed 为空 → 全量）。**inline 模式不调用**（F3.7/A 决策），仅 fork 子 Agent 用。
 
-### mewcode/tools/base.py（修改）
+### newcode/tools/base.py（修改）
 **要点：** Tool 协议新增 `is_system: bool` 只读属性。
 
-### mewcode/agent/agent.py（修改）
+### newcode/agent/agent.py（修改）
 **职责：** Skill 状态持有 + 每轮动态 env 合成。
 **新增：** `with_catalog(c: Catalog)` 可选注入（None 时跳过 env 组装，向后兼容 N10）；`activate_skill(name, body)` / `clear_active_skills()` 转发 store。
 **修改 `run()`：** 每轮组装时：
@@ -214,31 +214,31 @@ fork 分支：按 `fork_context` 构造独立 Conversation → 临时 Agent（`d
 - `env_text = base_env + render_skills_catalog(...) + render_active_skills_block(...)`（F4.1/F5.2）
 - `tool_defs` 保持全量（inline 不真过滤，F5.3）
 
-### mewcode/prompt/skills_block.py（新增）
+### newcode/prompt/skills_block.py（新增）
 **职责：** env 段的 Skill 渲染（prompt 包不依赖 skills 包）。
 **对外接口：** `render_skills_catalog(items: list[SkillCatalogItem]) -> str`（Available Skills 摘要段 + load_skill 指引）、`render_active_skills_block(entries: list[ActiveSkillEntry]) -> str`（`## Active Skills` 段，逐条 `### Skill: <name>` + body；空返回空串）
 **类型：** `SkillCatalogItem(name, description)`、`ActiveSkillEntry(name, body)`（瘦 dataclass，skills 包经 adapter 转换）
 
-### mewcode/context/recovery.py（修改）
+### newcode/context/recovery.py（修改）
 **职责：** 压缩后恢复段落地 Skill 注入 + 预算淘汰（F8.1）。
 **要点：** RecoveryBuilder 的 skill 分支由 TODO 改为：调 `active_store.enforce_budget(4k)` → 幸存激活 Skill 追加进恢复段；`active_store` 经 ContextManager 构造注入（复用现 skill_registry 参数位）。`context/` 只依赖 `skills.active`（零依赖 agent）。
 
-### mewcode/slash/commands/skill_register.py（新）
+### newcode/slash/commands/skill_register.py（新）
 **职责：** Skill 动态注册为 `/名字` 命令（F2.4）。
 **对外接口：** `register_skills_as_commands(reg, catalog, executor)`、`remove_skill_commands(reg)`。
 **要点：** 每个 Skill 注册 `CommandDef(name, kind=UI, description=f"{description} [skill]", handler)`；**闭包循环变量用 `functools.partial(handler, name=skill.name)` 显式拷贝**（Python 闭包按引用绑定陷阱）；handler 按 `mode` 分发：inline → `executor.execute` 后 `ui.inject_and_send`；fork → `asyncio.create_task(_run_fork)`（结果经 `ui.append_assistant_message` 回流）；与内置命令冲突：`try register except RuntimeError → warning 跳过`（F2.5）；`remove_skill_commands` 供 `/skill reload` 与 InstallSkill 后同步。
 
-### mewcode/slash/commands/skill.py（新）
+### newcode/slash/commands/skill.py（新）
 **职责：** `/skill` 管理命令（F7）。
 **要点：** 子命令：list / info <n> / reload [n] / load <n> / on <n> / off <n> / unload <n>；reload 调 `catalog.reload` 后同步命令注册（用返回的 added/removed）；off 同时 `store.deactivate` + `set_disabled`；on/off 后重建 catalog 并同步 `[skill]` 命令；unload 移出注册 + 清理内存状态 + 清 disabled 标记。
 
-### mewcode/slash/ui.py（修改）
+### newcode/slash/ui.py（修改）
 **要点：** UI 协议新增 4 方法（参考模板风格）：`list_catalog_skills() -> list[SkillSummary]`、`list_active_skills() -> list[str]`、`clear_active_skills() -> None`、`append_assistant_message(text) -> None`（fork 结果写主对话）；NopUI 提供零值实现，RecordingUI 记录调用。
 
-### mewcode/slash/commands/clear.py（修改）
+### newcode/slash/commands/clear.py（修改）
 **要点：** `handle_clear` 在 `request_clear_session` 后调 `ui.clear_active_skills()`（F5.5）。
 
-### mewcode/slash/registry.py（修改）
+### newcode/slash/registry.py（修改）
 **要点：** 新增 `unregister(name)`（锁内删除）与 `remove_by(filter)`，供 reload 重扫与 `remove_skill_commands` 用。
 
 ## 模块交互
@@ -282,7 +282,7 @@ reload / InstallSkill 后：
 ## 文件组织
 
 ```
-mewcode/
+newcode/
 ├── skills/                      # 新增
 │   ├── __init__.py              — 导出 Catalog / ActiveSkills / Executor / SkillSource
 │   ├── constants.py             — ACTIVE_SKILL_TOKEN_BUDGET=4_000、路径常量、recent 缺省 N=5
@@ -352,7 +352,7 @@ tests/
 | fork token 成本 | 累计后写回主 runtime anchor（`usage += sub`） | N13 成本透明落到 token 统计（参考模板） |
 | review 迁移 | 删 `slash/commands/review.py`，review Skill 接管 | F6.4 |
 | 名字归一化 | parser 统一 `normalize_name` | F1.4：与 `/名字` 注册合法性对齐 |
-| disabled 持久 | `~/.mewcode/skills/disabled.json` | F7.8 已定：跨会话保持禁用 |
+| disabled 持久 | `~/.newcode/skills/disabled.json` | F7.8 已定：跨会话保持禁用 |
 
 ## 待实现细节确认（实现期可能遇到的接线点）
 

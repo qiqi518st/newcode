@@ -1,8 +1,8 @@
-# MewCode ch08 — 上下文管理 技术设计 (plan.md)
+# NewCode ch08 — 上下文管理 技术设计 (plan.md)
 
 ## 架构概览
 
-本章在 ch07 MCP 客户端之上，新增一个 **`mewcode.context` 子包**，承载两层上下文管理 + Token 估算 + Context Window 解析 + 文件追踪 + Skill 骨架 + 会话落盘。子包对 Agent 主循环只暴露一个窄入口 `ContextManager`，主循环在每轮组装请求前调用它完成第一层 + 第二层压缩；TUI 斜杠命令路径与紧急压缩路径通过 `Agent` 暴露的 `compact_now()` / `force_compact()` 间接调用同一核心。所有阈值硬编码在子包内常量模块，不进配置层。
+本章在 ch07 MCP 客户端之上，新增一个 **`newcode.context` 子包**，承载两层上下文管理 + Token 估算 + Context Window 解析 + 文件追踪 + Skill 骨架 + 会话落盘。子包对 Agent 主循环只暴露一个窄入口 `ContextManager`，主循环在每轮组装请求前调用它完成第一层 + 第二层压缩；TUI 斜杠命令路径与紧急压缩路径通过 `Agent` 暴露的 `compact_now()` / `force_compact()` 间接调用同一核心。所有阈值硬编码在子包内常量模块，不进配置层。
 
 ```
                           ┌──────────────────────────────────────────────────┐
@@ -43,7 +43,7 @@
   解析侧：getContextWindowForModel(model) 四级优先 → context_window
   能力表：capabilities.py 静态表 + scripts/probe_context_window.py 手工探测回填
   Skill 骨架：SkillRegistry（空实现 + 注入挂载点，内容加载 TODO）
-  会话落盘：.mewcode/sessions/<session_id>/tool-results/<tool_use_id>
+  会话落盘：.newcode/sessions/<session_id>/tool-results/<tool_use_id>
   TUI 侧：BUILTIN_COMMANDS 注册表（/exit /plan /do /compact …），熔断/紧急菜单复用 _ask_choice
 ```
 
@@ -72,15 +72,15 @@
 
 ### Message（既有，不改）
 
-`mewcode/provider/base.py:25`——`role/content/tool_calls/tool_call_id/tool_use_id/name`。第一层就地改写只动 tool 角色消息的 `content` 字段；第二层摘要替换以消息列表为粒度整段替换。
+`newcode/provider/base.py:25`——`role/content/tool_calls/tool_call_id/tool_use_id/name`。第一层就地改写只动 tool 角色消息的 `content` 字段；第二层摘要替换以消息列表为粒度整段替换。
 
 ### ToolCall（既有，不改）
 
-`tool_use_id`（Anthropic）/ `tool_call_id`（OpenAI）作为第一层文件名与账本 key。`mewcode/provider/base.py:37`。`id` 可能为空字符串（流式回填兜底），落盘与账本需兜底命名。
+`tool_use_id`（Anthropic）/ `tool_call_id`（OpenAI）作为第一层文件名与账本 key。`newcode/provider/base.py:37`。`id` 可能为空字符串（流式回填兜底），落盘与账本需兜底命名。
 
 ### TokenUsage（既有，不改）
 
-`mewcode/provider/base.py:14`——`input_tokens/output_tokens/cache_creation_input_tokens/cache_read_input_tokens`。`usage_to_anchor` 锚点 = 四者之和。
+`newcode/provider/base.py:14`——`input_tokens/output_tokens/cache_creation_input_tokens/cache_read_input_tokens`。`usage_to_anchor` 锚点 = 四者之和。
 
 ### ContentReplacementState（新增）
 
@@ -280,11 +280,11 @@ class ContextManager:
 
 ## 模块设计
 
-### mewcode/context/__init__.py
+### newcode/context/__init__.py
 **职责：** 子包门面，导出 `ContextManager`、`AutoCompactGate`、`usage_to_anchor`/`estimate_tokens`/`estimate_messages`/`message_chars`、`get_context_window_for_model`、`ContentReplacementState`、`FileTracker`、`Skill`、`SkillRegistry`、`SessionPaths`、常量。
-**依赖：** 仅 `mewcode.provider.base`（`Message/ToolCall/ToolResult/TokenUsage/Provider/ToolDefinition`）、`mewcode.conversation.manager`、标准库；**不依赖 agent / tui / permission / mcp / config**（context_window 经构造传入 model/protocol 字符串，不读 config）。
+**依赖：** 仅 `newcode.provider.base`（`Message/ToolCall/ToolResult/TokenUsage/Provider/ToolDefinition`）、`newcode.conversation.manager`、标准库；**不依赖 agent / tui / permission / mcp / config**（context_window 经构造传入 model/protocol 字符串，不读 config）。
 
-### mewcode/context/constants.py
+### newcode/context/constants.py
 **职责：** 全部硬编码阈值。
 **对外接口：** 常量集合。
 **关键常量：**
@@ -315,7 +315,7 @@ CONTEXT_WINDOW_FLOOR = 33_000           # F7 入口 sanity check 下界（SUMMAR
 ```
 模块级变量（非字面常量），便于单测 monkeypatch 改小并 restore。
 
-### mewcode/context/tokens.py
+### newcode/context/tokens.py
 **职责：** Token 估算——**纯函数**模型，锚定真实 usage + 字符/3.5 增量；锚点与 `anchor_msg_len` 由调用方（Agent 主循环 / ContextManager）外部跟踪，估算器本身无状态。
 **对外接口：** `estimate_tokens(anchor, all_msgs, anchor_msg_len)`、`estimate_messages(messages)`、`usage_to_anchor(usage)`、`message_chars(msgs)`。
 **依赖：** `TokenUsage`、`Message`、`constants.ESTIMATE_CHARS_PER_TOKEN`、`math`。
@@ -331,7 +331,7 @@ CONTEXT_WINDOW_FLOOR = 33_000           # F7 入口 sanity check 下界（SUMMAR
 - `estimate_messages(messages) -> int`：纯 `math.ceil(message_chars(messages) / 3.5)`，摘要请求自检用（F23）。
 - **摘要请求不更新锚点**（spec F14 隐含 + 防污染）：摘要请求的 usage 反映的是「摘要这组消息」的消耗，不能拿来当主对话锚点；锚点只由主对话路径在 `_stream_once` 完成后更新。ContextManager / Agent 负责在摘要路径**不调** `usage_to_anchor` 更新外部锚点。
 
-### mewcode/context/window.py
+### newcode/context/window.py
 **职责：** `get_context_window_for_model(model, protocol)` 四级解析 + 静态能力表。
 **对外接口：** `get_context_window_for_model`、`CAPABILITIES`。
 **依赖：** `os`、`constants`。
@@ -342,29 +342,29 @@ CONTEXT_WINDOW_FLOOR = 33_000           # F7 入口 sanity check 下界（SUMMAR
 - 第 4 级：`protocol == "anthropic"` → `DEFAULT_WINDOW_ANTHROPIC`；`"openai"` → `DEFAULT_WINDOW_OPENAI`；其余 → `DEFAULT_WINDOW_ANTHROPIC`（保守默认）。
 - 永不抛：任一级异常 `try/except` 跳到下一级。
 
-### mewcode/context/capabilities.py
+### newcode/context/capabilities.py
 **职责：** 静态能力表（已知大上下文模型，≥100K）。
 **对外接口：** `CAPABILITIES: dict[str, int]`。
 **依赖：** 无。
 **关键点：** 初始收录少量已知模型（如 `claude-sonnet-4-20250514[1m]`→1_000_000 但其实会被第 2 级先命中、`gpt-4o`→128_000 等——**仅收录 ≥100K 的**，<100K 不进表）。表值旁用注释标「来源：官方文档 / 探测值 + 时间」。`scripts/probe_context_window.py` 产出的数字由开发者手工追加到此文件并提交。
 
-### mewcode/context/session.py
+### newcode/context/session.py
 **职责：** 会话 id 生成 + 落盘目录管理。
 **对外接口：** `SessionPaths` 类。
 **依赖：** `os`、`time`、`secrets`、`pathlib`。
 **关键点：**
-- `SessionPaths(cwd)`：`session_id = f"{int(time.time())}-{secrets.token_hex(4)}"`；`base = cwd/.mewcode/sessions/<session_id>/tool-results`。
+- `SessionPaths(cwd)`：`session_id = f"{int(time.time())}-{secrets.token_hex(4)}"`；`base = cwd/.newcode/sessions/<session_id>/tool-results`。
 - `path_for(tool_use_id: str) -> Path`：`base / (tool_use_id or _fallback_name())`；`_fallback_name` 用自增序号（`f"unknown-{self._seq}"`，`self._seq` 锁保护或用 `itertools.count`）。
 - `ensure_dir()`：`base.mkdir(parents=True, exist_ok=True)`，已存在不报错。
 - 会话 id 进程内唯一、不持久化、退出不清理（F33）。
 
-### mewcode/context/replacement.py
+### newcode/context/replacement.py
 **职责：** `ContentReplacementState` 账本。
 **对外接口：** `ContentReplacementState` 类。
 **依赖：** `asyncio`。
 **关键点：** 见数据结构。所有方法 `async with self._lock`。`decision_for` 返回 `tuple[Literal["replaced","kept","unseen"], str | None]`。落盘失败时调用方**不调** `record_*`，下轮 `decision_for` 返回 `unseen` 重评（F5b）。
 
-### mewcode/context/offload.py
+### newcode/context/offload.py
 **职责：** `offload_and_snip` 第一层纯字符串替换。
 **对外接口：** `offload_and_snip(messages, state, session_paths) -> int`。
 **依赖：** `Message`、`ContentReplacementState`、`SessionPaths`、`constants`、`pathlib`、`asyncio`。
@@ -376,22 +376,22 @@ CONTEXT_WINDOW_FLOOR = 33_000           # F7 入口 sanity check 下界（SUMMAR
     - `kept` → continue（保留原文，永不翻转）；
     - `unseen` → 进入 F1/F2 评估。
   - **F2a 三步原子**（对未决策的项，按 F2 单轮聚合逻辑）：
-    1. 建候选列表（本条 RoleTool 消息的所有未决策 tool_result 项——注意当前 `Message` 是单条 tool 消息含一个结果，F2 的「列表」语义在 MewCode 里体现为**同一回合的多条 tool 消息**，plan 把同回合多条 tool 消息视为一组做聚合），按字节倒序。
+    1. 建候选列表（本条 RoleTool 消息的所有未决策 tool_result 项——注意当前 `Message` 是单条 tool 消息含一个结果，F2 的「列表」语义在 NewCode 里体现为**同一回合的多条 tool 消息**，plan 把同回合多条 tool 消息视为一组做聚合），按字节倒序。
     2. 先把超 `SINGLE_RESULT_THRESHOLD` 的项落盘（F1）；再按 `AGGREGATE_LIMIT` 继续落盘下一项（F2）直到剩余聚合达标。
     3. 每项落盘：`path = session_paths.path_for(id)`；`path.write_bytes(content.encode("utf-8"))` 用 `wx` 模式（`open(path, "xb")`，`FileExistsError` 跳过写入复用）；**落盘成功**才 `msg.content = build_preview(content, path)` 并 `await state.record_replaced(id, msg.content)`；**落盘失败**（`OSError`）→ 保持原文 + 不写账本 + stderr 告警，该项下轮重评。
 - `build_preview(content, path) -> str`：取前 20 行（`content.splitlines()[:20]`）再按字节截 2048（`head.encode("utf-8")[:2048].decode("utf-8", errors="ignore")`），拼成含「原始字节数 + 头部预览 + 落盘路径 + 重读提示」四项的固定格式字符串。
 - **毫秒级、不调 LLM**（N1）：落盘 I/O 用 `await asyncio.to_thread(path.write_bytes, data)` 避免阻塞 loop 超 100ms。
 - 返回被替换的项数。
 
-**F2 聚合的会话内单位澄清**：MewCode 的 `ConversationManager` 每个 tool 结果是**独立一条 `Message(role="tool")`**（`manager.py:90`），不是一条消息挂列表。故 F2「一条 RoleTool 消息的 tool_results 列表」在实现层映射为「**同一 assistant(tool_use) 回合对应的多条 tool 消息**」。`offload_and_snip` 需先按 `tool_use_id` 所属回合把 tool 消息分组，再对每组做 F2 聚合判断。回合归属：通过 assistant 消息的 `tool_calls[].id` 与 tool 消息的 `tool_use_id`/`tool_call_id` 配对确定。
+**F2 聚合的会话内单位澄清**：NewCode 的 `ConversationManager` 每个 tool 结果是**独立一条 `Message(role="tool")`**（`manager.py:90`），不是一条消息挂列表。故 F2「一条 RoleTool 消息的 tool_results 列表」在实现层映射为「**同一 assistant(tool_use) 回合对应的多条 tool 消息**」。`offload_and_snip` 需先按 `tool_use_id` 所属回合把 tool 消息分组，再对每组做 F2 聚合判断。回合归属：通过 assistant 消息的 `tool_calls[].id` 与 tool 消息的 `tool_use_id`/`tool_call_id` 配对确定。
 
-### mewcode/context/files.py
+### newcode/context/files.py
 **职责：** `FileTracker` 最近文件追踪。
 **对外接口：** `FileTracker` 类、`TrackedFile` 数据类。
 **依赖：** `asyncio`、`time`。
 **关键点：** 见数据结构。`record` 在 Agent 工具执行成功后、`add_tool_result` 前同 task `await` 调用（F19a）。纯净字节：`read_file` 成功时剥离截断提示（`truncated=True` 时去掉末尾 `\n...（已截断…）` 段）。锁保护（N2）。
 
-### mewcode/context/recovery.py
+### newcode/context/recovery.py
 **职责：** `RecoveryBuilder` 恢复段三块（文本片段，非 Message 列表）。
 **对外接口：** `RecoveryBuilder` 类、`RecoveryBundle` 数据类。
 **依赖：** `FileTracker`、`ToolDefinition`、`constants`、`SkillRegistry`。
@@ -404,7 +404,7 @@ CONTEXT_WINDOW_FLOOR = 33_000           # F7 入口 sanity check 下界（SUMMAR
   - **三块都是 str**，由 `Summarizer.run_summary` 拼进单条 user 消息 content（见 summarize.py 的「合并消息」决策）。
 - 工具一致性以 `Agent.run` 单次迭代为粒度：`tool_defs` 在迭代开头一次性算出，`RecoveryBuilder.build` 与 `provider.stream` 共用同一引用。
 
-### mewcode/context/summarize.py
+### newcode/context/summarize.py
 **职责：** `Summarizer` 第二层 LLM 全量摘要。
 **对外接口：** `Summarizer` 类、`SummarizeConfig`、`CompactOutcome`。
 **依赖：** `Provider`、`RecoveryBuilder`、`MessageGroupDropper`、`Message`、`ToolDefinition`、`constants`、`tokens`（纯函数）。
@@ -425,7 +425,7 @@ CONTEXT_WINDOW_FLOOR = 33_000           # F7 入口 sanity check 下界（SUMMAR
 - **F27 丢组重试**（三路径共用，由 `MessageGroupDropper` 承载）：摘要请求自身 PTL 时，`group_by_user` 分组 → 最多 `PTL_DIRECT_RETRY_LIMIT` 次每次丢最旧 1 组重试 → 不行再每次丢 `ceil(剩余×PTL_DROP_RATIO)`（至少 1 组）直到成功或耗尽；耗尽仍失败 → 返回失败 outcome。不发送空 messages 摘要请求。
 - **错误隔离**（N11）：`summarize` 整体 `try/except Exception` 兜底，单次失败不崩进程，返回失败 outcome。
 
-### mewcode/context/dropper.py
+### newcode/context/dropper.py
 **职责：** `MessageGroupDropper` F27 丢消息组。
 **对外接口：** `MessageGroupDropper` 类。
 **依赖：** `Message`、`constants`、`math`。
@@ -435,13 +435,13 @@ CONTEXT_WINDOW_FLOOR = 33_000           # F7 入口 sanity check 下界（SUMMAR
 - `drop_ratio(groups, ratio)`：`n = max(1, math.ceil(len(groups)*ratio))`；`groups[n:]`。
 - 保证不拆 tool_use/tool_result 对：分组单位本身就是「一条 user + 其后所有 assistant/tool」，整组丢弃天然保对（F12）。
 
-### mewcode/context/skill.py
+### newcode/context/skill.py
 **职责：** `Skill` + `SkillRegistry` 骨架。
 **对外接口：** `Skill`、`SkillRegistry`。
 **依赖：** 无（纯数据 + 容器）。
 **关键点：** `SkillRegistry` 用 dict 存储；`register/get/list` 简单实现；`total_tokens` 当前总返回 0（内容加载 TODO）。`RecoveryBuilder` 持可选引用，注入分支空实现 + `# TODO(ch08): Skill 内容加载待后续章节` 注释。
 
-### mewcode/context/manager.py
+### newcode/context/manager.py
 **职责：** `ContextManager` 窄入口，编排 L1+L2、手动、紧急、熔断收尾；`AutoCompactGate` 仅自动路径连续失败闸。
 **对外接口：** `ContextManager` 类、`AutoCompactGate` 类。
 **依赖：** 上述所有 context 子模块、`ConversationManager`、`Provider`、`Message`、`ToolDefinition`、`asyncio`、`logging`。
@@ -467,16 +467,16 @@ CONTEXT_WINDOW_FLOOR = 33_000           # F7 入口 sanity check 下界（SUMMAR
 - **N10 日志**：每次压缩 `logging.info` 记触发原因/前后 token/被替换结果数。
 - **N11 错误隔离**：`manage_context`/`compact_now`/`force_compact` 整体 `try/except Exception` 兜底，异常不抛给主循环。
 
-### mewcode/context/autogate.py（或并入 manager.py）
+### newcode/context/autogate.py（或并入 manager.py）
 **职责：** `AutoCompactGate` 仅自动路径连续失败闸。
 **关键点：** `_consecutive_failures: int=0`；`record_auto_success`→清零；`record_auto_failure`→+1；`auto_disabled`→`_consecutive_failures >= AUTO_GATE_LIMIT(3)`；`reset_on_manual_success`→清零（手动 /compact 成功解除闸）。**仅自动路径读写**，手动/紧急不碰。防 provider 持续故障时每轮弹菜单轰炸。
 
-### mewcode/conversation/manager.py（修改）
+### newcode/conversation/manager.py（修改）
 **改动 1**：新增 `get_messages_ref() -> list[Message]`：返回 `self._messages`（**原始引用**，非副本），供 `offload_and_snip` 就地改写 content。保留 `get_context()` 返回副本不变（Agent assemble 仍用副本，但副本取自压缩后的原始列表）。
 **改动 2**：新增 `replace_history(new_messages: list[Message]) -> None`：`self._messages = list(new_messages)`（第二层摘要替换整段历史）。
 **改动 3**：`_trim`（`manager.py:112`）修正为不破坏 tool_use/tool_result 配对 + 降级条数兜底：裁剪单位改为「以 user 消息分界的组」（复用 `MessageGroupDropper.group_by_user` 或本地等价实现），从头部整组丢弃，天然保对；只在消息条数远超 `max_turns*某倍数` 时触发（兜底，主裁剪权已交 context）。原 `add_assistant` 后触发 `_trim` 保留，但语义改为条数兜底。
 
-### mewcode/agent/agent.py（修改）
+### newcode/agent/agent.py（修改）
 **改动 1**：`__init__` 新增可选 `context_mgr: ContextManager | None = None`、`file_tracker: FileTracker | None = None`，以及 `self._run_lock = asyncio.Lock()`（**会话级互斥锁，F34**）。无 context_mgr 时 Agent 行为与 ch07 完全一致（N8 向后兼容），`_run_lock` 仍存在但无实质竞态。
 **改动 1a（互斥锁 scope，F34 关键）**：`run()` 入口 `async with self._run_lock:` **贯穿整轮**（从 manage_context 到工具回填到流结束），不是只锁 manage_context。这样手动 `run_force_compact` 持同一锁等 run 结束，避免它在「manage_context 释放锁→该轮 add_tool_result 之间」这个窗口 `replace_history`，导致流回来写 tool_result 到新历史（新历史无对应 tool_use）→ 配对断裂。紧急 `force_compact` 在 run 内部调用、**已持锁**，用 `asyncio.Lock` 的不可重入特性需注意——plan 决定紧急路径调的是 `context_mgr.force_compact`（ContextManager 的 `_lock` 与 Agent 的 `_run_lock` 是**两把不同的锁**：`_run_lock` 管 run 与手动入口互斥，ContextManager `_lock` 管 context 内部三个方法互斥），紧急 force_compact 经 `context_mgr._lock` 保护、与 manage_context 同锁故不会并发，而 `_run_lock` 在 run 内全程持有故手动入口进不来，无死锁。
 **改动 2**：`run()` 循环体（`agent.py:94`）每轮 `TURN_START` 之后、`assemble`（`agent.py:106`）之前插入：
@@ -513,27 +513,27 @@ if _stream_error is not None and isinstance(_stream_error, PromptTooLongError):
 **改动 6**：暴露 `async def run_force_compact(self, tool_defs: list[ToolDefinition]) -> CompactOutcome`：**入口先 `async with self._run_lock:`**（等主循环 run 释放，F34），再调 `self._context_mgr.compact_now()`，供 TUI `/compact` 调用。注意 `compact_now` 内部还持 ContextManager 自己的 `_lock`——顺序是「先 `_run_lock`（等 run）→ 再 `_lock`（等 context 内部）」，不与 run 内「`_run_lock` → manage_context 内 `_lock`」的顺序冲突，无死锁。
 **改动 7**：新增 `EventType.CONTEXT_COMPACTING`、`EventType.COMPACT_FAILED`（见 events.py 改动），Agent 在压缩时透传给 TUI。
 
-### mewcode/agent/events.py（修改）
+### newcode/agent/events.py（修改）
 新增两个事件类型：
 ```
 CONTEXT_COMPACTING = "context_compacting"   # payload: str ("auto"/"manual"/"force")，TUI 显示提示
 COMPACT_FAILED = "compact_failed"           # payload: CompactOutcome，TUI 弹熔断菜单
 ```
 
-### mewcode/llm/__init__.py（修改）
+### newcode/llm/__init__.py（修改）
 **改动**：新增哨兵异常 `class PromptTooLongError(Exception):`（docstring「Provider 上报上下文超出窗口时统一抛出的哨兵异常」）。provider 适配层包装 `prompt_too_long` 类错误时用该异常，经 `yield StreamEvent(err=wrapped)` 投递；`wrapped.__cause__ = orig` 保留原 SDK 异常。
 
-### mewcode/provider/anthropic.py（修改）
+### newcode/provider/anthropic.py（修改）
 **改动 1**：`stream` 异常处理（`anthropic.py:195`）识别 PTL：`AnthropicAPIError` 中 `status_code == 400` 且消息含 `prompt is too long` / `context length` 等关键词 → `wrapped = PromptTooLongError(...)`，`wrapped.__cause__ = e`，`yield StreamEvent(err=wrapped)`；其余 `AnthropicAPIError` 维持原 `ProviderError(f"Anthropic API 错误: {e}")`。
 **改动 2**：`max_tokens` 可配（`anthropic.py:108`）：读 `payload.max_output_tokens`（PromptPayload 新字段，默认 None）；None 时维持 4096，有值时用该值。摘要请求设 8192。
 
-### mewcode/provider/openai.py（修改）
+### newcode/provider/openai.py（修改）
 **改动**：`stream` 异常处理（`openai.py:169`）识别 PTL：`OpenAIAPIError` 中 `status_code == 400` 且 `code == "context_length_exceeded"`（或消息含 `maximum context length`）→ `wrapped = PromptTooLongError(...)`，`wrapped.__cause__ = e`，`yield StreamEvent(err=wrapped)`；其余维持原样。OpenAI 侧 max_tokens 沿用端点默认（不改）。
 
-### mewcode/prompt/assembler.py（修改）
+### newcode/prompt/assembler.py（修改）
 **改动**：`PromptPayload` 新增 `max_output_tokens: int | None = None` 字段（默认 None，普通对话不设；摘要请求设 8192）。`assemble` 透传该字段。
 
-### mewcode/tui/app.py（修改）
+### newcode/tui/app.py（修改）
 **改动 1**：抽出 `BUILTIN_COMMANDS` 注册表（F21）：`/exit`、`/plan`、`/do`、`/delete-plan`、`/normal`、`/exit-plan`、`/compact` 各自注册处理函数；`_process_input`（`app.py:193`）改为「以 `/` 开头 → 查注册表 → 命中执行/未命中走未知命令兜底（给可用命令提示，不发给 LLM）」。原有命令行为不变（N7）。命令路径不写入 conversation，结果只通过系统消息展示。
 **改动 2**：新增 `/compact` 处理：调 `self.agent.run_force_compact(tool_defs)`，展示 `CompactOutcome` 前后 token（F24）；失败 outcome 弹熔断菜单（F28 手动路径）。
 **改动 3**：`_consume_agent_events`（`app.py:323`）处理新事件：
@@ -543,10 +543,10 @@ COMPACT_FAILED = "compact_failed"           # payload: CompactOutcome，TUI 弹�
 **改动 5**：`Turn {x+1}/10` 硬编码（`app.py:389`）与 `_MAX_AGENT_TURNS`（`agent.py:19`）同步——本章不改 max turns，但若 context 改动触及此处需注意（plan 标注，不主动改）。
 **改动 6**：`_consume_agent_events` 的 `max_retries=3`（`app.py:330`）是**流错误重试**，与 F28 压缩行动重试是两回事——plan 显式注释区分，不合并。
 
-### mewcode/main.py（修改）
+### newcode/main.py（修改）
 **改动**：`_amain`（`main.py:92`）构造 `ContextManager` 并注入 Agent：
 ```
-from mewcode.context import ContextManager, FileTracker, SkillRegistry
+from newcode.context import ContextManager, FileTracker, SkillRegistry
 file_tracker = FileTracker()
 skill_registry = SkillRegistry()   # 骨架，空
 context_mgr = ContextManager(
@@ -565,7 +565,7 @@ agent = Agent(provider, conversation, registry, stable_prompt, env_segment,
 **关键点：**
 - `python scripts/probe_context_window.py --protocol anthropic --model <name> [--base-url …] [--api-key …]`。
 - 二分逼近：构造逐步增长的 prompt（填充字符）发请求，直到 provider 返回 `prompt_too_long`，二分定位边界。
-- 产出的数字打印到 stdout，附「这是经验下界，手工填入 `mewcode/context/capabilities.py`」提示。
+- 产出的数字打印到 stdout，附「这是经验下界，手工填入 `newcode/context/capabilities.py`」提示。
 - **不在 Agent 主流程、不被 import、不被 F29 引用**（F30）。
 
 ## 模块交互
@@ -649,7 +649,7 @@ REPL 输入 /compact → BUILTIN_COMMANDS["/compact"] → agent.run_force_compac
 下一轮 manage_context:
   offload_and_snip 遍历到该 tool 消息
   → decision_for(id) = unseen
-  → 字节 > 50000? 落盘 .mewcode/sessions/<sid>/tool-results/<id> (wx, 已存在跳过)
+  → 字节 > 50000? 落盘 .newcode/sessions/<sid>/tool-results/<id> (wx, 已存在跳过)
   → 落盘成功 → msg.content = build_preview(content, path)  # 就地改写原始 _messages
               → state.record_replaced(id, msg.content)
   → assemble 用 conv.get_context()（副本，但取自改写后的原始列表）→ provider 收到预览体
@@ -658,7 +658,7 @@ REPL 输入 /compact → BUILTIN_COMMANDS["/compact"] → agent.run_force_compac
 ## 文件组织
 
 ```
-mewcode/
+newcode/
 ├── context/                      [新增子包]
 │   ├── __init__.py               — 门面导出
 │   ├── constants.py              — 全部硬编码阈值
@@ -722,7 +722,7 @@ tests/
 | 第一层就地改写作用点 | 改 `ConversationManager._messages` 原始列表（非副本） | `get_context` 返回副本（`manager.py:108`），Agent assemble 拿副本；就地改写须动原始列表才能让下一轮副本反映压缩。新增 `get_messages_ref` 暴露原始引用 |
 | 账本原子性 | 落盘→改写content→写账本三步串行，任一失败全不发生；锁保护读-决策-写 | 防「已 Seen 但 replacement 没写」中间态；防同 id 出现两个预览版本。spec F2a/F5/N2 |
 | 落盘幂等 | 文件名 = `tool_use_id`，`open(path,"xb")`（wx 模式），`FileExistsError` 跳过 | spec F3；`os.stat().st_mtime_ns` 不变可验证（AC3） |
-| 落盘路径 | `.mewcode/sessions/<session_id>/tool-results/<id>` 会话隔离 | 防跨会话 id 碰撞；会话 id `<unix_ts>-<short_random>` 进程内唯一不持久化。spec F33 |
+| 落盘路径 | `.newcode/sessions/<session_id>/tool-results/<id>` 会话隔离 | 防跨会话 id 碰撞；会话 id `<unix_ts>-<short_random>` 进程内唯一不持久化。spec F33 |
 | 落盘 I/O | `asyncio.to_thread(path.write_bytes, data)` | 避免阻塞 event loop 超 100ms（N1） |
 | 预览结构 | 头部 20 行或 2048 字节择短 + 原始字节数 + 路径 + 重读提示；字符串冻结复用 | 源文件头部信息密度最高；择短防一行超长爆字节；冻结保缓存。spec F4/F5d |
 | Context Window 四级解析 | env → [1m] 后缀 → 能力表(≥100K) → 协议默认 | 用户明确给的 `getContextWindowForModel` 算法；第 4 级用协议默认（anthropic 200K/openai 128K）。spec F29 |

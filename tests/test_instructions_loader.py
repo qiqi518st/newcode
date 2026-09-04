@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from mewcode.instructions.loader import InstructionLoader
+from newcode.instructions.loader import InstructionLoader
 
 
 @pytest.fixture
@@ -28,10 +28,10 @@ def _write(path: Path, text: str) -> Path:
 
 
 def test_three_layer_order(workspace, home):
-    """防 bug：三层内容必须按项目根、项目 .mewcode、用户级拼接且高优先级在前。"""
-    _write(workspace / "MEWCODE.md", "# root")
-    _write(workspace / ".mewcode" / "MEWCODE.md", "# project_config")
-    _write(home / ".mewcode" / "MEWCODE.md", "# user")
+    """防 bug：三层内容必须按项目根、项目 .newcode、用户级拼接且高优先级在前。"""
+    _write(workspace / "NEWCODE.md", "# root")
+    _write(workspace / ".newcode" / "NEWCODE.md", "# project_config")
+    _write(home / ".newcode" / "NEWCODE.md", "# user")
     loader = InstructionLoader(workspace, user_home=home)
     doc = loader.load()
     assert doc.text == "# root\n\n# project_config\n\n# user"
@@ -48,7 +48,7 @@ def test_missing_layers_silent(workspace, home):
 
 def test_empty_file_no_content(workspace, home):
     """防 bug：空文件不产生内容、来源也不计入（spec F1 静默跳过）。"""
-    _write(workspace / "MEWCODE.md", "")
+    _write(workspace / "NEWCODE.md", "")
     loader = InstructionLoader(workspace, user_home=home)
     doc = loader.load()
     assert doc.text == ""
@@ -57,7 +57,7 @@ def test_empty_file_no_content(workspace, home):
 
 def test_include_exclusive_line(workspace, home):
     """防 bug：独占行 include 被完整替换，段落中的 @include 保持原文。"""
-    _write(workspace / "MEWCODE.md", "before\n@include part.md\nafter")
+    _write(workspace / "NEWCODE.md", "before\n@include part.md\nafter")
     _write(workspace / "part.md", "INCLUDED")
     loader = InstructionLoader(workspace, user_home=home)
     doc = loader.load()
@@ -68,7 +68,7 @@ def test_include_exclusive_line(workspace, home):
 
 def test_include_inline_not_expanded(workspace, home):
     """防 bug：非独占行（段落中）的 @include 必须原样保留。"""
-    _write(workspace / "MEWCODE.md", "正文里有 @include part.md 不应展开")
+    _write(workspace / "NEWCODE.md", "正文里有 @include part.md 不应展开")
     _write(workspace / "part.md", "INCLUDED")
     loader = InstructionLoader(workspace, user_home=home)
     doc = loader.load()
@@ -78,7 +78,7 @@ def test_include_inline_not_expanded(workspace, home):
 
 def test_nested_include(workspace, home):
     """防 bug：引用文件可继续 include 其他相对路径文件。"""
-    _write(workspace / "MEWCODE.md", "@include a.md")
+    _write(workspace / "NEWCODE.md", "@include a.md")
     _write(workspace / "a.md", "@include b.md")
     _write(workspace / "b.md", "LEAF")
     loader = InstructionLoader(workspace, user_home=home)
@@ -90,7 +90,7 @@ def test_include_depth_limit(workspace, home):
     for i in range(7):
         nxt = f"@include f{i + 1}.md" if i < 6 else "LEAF"
         _write(workspace / f"f{i}.md", nxt)
-    _write(workspace / "MEWCODE.md", "@include f0.md")
+    _write(workspace / "NEWCODE.md", "@include f0.md")
     loader = InstructionLoader(workspace, user_home=home, max_depth=5)
     doc = loader.load()
     assert "LEAF" not in doc.text
@@ -99,7 +99,7 @@ def test_include_depth_limit(workspace, home):
 
 def test_include_cycle(workspace, home):
     """防 bug：A -> B -> A 环路必须跳过并追加环路警告。"""
-    _write(workspace / "MEWCODE.md", "@include a.md")
+    _write(workspace / "NEWCODE.md", "@include a.md")
     _write(workspace / "a.md", "@include b.md")
     _write(workspace / "b.md", "@include a.md")
     loader = InstructionLoader(workspace, user_home=home)
@@ -112,7 +112,7 @@ def test_include_path_escape(workspace, home):
     """防 bug：相对路径目录穿越必须被拒绝并追加越界警告。"""
     outside = workspace.parent / "secret.md"
     outside.write_text("SECRET", encoding="utf-8")
-    _write(workspace / "MEWCODE.md", "@include ../secret.md")
+    _write(workspace / "NEWCODE.md", "@include ../secret.md")
     loader = InstructionLoader(workspace, user_home=home)
     doc = loader.load()
     assert "SECRET" not in doc.text
@@ -123,7 +123,7 @@ def test_include_absolute_rejected(workspace, home):
     """防 bug：绝对路径 include 必须拒绝。"""
     outside = workspace.parent / "abs.md"
     outside.write_text("ABS", encoding="utf-8")
-    _write(workspace / "MEWCODE.md", f"@include {outside}")
+    _write(workspace / "NEWCODE.md", f"@include {outside}")
     loader = InstructionLoader(workspace, user_home=home)
     doc = loader.load()
     assert "ABS" not in doc.text
@@ -139,7 +139,7 @@ def test_include_symlink_escape(workspace, home):
         target.symlink_to(outside)
     except (OSError, NotImplementedError):
         pytest.skip("当前平台不支持符号链接")
-    _write(workspace / "MEWCODE.md", "@include link.md")
+    _write(workspace / "NEWCODE.md", "@include link.md")
     loader = InstructionLoader(workspace, user_home=home)
     doc = loader.load()
     assert "SYMLINK_SECRET" not in doc.text
@@ -147,7 +147,7 @@ def test_include_symlink_escape(workspace, home):
 
 def test_binary_file_skipped(workspace, home):
     """防 bug：前 512 字节含 \\x00 的二进制文件必须跳过并记录警告。"""
-    _write(workspace / "MEWCODE.md", "\x00\x01\x02" + "A" * 100)
+    _write(workspace / "NEWCODE.md", "\x00\x01\x02" + "A" * 100)
     loader = InstructionLoader(workspace, user_home=home)
     doc = loader.load()
     assert doc.text == ""
@@ -157,7 +157,7 @@ def test_binary_file_skipped(workspace, home):
 
 def test_file_size_limit(workspace, home):
     """防 bug：单文件超过大小上限时拒读。"""
-    _write(workspace / "MEWCODE.md", "X" * 2000)
+    _write(workspace / "NEWCODE.md", "X" * 2000)
     loader = InstructionLoader(workspace, user_home=home, max_file_size=1000)
     doc = loader.load()
     assert "X" * 2000 not in doc.text
@@ -165,9 +165,9 @@ def test_file_size_limit(workspace, home):
 
 def test_total_size_limit(workspace, home):
     """防 bug：展开总大小超限时拒绝超出部分并记录原因。"""
-    _write(workspace / "MEWCODE.md", "R" * 500)
-    _write(workspace / ".mewcode" / "MEWCODE.md", "C" * 500)
-    _write(home / ".mewcode" / "MEWCODE.md", "U" * 500)
+    _write(workspace / "NEWCODE.md", "R" * 500)
+    _write(workspace / ".newcode" / "NEWCODE.md", "C" * 500)
+    _write(home / ".newcode" / "NEWCODE.md", "U" * 500)
     loader = InstructionLoader(workspace, user_home=home, max_total_size=1000)
     doc = loader.load()
     # 至少记录总大小超限诊断，且内容不超过上限
@@ -176,7 +176,7 @@ def test_total_size_limit(workspace, home):
 
 def test_load_cached_after_startup(workspace, home):
     """防 bug：启动后修改指令文件不能改变已缓存的模块内容（AC4）。"""
-    root = _write(workspace / "MEWCODE.md", "ORIGINAL")
+    root = _write(workspace / "NEWCODE.md", "ORIGINAL")
     loader = InstructionLoader(workspace, user_home=home)
     first = loader.load().text
     root.write_text("CHANGED", encoding="utf-8")
@@ -187,8 +187,8 @@ def test_load_cached_after_startup(workspace, home):
 
 
 def test_user_scope_include_within_home(workspace, home):
-    """防 bug：用户级文件的 include 允许根为 ~/.mewcode，内部相对引用可展开。"""
-    _write(home / ".mewcode" / "MEWCODE.md", "@include extra.md")
-    _write(home / ".mewcode" / "extra.md", "USER_EXTRA")
+    """防 bug：用户级文件的 include 允许根为 ~/.newcode，内部相对引用可展开。"""
+    _write(home / ".newcode" / "NEWCODE.md", "@include extra.md")
+    _write(home / ".newcode" / "extra.md", "USER_EXTRA")
     loader = InstructionLoader(workspace, user_home=home)
     assert "USER_EXTRA" in loader.load().text

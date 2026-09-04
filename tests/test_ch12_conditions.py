@@ -12,15 +12,15 @@
 
 from __future__ import annotations
 
-from mewcode.hooks.conditions import (
+from newcode.hooks.conditions import (
     AtomCondition,
     Condition,
     eval_condition,
     get_by_path,
 )
-from mewcode.hooks.executor import render_template
-from mewcode.hooks.types import CombineMode
-from mewcode.permission.matcher import matcher_from_spec
+from newcode.hooks.executor import render_template
+from newcode.hooks.types import CombineMode
+from newcode.permission.matcher import matcher_from_spec
 
 
 def _matcher(spec_type: str, value: str):

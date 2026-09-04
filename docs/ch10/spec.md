@@ -1,8 +1,8 @@
-# MewCode ch10 - SlashCommand 内置命令框架 Spec
+# NewCode ch10 - SlashCommand 内置命令框架 Spec
 
 ## 背景
 
-MewCode TUI 的输入框是单一入口：所有回车提交都作为 user message 送进 Agent 走 LLM。代码里已有一个最小的斜杠分发器，支持 11 条命令（/exit、/quit、/plan、/do、/normal、/compact、/resume、/session、/memory、/delete-plan、/exit-plan），但存在几处明显的工程缺口：
+NewCode TUI 的输入框是单一入口：所有回车提交都作为 user message 送进 Agent 走 LLM。代码里已有一个最小的斜杠分发器，支持 11 条命令（/exit、/quit、/plan、/do、/normal、/compact、/resume、/session、/memory、/delete-plan、/exit-plan），但存在几处明显的工程缺口：
 
 - 命令分发是 `if/elif` 硬编码阶梯，没有"名字 → handler"之外的元数据（描述、别名、执行类型等）
 - 没有启动期冲突检测，名字撞了会在运行时静默失效
@@ -12,7 +12,7 @@ MewCode TUI 的输入框是单一入口：所有回车提交都作为 user messa
 - 缺少"纯本地查询"类命令（看状态/记忆/权限/会话/帮助），这些非对话操作目前都要让 LLM 去做，浪费 token、行为不确定
 - 存量 bug：/memory 出现在 `_is_known_command` 白名单但无 handler，输入会被静默透传给 Agent 消耗 token
 
-ch10 为 MewCode 装上 **SlashCommand 内置命令框架**：一套命令注册与分发机制，让以 `/` 开头的输入**绕过 AgentLoop 直接在本地执行**——常用操作响应快、省 Token、行为确定。
+ch10 为 NewCode 装上 **SlashCommand 内置命令框架**：一套命令注册与分发机制，让以 `/` 开头的输入**绕过 AgentLoop 直接在本地执行**——常用操作响应快、省 Token、行为确定。
 
 ## 目标
 
@@ -191,7 +191,7 @@ ch10 为 MewCode 装上 **SlashCommand 内置命令框架**：一套命令注册
 - AC12（F9.1）：继续输入 s（输入框为 /s），补全仅显示以 /s 开头的候选
 - AC13（F9.6）：多匹配时 Tab 弹出候选列表；单匹配时直接补全
 - AC14（F9.5）：隐藏命令不出现补全候选，但 dispatcher 仍能命中
-- AC15（F1.3）：在源码中给某条已注册命令名再注册一个同名命令，启动 mewcode，进程立即终止启动并报错并打印冲突名字
+- AC15（F1.3）：在源码中给某条已注册命令名再注册一个同名命令，启动 newcode，进程立即终止启动并报错并打印冲突名字
 - AC16（F8.14-F8.22）：/memory_add 后 /memory_list 可见；/memory_clear 后该作用域清空；/permission_mode 切换生效；/session_list 列出可恢复会话
 - AC17（F10.1）：隐藏命令不出现在 /help 输出中，但可正常执行
 
@@ -208,5 +208,5 @@ ch10 为 MewCode 装上 **SlashCommand 内置命令框架**：一套命令注册
 | /clear 模式重置 | 换新会话时 AppMode 重置回 NORMAL，token 与回合数归零 |
 | 补全交互 | 简单 Tab 补全（单匹配直接补、多匹配弹列表），不采用全套键位菜单 |
 | /resume | 保留为 /session_resume 的隐藏别名（ch09 遗留向后兼容） |
-| 框架位置 | 独立 mewcode/slash/ 包，UI 通过 UIController 抽象 |
+| 框架位置 | 独立 newcode/slash/ 包，UI 通过 UIController 抽象 |
 | 框架层借鉴 | 吸收模板：N3a 状态机细化、N5 单一信源、N12 cancel scope、F3.4 提示词持久化、F10 隐藏命令双向约束 |

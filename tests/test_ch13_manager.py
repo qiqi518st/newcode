@@ -15,7 +15,7 @@ import asyncio
 
 import pytest
 
-from mewcode.subagent.manager import (
+from newcode.subagent.manager import (
     Status,
     TaskBusy,
     TaskCapReached,

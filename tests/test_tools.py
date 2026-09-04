@@ -4,16 +4,16 @@ import os
 
 import pytest
 
-from mewcode.tools.file_ops import EditFileTool, ReadFileTool, WriteFileTool
-from mewcode.tools.search import ListFilesTool, SearchCodeTool
-from mewcode.tools.shell import ExecuteCommandTool
+from newcode.tools.file_ops import EditFileTool, ReadFileTool, WriteFileTool
+from newcode.tools.search import ListFilesTool, SearchCodeTool
+from newcode.tools.shell import ExecuteCommandTool
 
 
 class TestReadFileTool:
     @pytest.mark.anyio
     async def test_read_success(self):
         t = ReadFileTool()
-        r = await t.execute({"path": "mewcode/main.py"})
+        r = await t.execute({"path": "newcode/main.py"})
         assert r.status == "ok"
         assert "main" in r.output
 
@@ -34,7 +34,7 @@ class TestReadFileTool:
     @pytest.mark.anyio
     async def test_read_limit(self):
         t = ReadFileTool()
-        r = await t.execute({"path": "mewcode/main.py", "limit": 5})
+        r = await t.execute({"path": "newcode/main.py", "limit": 5})
         assert r.status == "ok"
         assert r.truncated is True
         assert "未返回全部文件" in r.output
@@ -95,7 +95,7 @@ class TestEditFileTool:
         t = EditFileTool()
         r = await t.execute(
             {
-                "path": "mewcode/main.py",
+                "path": "newcode/main.py",
                 "old_string": "NOTEXIST12345",
                 "new_string": "x",
             }
@@ -145,7 +145,7 @@ class TestListFilesTool:
     @pytest.mark.anyio
     async def test_list(self):
         t = ListFilesTool()
-        r = await t.execute({"pattern": "mewcode/*.py"})
+        r = await t.execute({"pattern": "newcode/*.py"})
         assert r.status == "ok"
         assert "main.py" in r.output or len(r.output) > 0
 
@@ -160,13 +160,13 @@ class TestSearchCodeTool:
     @pytest.mark.anyio
     async def test_search(self):
         t = SearchCodeTool()
-        r = await t.execute({"pattern": "class.*Tool", "glob": "mewcode/tools/*.py"})
+        r = await t.execute({"pattern": "class.*Tool", "glob": "newcode/tools/*.py"})
         assert r.status == "ok"
 
     @pytest.mark.anyio
     async def test_search_empty(self):
         t = SearchCodeTool()
-        r = await t.execute({"pattern": "NOTEXISTXYZ", "glob": "mewcode/*.py"})
+        r = await t.execute({"pattern": "NOTEXISTXYZ", "glob": "newcode/*.py"})
         assert r.status == "ok"
 
 

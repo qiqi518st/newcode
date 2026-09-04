@@ -7,7 +7,7 @@
 
 import pytest
 
-from mewcode.permission.blocklist import BLOCKLIST_PATTERNS, hits_blacklist
+from newcode.permission.blocklist import BLOCKLIST_PATTERNS, hits_blacklist
 
 
 class TestBlacklistHit:

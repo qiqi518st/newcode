@@ -15,12 +15,12 @@ from pathlib import Path
 
 import pytest
 
-from mewcode.permission.modes import PermissionMode
-from mewcode.subagent.types import AgentDefinition, Source
-from mewcode.tools.agent_worktree import _execute_with_worktree, build_worktree_notice
-from mewcode.tools.cwd import cwd_from_ctx, resolve_path
-from mewcode.worktree.config import WorktreesConfig
-from mewcode.worktree.manager import Manager
+from newcode.permission.modes import PermissionMode
+from newcode.subagent.types import AgentDefinition, Source
+from newcode.tools.agent_worktree import _execute_with_worktree, build_worktree_notice
+from newcode.tools.cwd import cwd_from_ctx, resolve_path
+from newcode.worktree.config import WorktreesConfig
+from newcode.worktree.manager import Manager
 
 pytestmark = pytest.mark.anyio
 
@@ -89,11 +89,11 @@ async def test_execute_readonly_creates_then_cleanup(git_repo):
     assert result.status == "completed"
     # 子 Agent 在 worktree 内执行
     assert stub.seen_cwd is not None
-    assert "/.mewcode/worktrees/agent-a" in stub.seen_cwd
+    assert "/.newcode/worktrees/agent-a" in stub.seen_cwd
     # 隔离构造参数：acceptEdits + 沙箱根=worktree
     _name, pm, root, bg, _model = launcher.calls[0]
     assert pm == PermissionMode.ACCEPT_EDITS
-    assert "/.mewcode/worktrees/agent-a" in root
+    assert "/.newcode/worktrees/agent-a" in root
     assert bg is False  # 强制前台
     # notice 注入 task 文本
     assert "<worktree-context>" in stub.task_text
@@ -109,7 +109,7 @@ async def test_execute_writer_keeps_with_notice(git_repo):
     result = await _execute_with_worktree(m, launcher, _role(), "新建 new.txt")
     assert result.status == "completed"
     # 子 Agent 的相对路径落到 worktree 而非主目录
-    assert "/.mewcode/worktrees/agent-a" in stub.wrote_to
+    assert "/.newcode/worktrees/agent-a" in stub.wrote_to
     assert not (git_repo / "new.txt").exists()  # 主目录未污染
     # 有变更 → 保留 + 追加保留通知给主 Agent review
     assert "[Worktree 保留在" in result.text
@@ -118,7 +118,7 @@ async def test_execute_writer_keeps_with_notice(git_repo):
 
 
 def test_build_worktree_notice_contains_paths():
-    n = build_worktree_notice("/parent", "/parent/.mewcode/worktrees/agent-a1b2c3de")
+    n = build_worktree_notice("/parent", "/parent/.newcode/worktrees/agent-a1b2c3de")
     assert "<worktree-context>" in n
     assert "/parent" in n
     assert "agent-a1b2c3de" in n

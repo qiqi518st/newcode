@@ -11,13 +11,13 @@ from __future__ import annotations
 
 import os
 
-from mewcode.subagent.catalog import Catalog, load_catalog
-from mewcode.subagent.config import AgentConfig
-from mewcode.subagent.types import Source
+from newcode.subagent.catalog import Catalog, load_catalog
+from newcode.subagent.config import AgentConfig
+from newcode.subagent.types import Source
 
 
 def _write_agent(root, name, description="d"):
-    p = root / ".mewcode" / "agents"
+    p = root / ".newcode" / "agents"
     p.mkdir(parents=True, exist_ok=True)
     (p / f"{name}.md").write_text(
         f"---\nname: {name}\ndescription: {description}\n---\nbody", encoding="utf-8"
@@ -44,7 +44,7 @@ def test_project_overrides_user_and_builtin(tmp_path, monkeypatch):
     # 项目级 explore
     _write_agent(tmp_path, "explore", "项目版")
     # 用户级 explore（应被项目级覆盖）
-    user = tmp_path / "home" / ".mewcode" / "agents"
+    user = tmp_path / "home" / ".newcode" / "agents"
     user.mkdir(parents=True)
     (user / "explore.md").write_text(
         "---\nname: explore\ndescription: 用户版\n---\nb", encoding="utf-8"
@@ -60,7 +60,7 @@ def test_project_overrides_user_and_builtin(tmp_path, monkeypatch):
 
 def test_user_bad_file_skipped(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    user = tmp_path / "home" / ".mewcode" / "agents"
+    user = tmp_path / "home" / ".newcode" / "agents"
     user.mkdir(parents=True)
     (user / "broken.md").write_text("---\nname: broken\n---\nno description")
     (user / "ok.md").write_text("---\nname: ok\ndescription: fine\n---\nb")

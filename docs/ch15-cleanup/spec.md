@@ -1,8 +1,8 @@
-# MewCode ch15 收尾 - 团队清理引导与孤儿 Worktree 自动清扫 Spec
+# NewCode ch15 收尾 - 团队清理引导与孤儿 Worktree 自动清扫 Spec
 
 ## 背景
 
-ch15 已实现 `TeamCreate`/`TeamDelete` 工具 + `/team delete` slash 命令（F16.3），`Manager.delete` 内部按正确顺序清理（`backend.kill` → `git worktree remove` → `git branch -D` → 删 `~/.mewcode/teams/<name>/`）。
+ch15 已实现 `TeamCreate`/`TeamDelete` 工具 + `/team delete` slash 命令（F16.3），`Manager.delete` 内部按正确顺序清理（`backend.kill` → `git worktree remove` → `git branch -D` → 删 `~/.newcode/teams/<name>/`）。
 
 但真实会话实测暴露三个问题：
 
@@ -29,7 +29,7 @@ ch15 已实现 `TeamCreate`/`TeamDelete` 工具 + `/team delete` slash 命令（
 ### F2 execute_command 守卫（层2a）
 
 - F2.1 team 包提供 `guard_team_git_cleanup(mgr, command) -> str | None`：`None`=放行；`str`=拦截提示文案
-- F2.2 命中条件：command 匹配 git 清理类操作（`git worktree remove` / `git branch -D` / `git worktree prune`）**且**目标指向 `team-*`（路径含 `.mewcode/worktrees/team-`，或分支名 `worktree-team-`）**且该团队配置仍存在**（`mgr.get(prefix)` 命中）
+- F2.2 命中条件：command 匹配 git 清理类操作（`git worktree remove` / `git branch -D` / `git worktree prune`）**且**目标指向 `team-*`（路径含 `.newcode/worktrees/team-`，或分支名 `worktree-team-`）**且该团队配置仍存在**（`mgr.get(prefix)` 命中）
 - F2.3 命中返回：`ToolResult(status="error", error="请改用 /team delete <name> --force 或 TeamDelete 工具清理团队（自动按正确顺序：kill → worktree remove → branch -D → 删配置）")`——**不执行、不弹权限确认**
 - F2.4 团队配置已不存在（孤儿）→ **不拦截**（放行正常 git 清理；孤儿本体由层2b 自动清扫接管）
 - F2.5 非清理类 git 操作（`status`/`merge`/`diff`/`log`/`add`/`commit` 等）一律不拦截（F15 收敛依赖 `git merge`）
@@ -38,7 +38,7 @@ ch15 已实现 `TeamCreate`/`TeamDelete` 工具 + `/team delete` slash 命令（
 
 ### F3 孤儿 team worktree 自动清扫（层2b）
 
-- F3.1 team `Manager` 提供 `sweep_orphan_worktrees() -> list[str]`：遍历 `wt_mgr.list()`，名字前缀 `team-` 且对应团队配置（`~/.mewcode/teams/<prefix>/config.json`）不存在 → 视为孤儿
+- F3.1 team `Manager` 提供 `sweep_orphan_worktrees() -> list[str]`：遍历 `wt_mgr.list()`，名字前缀 `team-` 且对应团队配置（`~/.newcode/teams/<prefix>/config.json`）不存在 → 视为孤儿
 - F3.2 孤儿判定 **fail-closed**：配置存在（含损坏但文件在）→ 保留；仅「配置目录/文件不存在」才清
 - F3.3 清理：调 `wt_mgr.remove(孤儿名, ExitOptions(discard_changes=True))`；有未提交变更/未推送 commit → 保留（ch14 保护语义，fail-closed）
 - F3.4 触发时机：**启动时一次** + **周期后台任务**（间隔复用 worktree `cleanup_interval_minutes`）+ **TeamDelete 成功后立即补扫**
@@ -57,7 +57,7 @@ ch15 已实现 `TeamCreate`/`TeamDelete` 工具 + `/team delete` slash 命令（
 
 ## 不做的事
 
-- 拦截用户在**自己终端**里直接敲的 git 命令（mewcode 只能管自己的 agent 工具调用）
+- 拦截用户在**自己终端**里直接敲的 git 命令（newcode 只能管自己的 agent 工具调用）
 - 拦截非团队 worktree（`agent-*`/`wf-`）的手动 git 清理（走既有 `/worktree` + ch14 sweep）
 - 引导式 UI（弹窗/菜单）——只用结构化错误 + 提示词
 - 新增用户命令（如 `/team prune`）——层2b 全自动，不加新命令
@@ -67,17 +67,17 @@ ch15 已实现 `TeamCreate`/`TeamDelete` 工具 + `/team delete` slash 命令（
 
 - AC1（F1.1/F1.2）：团队功能启用时 stable_prompt 含纪律段（含「TeamDelete」「/team delete」「禁止」）；未启用时不追加
 - AC2（F2.2/F2.3）：团队 demo 存在时，`git branch -D worktree-team-demo+alice` → ToolResult error 含「/team delete」，**不执行**
-- AC3（F2.2/F2.3）：`git worktree remove .mewcode/worktrees/team-demo+alice` → 同上拦截
+- AC3（F2.2/F2.3）：`git worktree remove .newcode/worktrees/team-demo+alice` → 同上拦截
 - AC4（F2.4）：团队配置已删 → 同类命令**不拦截**（放行）
 - AC5（F2.5）：`git merge worktree-team-demo+alice --no-ff` / `git status` / `git diff` → **不拦截**（F15 收敛不受影响）
 - AC6（F2.6）：`git branch -D worktree-agent-a1b2c3d`（非团队）→ **不拦截**
 - AC7（F3.1/F3.3）：构造孤儿（删团队配置后残留 `team-*` worktree）→ `sweep_orphan_worktrees` 删除目录+分支
 - AC8（F3.2/F3.3）：配置仍存在 → 不清；孤儿有未提交变更/未推送 commit → 保留（fail-closed）
 - AC9（F3.4）：TeamDelete 成功后孤儿被补扫（单测断言）
-- AC10（N6/N7）：全量存量测试通过、ruff 通过、版本 0.15.1 两处一致、`python -m mewcode --version` 正常
+- AC10（N6/N7）：全量存量测试通过、ruff 通过、版本 0.15.1 两处一致、`python -m newcode --version` 正常
 
 ## 端到端场景（验收参考）
 
-- 场景1（拦截引导）：mewcode 会话中 agent 尝试 `git branch -D worktree-team-demo+alice` → 收到「请改用 /team delete」错误 → 改调 TeamDelete 一次清理成功
-- 场景2（孤儿清扫）：手动删除 `~/.mewcode/teams/demo-2/` 配置 → 残留 `team-*` worktree → 下次启动/周期清扫自动移除（目录+分支）
+- 场景1（拦截引导）：newcode 会话中 agent 尝试 `git branch -D worktree-team-demo+alice` → 收到「请改用 /team delete」错误 → 改调 TeamDelete 一次清理成功
+- 场景2（孤儿清扫）：手动删除 `~/.newcode/teams/demo-2/` 配置 → 残留 `team-*` worktree → 下次启动/周期清扫自动移除（目录+分支）
 - 场景3（正常收敛不误伤）：F15 的 `git merge worktree-team-*` 在守卫下正常执行

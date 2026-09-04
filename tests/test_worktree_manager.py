@@ -16,9 +16,9 @@ from pathlib import Path
 
 import pytest
 
-from mewcode.worktree.config import WorktreesConfig
-from mewcode.worktree.manager import Manager
-from mewcode.worktree.types import (
+from newcode.worktree.config import WorktreesConfig
+from newcode.worktree.manager import Manager
+from newcode.worktree.types import (
     WorktreeError,
     WorktreeExistsError,
     WorktreeNotFoundError,
@@ -34,9 +34,9 @@ def _manager(repo: Path) -> Manager:
 async def test_create_flat_slug_dir_and_branch(git_repo):
     m = _manager(git_repo)
     wt = await m.create("alice", "HEAD", manual=True)
-    assert wt.path == str(git_repo / ".mewcode" / "worktrees" / "alice")
+    assert wt.path == str(git_repo / ".newcode" / "worktrees" / "alice")
     assert wt.branch == "worktree-alice"
-    assert (git_repo / ".mewcode" / "worktrees" / "alice").is_dir()
+    assert (git_repo / ".newcode" / "worktrees" / "alice").is_dir()
     assert wt in m.list()
     assert m.get("alice") is wt
 
@@ -45,7 +45,7 @@ async def test_create_nested_slug_flattened(git_repo):
     m = _manager(git_repo)
     wt = await m.create("team-refactor/alice", "HEAD", manual=True)
     assert wt.branch == "worktree-team-refactor+alice"
-    assert (git_repo / ".mewcode" / "worktrees" / "team-refactor+alice").is_dir()
+    assert (git_repo / ".newcode" / "worktrees" / "team-refactor+alice").is_dir()
 
 
 async def test_create_duplicate_raises(git_repo):
@@ -63,10 +63,10 @@ async def test_manual_create_rejects_auto_prefix(git_repo):
 
 async def test_create_fast_recovery_no_git(git_repo, monkeypatch):
     """AC4：目录已存在（外部残留）再 create → 快速恢复，不调 git worktree add。"""
-    from mewcode.worktree import git as g
+    from newcode.worktree import git as g
 
     m = _manager(git_repo)
-    wt_dir = git_repo / ".mewcode" / "worktrees" / "alice"
+    wt_dir = git_repo / ".newcode" / "worktrees" / "alice"
     wt_dir.parent.mkdir(parents=True, exist_ok=True)
     # 模拟崩溃残留：外部直接 git worktree add（绕过 Manager.create）
     await asyncio.to_thread(
@@ -141,7 +141,7 @@ async def test_session_cleared_when_worktree_gone(git_repo, capsys):
     # 外部删除 worktree 目录
     import shutil
 
-    shutil.rmtree(git_repo / ".mewcode" / "worktrees" / "alice", ignore_errors=True)
+    shutil.rmtree(git_repo / ".newcode" / "worktrees" / "alice", ignore_errors=True)
     m2 = _manager(git_repo)
     assert m2.current_session() is None
     assert "已清空" in capsys.readouterr().err
@@ -154,7 +154,7 @@ async def test_gitignore_missing_only_warns(git_repo, capsys):
     err = capsys.readouterr().err
     assert "只警告不修改" in err or "未包含" in err
     if gi.exists():
-        assert ".mewcode/worktrees/" not in gi.read_text(encoding="utf-8")
+        assert ".newcode/worktrees/" not in gi.read_text(encoding="utf-8")
     else:
         assert not gi.exists()  # 未自动创建
 
@@ -162,7 +162,7 @@ async def test_gitignore_missing_only_warns(git_repo, capsys):
 async def test_gitignore_present_no_warn(git_repo, capsys):
     gi = git_repo / ".gitignore"
     gi.write_text(
-        ".mewcode/worktrees/\n.mewcode/worktree_session.json\n", encoding="utf-8"
+        ".newcode/worktrees/\n.newcode/worktree_session.json\n", encoding="utf-8"
     )
     _manager(git_repo)
     err = capsys.readouterr().err

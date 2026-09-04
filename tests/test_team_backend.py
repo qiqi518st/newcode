@@ -12,13 +12,13 @@ from __future__ import annotations
 import asyncio
 import sys
 
-import mewcode.team.backend.detect as detect_mod
-import mewcode.team.backend.tmux as tmux_mod
-from mewcode.team.backend import SpawnRequest
-from mewcode.team.backend.detect import detect
-from mewcode.team.backend.inprocess import InProcessBackend
-from mewcode.team.backend.tmux import TmuxBackend, build_member_cmd
-from mewcode.team.types import BackendType
+import newcode.team.backend.detect as detect_mod
+import newcode.team.backend.tmux as tmux_mod
+from newcode.team.backend import SpawnRequest
+from newcode.team.backend.detect import detect
+from newcode.team.backend.inprocess import InProcessBackend
+from newcode.team.backend.tmux import TmuxBackend, build_member_cmd
+from newcode.team.types import BackendType
 
 
 def _req(**kw):

@@ -3,7 +3,7 @@
 防 bug：自动闸在错误次数触发/解除、跨种类计数污染。
 """
 
-from mewcode.context.autogate import AutoCompactGate
+from newcode.context.autogate import AutoCompactGate
 
 
 def test_consecutive_failures_trips_at_3():

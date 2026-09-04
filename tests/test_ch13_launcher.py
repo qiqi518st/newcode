@@ -14,15 +14,15 @@ import tempfile
 
 import pytest
 
-from mewcode.agent import Agent
-from mewcode.conversation.manager import ConversationManager
-from mewcode.permission.checker import PermissionChecker
-from mewcode.provider.base import StreamEvent, TokenUsage
-from mewcode.subagent.config import AgentConfig
-from mewcode.subagent.launcher import SubAgentLauncher
-from mewcode.subagent.manager import Status, TaskManager
-from mewcode.subagent.types import AgentDefinition, Source
-from mewcode.tools.registry import Registry
+from newcode.agent import Agent
+from newcode.conversation.manager import ConversationManager
+from newcode.permission.checker import PermissionChecker
+from newcode.provider.base import StreamEvent, TokenUsage
+from newcode.subagent.config import AgentConfig
+from newcode.subagent.launcher import SubAgentLauncher
+from newcode.subagent.manager import Status, TaskManager
+from newcode.subagent.types import AgentDefinition, Source
+from newcode.tools.registry import Registry
 
 pytestmark = pytest.mark.anyio
 
