@@ -13,8 +13,11 @@ import tempfile
 from rich.console import Console
 
 from newcode.agent.events import Event, EventType, StopReason
+from newcode.permission.modes import PermissionMode
 from newcode.plans import PlanManager
-from newcode.tui.app import REPL
+from newcode.slash import CommandContext, CommandRegistry
+from newcode.slash.commands import register_all
+from newcode.tui.app import AppMode, REPL, RichUIController, SessionState
 
 
 class FakeAgent:
@@ -327,3 +330,66 @@ def test_choice_session_pollution_regression():
             assert main_result == "", f"主循环被弹窗 kb 污染：{main_result!r}"
 
     asyncio.run(main())
+
+
+# ── /exit 退出只打印一次「再见！」（ch16 修复双打印）────────────────
+
+
+class _ExitSession:
+    """mock PromptSession：首次 prompt_async 返回 /exit，触发退出路径。"""
+
+    async def prompt_async(self, *args, **kwargs):
+        return "/exit"
+
+
+def _make_exit_repl(tmp_path) -> tuple[REPL, Console]:
+    """构造走真实 run() 主循环的 REPL（绕过 __init__，mock session）。"""
+    repl = object.__new__(REPL)
+    repl._console = Console(record=True, width=80)
+    repl.state = SessionState.IDLE
+    repl.mode = AppMode.NORMAL
+    repl._permission_mode = PermissionMode.DEFAULT
+    repl._exit_requested = False
+    repl.agent = FakeAgent([])
+    repl.task_manager = None
+    repl.team_mgr = None
+    repl.cur_reply = ""
+    repl.turn_start = 0.0
+    repl._stream_task = None
+    repl.plan_manager = PlanManager(str(tmp_path / "plans"))
+    repl._pending_plan = ""
+    repl._pending_slug = ""
+    repl._executing_slug = ""
+    repl._session_in_tokens = 0
+    repl._session_out_tokens = 0
+    repl._current_turn = 0
+    repl._retry_count = 0
+    reg = CommandRegistry()
+    register_all(reg)
+    repl.command_registry = reg
+    repl.ui = RichUIController(repl)
+    repl.command_ctx = CommandContext(
+        registry=reg,
+        ui=repl.ui,
+        agent=repl.agent,
+        conversation=None,
+        plan_manager=repl.plan_manager,
+        session_runtime=None,
+        session_archive=None,
+        memory_manager=None,
+    )
+    repl._session = _ExitSession()
+    return repl, repl._console
+
+
+def test_run_loop_exit_prints_goodbye_once(tmp_path):
+    """防 bug：/exit 退出时「再见！」恰好打印一次。
+
+    背景：曾出现 /exit 在 handler（handle_exit 的 show_message）与主循环
+    （_exit_requested 分支）各打印一次「再见！」，终端出现两遍。
+    本测试用 mock session 驱动真实 REPL.run() 主循环，断言 farewell 出现且仅一次。
+    """
+    repl, console = _make_exit_repl(tmp_path)
+    asyncio.run(repl.run())
+    text = console.export_text()
+    assert text.count("再见！") == 1, f"退出 farewell 出现 {text.count('再见！')} 次：{text!r}"

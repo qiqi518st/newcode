@@ -7,9 +7,11 @@ from ..registry import CommandDef, CommandKind
 
 
 async def handle_exit(ctx: CommandContext, _args: str) -> None:
-    """F8.1：退出——request_exit 先取消主 cancel scope（N12），REPL 主循环收到退出标志后 break。"""
+    """F8.1：退出——request_exit 先取消主 cancel scope（N12），REPL 主循环收到退出标志后 break。
+
+    告别文案「再见！」由 REPL 主循环统一打印（ch16 修复：此处曾重复输出导致双打印）。
+    """
     ctx.ui.request_exit()
-    ctx.ui.show_message("再见！")
 
 
 async def handle_resume(ctx: CommandContext, _args: str) -> None:

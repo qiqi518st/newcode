@@ -437,10 +437,14 @@ def test_review_removed_from_builtin_commands():
 
 
 def test_exit_requests():
+    """F8.1：/exit 置退出标志；告别文案由 REPL 主循环统一打印，handler 不再输出。
+
+    防 bug：曾出现 handler 与主循环各打一次「再见！」导致退出打印两遍（ch16 修复）。
+    """
     ui = RecordingUI()
     asyncio.run(_run(_registered(), "exit", _ctx(ui)))
     assert ("request_exit",) in ui.calls
-    assert "再见" in ui.messages[-1]
+    assert not any("再见" in m for m in ui.messages)  # farewell 归主循环，防双打印
 
 
 def test_delete_plan_flow(tmp_path):
